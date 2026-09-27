@@ -1,12 +1,14 @@
 # GovernWorld Chrome Extension
 
 [![CI](https://github.com/ACR-LOGIC/governworld-chrome-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/ACR-LOGIC/governworld-chrome-extension/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/License-Source--Available-orange.svg)](LICENSE)
 [![Manifest V3](https://img.shields.io/badge/Chrome%20Extension-Manifest%20V3-green.svg)](manifest.json)
 [![Local-First](https://img.shields.io/badge/Architecture-100%25%20Local--First-brightgreen.svg)](#local-first-architecture--privacy-guarantees)
 [![Support on Buy Me A Coffee](https://img.shields.io/badge/Support-Buy%20Me%20A%20Coffee-ff813f?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/governworld)
 
 The **GovernWorld Chrome Extension** is a fully functional, local-first browser protection tool that brings GovernWorld's high-assurance detection and redaction engine directly into your web browser. It empowers users to detect, mask, and redact sensitive Personally Identifiable Information (PII), Protected Health Information (PHI), financial data, credentials, and custom patterns directly on web pages and in uploaded documents (PDF, DOCX, images) **without any data ever leaving the local device**.
+
+> **Licensing:** GovernWorld Extension is source-available and free for non-commercial community use. You may inspect, modify, fork, and run the extension locally for permitted non-commercial purposes. Commercial use, redistribution, resale, hosting, bundling, or incorporation into a commercial product or service requires a separate commercial license from Andres Chavez Ramirez. See [LICENSE](LICENSE). This is not an open-source license.
 
 ---
 
@@ -242,10 +244,10 @@ npm run typecheck
 
 ## 💛 Community Support & Sponsorship
 
-GovernWorld is **100% free, open-source, and local-only** to ensure your privacy is never compromised:
+GovernWorld is **free for non-commercial use, source-available, and local-only** to ensure your privacy is never compromised:
 - **Zero Cloud Transmission:** All PII/PHI scanning, OCR text extraction, and document flattening happen directly on your local device.
 - **Zero Data Monetization:** We never sell, log, monetize, or transmit your sensitive documents, scanned values, or browsing activity.
-- **Completely Free:** Every core capability is freely accessible to everyone.
+- **Free for Community Use:** Every core capability is freely accessible for personal, educational, research, and other non-commercial purposes.
 
 If GovernWorld saves you time or protects your sensitive workflows, you can support ongoing development, maintenance of offline models, and validator improvements:
 
@@ -261,4 +263,6 @@ You can also contribute by submitting new regex/checksum patterns, opening issue
 
 ## License
 
-Copyright (c) 2026 Andres Chavez Ramirez. Licensed under the [Apache License, Version 2.0](LICENSE).
+Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
+
+GovernWorld Extension is **source-available** under the [GovernWorld Source-Available Community License](LICENSE): free for non-commercial community use. You may inspect, modify, fork, and run the extension locally for permitted non-commercial purposes. Commercial use, redistribution, resale, hosting, bundling, or incorporation into a commercial product or service requires a separate commercial license from Andres Chavez Ramirez. This is not an open-source (OSI-approved) license.

@@ -2,7 +2,7 @@
   "name": "governworld-chrome-extension",
   "version": "0.1.0",
   "description": "GovernWorld Chrome Extension: Local-first PII/PHI detection, page visual masking, and flattened document redaction.",
-  "license": "Apache-2.0",
+  "license": "SEE LICENSE IN LICENSE",
   "author": "Andres Chavez Ramirez",
   "type": "module",
   "repository": {
