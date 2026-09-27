@@ -1038,10 +1038,30 @@ export async function initPopup(): Promise<void> {
 
   document.getElementById("open-side-panel-btn")?.addEventListener("click", async () => {
     try {
-      const windowId = (await chrome.windows.getCurrent()).id;
-      if (windowId != null) await chrome.sidePanel.open({ windowId });
+      if (typeof chrome !== "undefined" && chrome.sidePanel && typeof chrome.sidePanel.open === "function") {
+        const windowId = (await chrome.windows.getCurrent()).id;
+        if (windowId != null) {
+          await chrome.sidePanel.open({ windowId });
+          return;
+        }
+      }
+      // Cross-browser fallback for Firefox/Safari/older Chromium without sidePanel API
+      if (typeof chrome !== "undefined" && chrome.windows && typeof chrome.windows.create === "function") {
+        await chrome.windows.create({
+          url: chrome.runtime.getURL("sidepanel.html"),
+          type: "popup",
+          width: 440,
+          height: 680,
+        });
+      } else if (typeof chrome !== "undefined" && chrome.tabs && typeof chrome.tabs.create === "function") {
+        await chrome.tabs.create({ url: chrome.runtime.getURL("sidepanel.html") });
+      }
     } catch {
-      // Ignored
+      try {
+        window.open(chrome.runtime.getURL("sidepanel.html"), "_blank");
+      } catch {
+        // Ignored
+      }
     }
   });
 
