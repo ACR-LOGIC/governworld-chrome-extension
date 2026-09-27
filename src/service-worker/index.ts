@@ -3,7 +3,7 @@ import { validateMessage } from "../shared/messages.js";
 import { loadSettings, saveSettings, isCloudAllowed, isAllowedGatewayOrigin, meetsThreshold } from "../shared/settings.js";
 import { recordAudit, exportSignedAuditLog } from "../shared/audit.js";
 import type { Settings } from "../shared/settings.js";
-import type { DocKind, PopupState, ScanMode, WorkerMessage, ExtensionMessage, Finding, PopupFromWorker, Rect } from "../shared/types.js";
+import type { DocKind, PopupState, ScanMode, WorkerMessage, ExtensionMessage, Finding, PopupFromWorker, Rect, RedactionOptions } from "../shared/types.js";
 import { previewDocument, redactDocument, getLastSession, clearSession as clearDocSession, clearAllFiles } from "./documents.js";
 import { analyzeExamples, testPattern } from "../shared/wizardAnalyzer.js";
 import {
@@ -391,7 +391,8 @@ async function handlePopupDocRedact(
   kind: DocKind,
   boxes: { pageIndex: number; rects: Rect[] }[],
   findingIds: string[],
-  requestId: string
+  requestId: string,
+  options?: RedactionOptions
 ): Promise<void> {
   try {
     const { outputName, outputBytes, outputMimeType, verification, redactedRegions } = await redactDocument(
@@ -401,7 +402,8 @@ async function handlePopupDocRedact(
       mimeType,
       kind,
       boxes,
-      findingIds
+      findingIds,
+      options
     );
     const docHash = await sha256Hex(outputBytes);
 
@@ -891,6 +893,73 @@ chrome.commands.onCommand.addListener((command) => {
   })().catch(() => undefined);
 });
 
+if (chrome.runtime.onInstalled) {
+  chrome.runtime.onInstalled.addListener(() => {
+    if (chrome.contextMenus) {
+      chrome.contextMenus.removeAll(() => {
+        chrome.contextMenus.create({
+          id: "scan_page",
+          title: "Scan page for sensitive data",
+          contexts: ["page", "selection"],
+        });
+        chrome.contextMenus.create({
+          id: "redact_selection",
+          title: "Redact selection to clipboard",
+          contexts: ["selection"],
+        });
+        chrome.contextMenus.create({
+          id: "mask_selection",
+          title: "Mask selected text / element",
+          contexts: ["selection", "page"],
+        });
+      });
+    }
+  });
+}
+
+if (chrome.contextMenus?.onClicked) {
+  chrome.contextMenus.onClicked.addListener((info, tab) => {
+    void (async () => {
+      const tabId = tab?.id ?? (await getActiveTab())?.id;
+      if (!tabId) return;
+
+      if (info.menuItemId === "scan_page") {
+        await handlePopupScan("local", crypto.randomUUID());
+        return;
+      }
+
+      const settings = await loadSettings();
+      if (info.menuItemId === "redact_selection") {
+        const msg: WorkerMessage = {
+          type: "CONTEXT_REDACT_SELECTION",
+          requestId: crypto.randomUUID(),
+          selectionText: info.selectionText,
+          settings: {
+            enabledCategories: settings.enabledCategories,
+            maxVisibleChars: settings.maxVisibleChars,
+            maxNodeChars: settings.maxNodeChars,
+            maskPlaceholders: settings.maskPlaceholders,
+          },
+        };
+        await sendToTab(tabId, msg);
+      } else if (info.menuItemId === "mask_selection") {
+        const msg: WorkerMessage = {
+          type: "CONTEXT_MASK_SELECTION",
+          requestId: crypto.randomUUID(),
+          selectionText: info.selectionText,
+          settings: {
+            enabledCategories: settings.enabledCategories,
+            maxVisibleChars: settings.maxVisibleChars,
+            maxNodeChars: settings.maxNodeChars,
+            maskPlaceholders: settings.maskPlaceholders,
+          },
+        };
+        await sendToTab(tabId, msg);
+      }
+    })().catch(() => undefined);
+  });
+}
+
 const CONTENT_MESSAGE_TYPES = new Set<ExtensionMessage["type"]>([
   "SCAN_RESULT",
   "COPY_REDACTED_TEXT_RESULT",
@@ -986,7 +1055,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
         await handlePopupDocPreview(msg.fileKey, msg.name, msg.mimeType, msg.kind, msg.requestId);
         break;
       case "POPUP_DOC_REDACT":
-        await handlePopupDocRedact(msg.docId, msg.fileKey, msg.name, msg.mimeType, msg.kind, msg.boxes, msg.findingIds, msg.requestId);
+        await handlePopupDocRedact(msg.docId, msg.fileKey, msg.name, msg.mimeType, msg.kind, msg.boxes, msg.findingIds, msg.requestId, msg.options);
         break;
       case "POPUP_DOC_CLEAR":
         await clearDocSession(msg.docId);

@@ -2,11 +2,11 @@
 import { validateMessage } from "../shared/messages.js";
 import { ALL_CATEGORIES, loadSettings, saveSettings, PRESET_CATEGORIES, PRESET_LABELS, type PresetId, type Settings } from "../shared/settings.js";
 import { recordAudit } from "../shared/audit.js";
-import type { DocKind, Finding, FindingCategory, PopupState, PopupMessage, ScanMode, DocPageMeta, PopupFromWorker, Rect } from "../shared/types.js";
+import type { DocKind, Finding, FindingCategory, PopupState, PopupMessage, ScanMode, DocPageMeta, PopupFromWorker, Rect, RedactionStyle } from "../shared/types.js";
 import type { CustomPattern, CommunityAccount, CommunityRule } from "../shared/customPatterns.js";
 import type { WizardAnalysis } from "../shared/wizardAnalyzer.js";
 
-const CATEGORY_LABELS: Record<FindingCategory, string> = {
+const CATEGORY_LABELS: Record<string, string> = {
   email: "Email address",
   phone: "US phone number",
   ssn: "Social Security number",
@@ -20,6 +20,12 @@ const CATEGORY_LABELS: Record<FindingCategory, string> = {
   payment_card: "Payment card",
   secrets: "API keys & secrets",
   possible_name: "Possible name",
+  canadian_sin: "Canadian SIN",
+  uk_nhs: "UK NHS Number",
+  aadhaar: "Indian Aadhaar",
+  pan_india: "Indian PAN",
+  australian_tfn: "Australian TFN",
+  cpf: "Brazilian CPF",
   custom: "Custom pattern",
 };
 
@@ -435,55 +441,262 @@ function resetDocStages(): void {
   }
 }
 
+const overlayRedrawers: (() => void)[] = [];
+
+function redrawAllOverlays(): void {
+  for (const redraw of overlayRedrawers) {
+    try {
+      redraw();
+    } catch {
+      // Ignored
+    }
+  }
+}
+
+function updateDocRedactBtn(): void {
+  const redactBtn = document.getElementById("doc-redact-btn") as HTMLButtonElement | null;
+  if (redactBtn) {
+    redactBtn.disabled = selectedDocFindingIds.size === 0;
+  }
+}
+
 function renderDocFindings(): void {
   const list = document.getElementById("doc-findings") as HTMLUListElement | null;
-  const redactBtn = document.getElementById("doc-redact-btn") as HTMLButtonElement | null;
-  if (!list || !redactBtn) return;
+  if (!list) return;
   list.replaceChildren();
-  selectedDocFindingIds.clear();
-  if (!lastDoc) return;
+  if (!lastDoc) {
+    updateDocRedactBtn();
+    return;
+  }
   for (const page of lastDoc.pages) {
     for (const finding of page.findings) {
       const item = el("li", "finding");
       const check = document.createElement("input");
       check.type = "checkbox";
-      check.setAttribute("aria-label", `Select ${CATEGORY_LABELS[finding.category]} finding on page ${page.index + 1}`);
+      check.className = "finding__check";
+      check.checked = selectedDocFindingIds.has(finding.id);
+      check.setAttribute("aria-label", `Select ${CATEGORY_LABELS[finding.category] || finding.category} finding on page ${page.index + 1}`);
       check.addEventListener("change", () => {
         if (check.checked) selectedDocFindingIds.add(finding.id);
         else selectedDocFindingIds.delete(finding.id);
-        redactBtn.disabled = selectedDocFindingIds.size === 0;
+        updateDocRedactBtn();
+        redrawAllOverlays();
       });
 
-      const main = el("div");
-      const category = el("div", "finding__category", CATEGORY_LABELS[finding.category]);
+      const main = el("div", "finding__main");
+      const head = el("div", "finding__head");
+      const category = el("div", "finding__category", CATEGORY_LABELS[finding.category] || finding.category);
+      head.append(category);
+      if (finding.category === "custom") {
+        const customBadge = el("span", "finding__badge-attr", "Custom Box");
+        head.append(customBadge);
+      }
       const preview = el("div", "finding__preview", finding.preview);
+      const meta = el("div", "finding__meta");
       const confidence = el("div", "finding__confidence", `${confidenceLabel(finding.confidence)} (${Math.round(finding.confidence * 100)}%)`);
-      main.append(category, preview, confidence);
+      meta.append(confidence);
+      main.append(head, preview, meta);
 
       const context = el("div", "finding__context", `Page ${page.index + 1} — ${finding.contextPreview ?? ""}`);
       item.append(check, main, context);
       list.appendChild(item);
     }
   }
-  redactBtn.disabled = true;
+  updateDocRedactBtn();
 }
 
 function renderDoc(state: DocUiState): void {
   lastDoc = state;
+  selectedDocFindingIds.clear();
+  overlayRedrawers.length = 0;
+
+  for (const page of state.pages) {
+    for (const finding of page.findings) {
+      if (finding.selected !== false) {
+        selectedDocFindingIds.add(finding.id);
+      }
+    }
+  }
+
   const review = document.getElementById("doc-review") as HTMLElement | null;
   const thumbs = document.getElementById("doc-thumbs") as HTMLElement | null;
   if (review) review.hidden = false;
   if (thumbs) {
     thumbs.replaceChildren();
     for (const page of state.pages) {
+      const wrapper = el("div", "doc-thumb-wrapper");
+      wrapper.setAttribute("title", "Click a finding to toggle, or click and drag to draw a custom redaction box");
+
       const img = document.createElement("img");
       img.src = page.previewDataUrl;
       img.alt = `Page ${page.index + 1}`;
       img.loading = "lazy";
-      thumbs.appendChild(img);
+
+      const canvas = document.createElement("canvas");
+      canvas.className = "doc-thumb-overlay";
+      canvas.setAttribute("aria-label", `Page ${page.index + 1} interactive redaction canvas`);
+
+      wrapper.append(img, canvas);
+      thumbs.appendChild(wrapper);
+
+      let isDragging = false;
+      let startX = 0;
+      let startY = 0;
+      let dragBox: { x: number; y: number; width: number; height: number } | null = null;
+
+      const redraw = () => {
+        const rect = wrapper.getBoundingClientRect();
+        const width = Math.max(1, Math.round(rect.width || img.naturalWidth || 120));
+        const height = Math.max(1, Math.round(rect.height || img.naturalHeight || 160));
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        const scaleX = canvas.width / (page.widthPx || canvas.width || 1);
+        const scaleY = canvas.height / (page.heightPx || canvas.height || 1);
+
+        for (const finding of page.findings) {
+          const isSelected = selectedDocFindingIds.has(finding.id);
+          for (const r of finding.rects) {
+            const rx = r.x * scaleX;
+            const ry = r.y * scaleY;
+            const rw = r.width * scaleX;
+            const rh = r.height * scaleY;
+
+            if (isSelected) {
+              ctx.fillStyle = finding.category === "custom" ? "rgba(239, 68, 68, 0.45)" : "rgba(15, 23, 42, 0.75)";
+              ctx.fillRect(rx, ry, rw, rh);
+              ctx.strokeStyle = finding.category === "custom" ? "rgba(239, 68, 68, 0.95)" : "rgba(34, 211, 238, 0.9)";
+              ctx.lineWidth = 1.5;
+              ctx.setLineDash([]);
+              ctx.strokeRect(rx, ry, rw, rh);
+            } else {
+              ctx.strokeStyle = "rgba(148, 163, 184, 0.6)";
+              ctx.lineWidth = 1;
+              ctx.setLineDash([3, 3]);
+              ctx.strokeRect(rx, ry, rw, rh);
+              ctx.setLineDash([]);
+            }
+          }
+        }
+
+        if (dragBox) {
+          ctx.fillStyle = "rgba(34, 211, 238, 0.25)";
+          ctx.fillRect(dragBox.x, dragBox.y, dragBox.width, dragBox.height);
+          ctx.strokeStyle = "rgba(34, 211, 238, 0.95)";
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 2]);
+          ctx.strokeRect(dragBox.x, dragBox.y, dragBox.width, dragBox.height);
+          ctx.setLineDash([]);
+        }
+      };
+
+      overlayRedrawers.push(redraw);
+      img.addEventListener("load", redraw);
+      window.addEventListener("resize", redraw);
+
+      canvas.addEventListener("mousedown", (e) => {
+        const bcr = canvas.getBoundingClientRect();
+        const mouseX = (e.clientX - bcr.left) * (canvas.width / (bcr.width || 1));
+        const mouseY = (e.clientY - bcr.top) * (canvas.height / (bcr.height || 1));
+
+        const scaleX = canvas.width / (page.widthPx || canvas.width || 1);
+        const scaleY = canvas.height / (page.heightPx || canvas.height || 1);
+        const pageX = mouseX / scaleX;
+        const pageY = mouseY / scaleY;
+
+        let hitFinding: Finding | null = null;
+        for (let i = page.findings.length - 1; i >= 0; i--) {
+          const f = page.findings[i];
+          for (const r of f.rects) {
+            if (pageX >= r.x && pageX <= r.x + r.width && pageY >= r.y && pageY <= r.y + r.height) {
+              hitFinding = f;
+              break;
+            }
+          }
+          if (hitFinding) break;
+        }
+
+        if (hitFinding) {
+          if (selectedDocFindingIds.has(hitFinding.id)) {
+            selectedDocFindingIds.delete(hitFinding.id);
+          } else {
+            selectedDocFindingIds.add(hitFinding.id);
+          }
+          renderDocFindings();
+          redrawAllOverlays();
+          return;
+        }
+
+        isDragging = true;
+        startX = mouseX;
+        startY = mouseY;
+        dragBox = { x: mouseX, y: mouseY, width: 0, height: 0 };
+        redraw();
+      });
+
+      canvas.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        const bcr = canvas.getBoundingClientRect();
+        const curX = (e.clientX - bcr.left) * (canvas.width / (bcr.width || 1));
+        const curY = (e.clientY - bcr.top) * (canvas.height / (bcr.height || 1));
+
+        dragBox = {
+          x: Math.min(startX, curX),
+          y: Math.min(startY, curY),
+          width: Math.abs(curX - startX),
+          height: Math.abs(curY - startY),
+        };
+        redraw();
+      });
+
+      const finishDrag = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (dragBox && dragBox.width > 4 && dragBox.height > 4) {
+          const scaleX = canvas.width / (page.widthPx || canvas.width || 1);
+          const scaleY = canvas.height / (page.heightPx || canvas.height || 1);
+          const customRect: Rect = {
+            x: Math.round(dragBox.x / scaleX),
+            y: Math.round(dragBox.y / scaleY),
+            width: Math.round(dragBox.width / scaleX),
+            height: Math.round(dragBox.height / scaleY),
+          };
+          const customId = `custom:${requestId()}`;
+          const customFinding: Finding = {
+            id: customId,
+            category: "custom",
+            confidence: 1.0,
+            source: "custom-pattern",
+            preview: "[Custom Redaction]",
+            nodeId: "",
+            startOffset: 0,
+            endOffset: 0,
+            rects: [customRect],
+            contextPreview: `Drawn bounding box (${customRect.width}×${customRect.height}px)`,
+            selected: true,
+          };
+          page.findings.push(customFinding);
+          selectedDocFindingIds.add(customId);
+          renderDocFindings();
+        }
+        dragBox = null;
+        redraw();
+      };
+
+      canvas.addEventListener("mouseup", finishDrag);
+      canvas.addEventListener("mouseleave", finishDrag);
+
+      setTimeout(redraw, 0);
     }
   }
   renderDocFindings();
+  redrawAllOverlays();
 }
 
 function buildDocBoxes(): { pageIndex: number; rects: Rect[] }[] {
@@ -508,6 +721,7 @@ function clearDocUi(): void {
   if (lastDoc) void deleteFile(lastDoc.fileKey).catch(() => undefined);
   lastDoc = null;
   selectedDocFindingIds.clear();
+  overlayRedrawers.length = 0;
   if (review) review.hidden = true;
   if (thumbs) thumbs.replaceChildren();
   if (list) list.replaceChildren();
@@ -670,6 +884,27 @@ export async function initPopup(): Promise<void> {
     }
   });
 
+  const docStyleSelect = document.getElementById("doc-style-select") as HTMLSelectElement | null;
+  const docStampContainer = document.getElementById("doc-stamp-container") as HTMLDivElement | null;
+  const docStampText = document.getElementById("doc-stamp-text") as HTMLInputElement | null;
+  const ocrLangSelect = document.getElementById("ocr-language-select") as HTMLSelectElement | null;
+
+  if (ocrLangSelect) {
+    ocrLangSelect.value = settings.ocrLanguage || "eng";
+    ocrLangSelect.addEventListener("change", async () => {
+      const current = await loadSettings();
+      await saveSettings({ ...current, ocrLanguage: ocrLangSelect.value });
+    });
+  }
+
+  if (docStyleSelect) {
+    docStyleSelect.addEventListener("change", () => {
+      if (docStampContainer) {
+        docStampContainer.hidden = docStyleSelect.value !== "stamp";
+      }
+    });
+  }
+
   docRedactBtn?.addEventListener("click", () => {
     if (!lastDoc || selectedDocFindingIds.size === 0) return;
     docConfirmDialog?.showModal();
@@ -684,6 +919,8 @@ export async function initPopup(): Promise<void> {
     const ids = [...selectedDocFindingIds];
     if (boxes.length === 0) return;
     setDocStatus("Preparing redacted copy…", false);
+    const style = (docStyleSelect?.value as RedactionStyle) || "blackout";
+    const stampText = docStampText?.value?.trim() || "[REDACTED]";
     void sendMessage({
       type: "POPUP_DOC_REDACT",
       requestId: requestId(),
@@ -694,6 +931,11 @@ export async function initPopup(): Promise<void> {
       kind: lastDoc.kind,
       boxes,
       findingIds: ids,
+      options: {
+        style,
+        stampText,
+        padding: settings.maskPadding,
+      },
     });
   });
 
@@ -766,6 +1008,15 @@ export async function initPopup(): Promise<void> {
     placeholderToggle.addEventListener("change", async () => {
       const current = await loadSettings();
       await saveSettings({ ...current, maskPlaceholders: placeholderToggle.checked });
+    });
+  }
+
+  const pasteGuardToggle = document.getElementById("paste-guard-toggle") as HTMLInputElement | null;
+  if (pasteGuardToggle) {
+    pasteGuardToggle.checked = settings.pasteGuardEnabled;
+    pasteGuardToggle.addEventListener("change", async () => {
+      const current = await loadSettings();
+      await saveSettings({ ...current, pasteGuardEnabled: pasteGuardToggle.checked });
     });
   }
 

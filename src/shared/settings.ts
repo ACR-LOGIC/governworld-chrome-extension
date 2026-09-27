@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import { isRecord } from "./types.js";
 import type { FindingCategory, ScanMode } from "./types.js";
+export type { FindingCategory, ScanMode };
 
 export const ALL_CATEGORIES: FindingCategory[] = [
   "email",
@@ -17,9 +18,25 @@ export const ALL_CATEGORIES: FindingCategory[] = [
   "secrets",
   "possible_name",
   "custom",
+  "canadian_sin",
+  "uk_nhs",
+  "aadhaar",
+  "pan_india",
+  "australian_tfn",
+  "cpf",
 ];
 
-export type PresetId = "custom" | "hipaa" | "pci" | "gdpr" | "developer";
+export type PresetId =
+  | "custom"
+  | "hipaa"
+  | "pci"
+  | "gdpr"
+  | "developer"
+  | "pipeda"
+  | "uk_gdpr"
+  | "india_dpdp"
+  | "australia_privacy"
+  | "brazil_lgpd";
 
 export const PRESET_CATEGORIES: Record<Exclude<PresetId, "custom">, FindingCategory[]> = {
   hipaa: [
@@ -57,6 +74,54 @@ export const PRESET_CATEGORIES: Record<Exclude<PresetId, "custom">, FindingCateg
     "email",
     "phone",
   ],
+  pipeda: [
+    "canadian_sin",
+    "email",
+    "phone",
+    "address",
+    "dob",
+    "possible_name",
+    "payment_card",
+  ],
+  uk_gdpr: [
+    "uk_nhs",
+    "email",
+    "phone",
+    "address",
+    "dob",
+    "possible_name",
+    "medical_record_number",
+    "member_id",
+    "payment_card",
+  ],
+  india_dpdp: [
+    "aadhaar",
+    "pan_india",
+    "email",
+    "phone",
+    "address",
+    "dob",
+    "possible_name",
+    "payment_card",
+  ],
+  australia_privacy: [
+    "australian_tfn",
+    "email",
+    "phone",
+    "address",
+    "dob",
+    "possible_name",
+    "payment_card",
+  ],
+  brazil_lgpd: [
+    "cpf",
+    "email",
+    "phone",
+    "address",
+    "dob",
+    "possible_name",
+    "payment_card",
+  ],
 };
 
 export const PRESET_LABELS: Record<PresetId, string> = {
@@ -65,6 +130,11 @@ export const PRESET_LABELS: Record<PresetId, string> = {
   pci: "PCI DSS (Payments)",
   gdpr: "GDPR (EU Personal Data)",
   developer: "Developer (API keys & secrets)",
+  pipeda: "PIPEDA (Canada Personal Data)",
+  uk_gdpr: "UK GDPR / NHS (United Kingdom)",
+  india_dpdp: "DPDP Act (India Privacy)",
+  australia_privacy: "Privacy Act (Australia)",
+  brazil_lgpd: "LGPD (Brazil Personal Data)",
 };
 
 export const CONSENT_VERSION = "1";
@@ -78,6 +148,8 @@ export interface Settings {
   maskPadding: number;
   /** When true, applied masks show a short placeholder label (e.g. [SSN]) in white on the block. */
   maskPlaceholders: boolean;
+  /** When true, inspects pasted text on input fields and alerts before sensitive data leaks. */
+  pasteGuardEnabled: boolean;
   /** Max visible characters scanned per page before a graceful stop. */
   maxVisibleChars: number;
   /** Per-node character cap. */
@@ -93,6 +165,8 @@ export interface Settings {
   /** Human-readable label cached from the linked gateway account (never a secret). */
   accountLabel?: string;
   consentVersion: string;
+  /** Selectable OCR recognition language code ('eng', 'spa', 'fra', 'deu', 'jpn', 'por'). */
+  ocrLanguage: string;
 }
 
 function defaultThresholds(): Record<FindingCategory, number> {
@@ -121,10 +195,17 @@ export const DEFAULT_SETTINGS: Settings = {
     "payment_card",
     "secrets",
     "possible_name",
+    "canadian_sin",
+    "uk_nhs",
+    "aadhaar",
+    "pan_india",
+    "australian_tfn",
+    "cpf",
   ],
   confidenceThresholds: defaultThresholds(),
   maskPadding: 4,
   maskPlaceholders: false,
+  pasteGuardEnabled: true,
   maxVisibleChars: 250_000,
   maxNodeChars: 10_000,
   gatewayOrigin: null,
@@ -132,6 +213,7 @@ export const DEFAULT_SETTINGS: Settings = {
   verificationNoticeAcknowledged: false,
   notificationsEnabled: false,
   consentVersion: CONSENT_VERSION,
+  ocrLanguage: "eng",
 };
 
 export function isCategory(value: unknown): value is FindingCategory {
@@ -160,6 +242,7 @@ export function normalizeSettings(raw: unknown): Settings {
 
   const maskPadding = typeof raw.maskPadding === "number" && Number.isFinite(raw.maskPadding) && raw.maskPadding >= 0 ? raw.maskPadding : base.maskPadding;
   const maskPlaceholders = raw.maskPlaceholders === true;
+  const pasteGuardEnabled = typeof raw.pasteGuardEnabled === "boolean" ? raw.pasteGuardEnabled : base.pasteGuardEnabled;
   const maxVisibleChars =
     typeof raw.maxVisibleChars === "number" && Number.isFinite(raw.maxVisibleChars) && raw.maxVisibleChars >= 100
       ? raw.maxVisibleChars
@@ -179,6 +262,10 @@ export function normalizeSettings(raw: unknown): Settings {
     typeof raw.accountLabel === "string" && raw.accountLabel.length > 0 && raw.accountLabel.length <= 200
       ? raw.accountLabel
       : undefined;
+  const ocrLanguage =
+    typeof raw.ocrLanguage === "string" && ["eng", "spa", "fra", "deu", "jpn", "por"].includes(raw.ocrLanguage)
+      ? raw.ocrLanguage
+      : base.ocrLanguage;
 
   return {
     mode,
@@ -186,6 +273,7 @@ export function normalizeSettings(raw: unknown): Settings {
     confidenceThresholds,
     maskPadding,
     maskPlaceholders,
+    pasteGuardEnabled,
     maxVisibleChars,
     maxNodeChars,
     gatewayOrigin,
@@ -194,6 +282,7 @@ export function normalizeSettings(raw: unknown): Settings {
     verificationNoticeAcknowledged,
     notificationsEnabled,
     ...(accountLabel !== undefined ? { accountLabel } : {}),
+    ocrLanguage,
   };
 }
 

@@ -24,7 +24,13 @@ export type FindingCategory =
   | "payment_card"
   | "secrets"
   | "possible_name"
-  | "custom";
+  | "custom"
+  | "canadian_sin"
+  | "uk_nhs"
+  | "aadhaar"
+  | "pan_india"
+  | "australian_tfn"
+  | "cpf";
 
 export type FindingSource = "local-rules" | "local-model" | "gateway" | "attr" | "custom-pattern";
 
@@ -63,6 +69,15 @@ export interface Finding {
   selected: boolean;
 }
 
+export type RedactionStyle = "blackout" | "whiteout" | "stamp";
+
+export interface RedactionOptions {
+  style?: RedactionStyle;
+  stampText?: string;
+  padding?: number;
+  fillColor?: string;
+}
+
 export type ScanMode = "local" | "cloud";
 
 export interface ScanStats {
@@ -88,7 +103,7 @@ export type PopupMessage =
   | { type: "POPUP_GET_STATE"; requestId: string }
   | { type: "POPUP_SET_MODE"; requestId: string; mode: ScanMode }
   | { type: "POPUP_DOC_PREVIEW"; requestId: string; fileKey: string; name: string; mimeType: string; kind: DocKind }
-  | { type: "POPUP_DOC_REDACT"; requestId: string; docId: string; fileKey: string; name: string; mimeType: string; kind: DocKind; boxes: { pageIndex: number; rects: Rect[] }[]; findingIds: string[] }
+  | { type: "POPUP_DOC_REDACT"; requestId: string; docId: string; fileKey: string; name: string; mimeType: string; kind: DocKind; boxes: { pageIndex: number; rects: Rect[] }[]; findingIds: string[]; options?: RedactionOptions }
   | { type: "POPUP_DOC_CLEAR"; requestId: string; docId: string }
   | {
       /**
@@ -136,7 +151,9 @@ export type WorkerMessage =
   | { type: "APPLY_MASKS"; requestId: string; sessionId: string; findingIds: string[] }
   | { type: "REMOVE_MASKS"; requestId: string; sessionId: string }
   | { type: "COPY_REDACTED_TEXT"; requestId: string; sessionId: string; findingIds: string[] }
-  | { type: "COPY_REDACTED_TEXT_RESULT"; requestId: string; sessionId: string; text: string };
+  | { type: "COPY_REDACTED_TEXT_RESULT"; requestId: string; sessionId: string; text: string }
+  | { type: "CONTEXT_REDACT_SELECTION"; requestId: string; selectionText?: string; settings?: ScanSettingsMessage }
+  | { type: "CONTEXT_MASK_SELECTION"; requestId: string; selectionText?: string; settings?: ScanSettingsMessage };
 
 export type ExtensionMessage = PopupMessage | WorkerMessage | PopupFromWorker;
 
@@ -263,6 +280,8 @@ export const MESSAGE_TYPES = new Set<string>([
   "REMOVE_MASKS",
   "COPY_REDACTED_TEXT",
   "COPY_REDACTED_TEXT_RESULT",
+  "CONTEXT_REDACT_SELECTION",
+  "CONTEXT_MASK_SELECTION",
   "POPUP_STATE",
   "POPUP_COPY_RESULT",
   "POPUP_DOC_STATE",

@@ -23,6 +23,10 @@ export interface OcrPageResult {
   fullText: string;
 }
 
+export const SUPPORTED_OCR_LANGUAGES = ["eng", "spa", "fra", "deu", "jpn", "por"] as const;
+export type OcrLanguage = (typeof SUPPORTED_OCR_LANGUAGES)[number];
+
+let currentWorkerLang: string | null = null;
 let workerPromise: Promise<Worker> | null = null;
 
 // tesseract.js resolves `createWorker` only after worker core init + language
@@ -51,7 +55,7 @@ function assetUrl(name: string): string {
   return chrome.runtime.getURL(`assets/${name}`);
 }
 
-async function langDataPresent(lang: string): Promise<boolean> {
+export async function langDataPresent(lang: string): Promise<boolean> {
   // Traineddata is vendored into dist/assets/tessdata at build time. If it is
   // absent, fail closed rather than download from a CDN.
   try {
@@ -62,13 +66,28 @@ async function langDataPresent(lang: string): Promise<boolean> {
   }
 }
 
-async function getWorker(lang = "eng"): Promise<Worker> {
-  if (!(await langDataPresent(lang))) {
-    throw new Error("Language data is not installed; OCR is unavailable in offline mode.");
+export async function getWorker(requestedLang = "eng"): Promise<Worker> {
+  const targetLang = (SUPPORTED_OCR_LANGUAGES as readonly string[]).includes(requestedLang) ? requestedLang : "eng";
+  let activeLang = targetLang;
+
+  const targetPresent = await langDataPresent(targetLang);
+  if (!targetPresent) {
+    const engPresent = await langDataPresent("eng");
+    if (engPresent) {
+      activeLang = "eng";
+    } else {
+      throw new Error("Language data is not installed; OCR is unavailable in offline mode.");
+    }
   }
+
+  if (workerPromise && currentWorkerLang !== activeLang) {
+    await resetOcr();
+  }
+
   if (!workerPromise) {
+    currentWorkerLang = activeLang;
     workerPromise = withInitTimeout(
-      createWorker(lang, 1, {
+      createWorker(activeLang, 1, {
         workerPath: assetUrl("tesseract.worker.min.js"),
         workerBlobURL: false,
         corePath: assetUrl("tesseract-core.wasm.js"),
@@ -79,6 +98,7 @@ async function getWorker(lang = "eng"): Promise<Worker> {
     // Reset so a failed init can be retried.
     workerPromise.catch(() => {
       workerPromise = null;
+      currentWorkerLang = null;
     });
   }
   return workerPromise;
@@ -89,6 +109,7 @@ export async function resetOcr(): Promise<void> {
     const w = await workerPromise;
     await w.terminate().catch(() => undefined);
     workerPromise = null;
+    currentWorkerLang = null;
   }
 }
 
@@ -98,8 +119,12 @@ function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
-export async function ocrCanvas(canvas: HTMLCanvasElement | OffscreenCanvas, pageIndex: number): Promise<OcrPageResult> {
-  const worker = await getWorker();
+export async function ocrCanvas(
+  canvas: HTMLCanvasElement | OffscreenCanvas,
+  pageIndex: number,
+  lang = "eng"
+): Promise<OcrPageResult> {
+  const worker = await getWorker(lang);
   const source = canvas instanceof OffscreenCanvas ? await canvas.convertToBlob() : await canvasToBlob(canvas);
   const result = await worker.recognize(source);
   const data = result.data;
@@ -131,10 +156,13 @@ export async function ocrCanvas(canvas: HTMLCanvasElement | OffscreenCanvas, pag
   };
 }
 
-export async function ocrPages(canvases: (HTMLCanvasElement | OffscreenCanvas)[]): Promise<OcrPageResult[]> {
+export async function ocrPages(
+  canvases: (HTMLCanvasElement | OffscreenCanvas)[],
+  lang = "eng"
+): Promise<OcrPageResult[]> {
   const out: OcrPageResult[] = [];
   for (let i = 0; i < canvases.length; i++) {
-    out.push(await ocrCanvas(canvases[i], i));
+    out.push(await ocrCanvas(canvases[i], i, lang));
   }
   return out;
 }

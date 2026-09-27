@@ -11,7 +11,7 @@
 //
 // Runs inside the offscreen document: it needs DOM canvas access.
 
-import type { Rect } from "../shared/types.js";
+import type { Rect, RedactionOptions } from "../shared/types.js";
 
 /**
  * A pixel counts as covered when its Rec.709 luminance is below this. Pure black
@@ -19,12 +19,14 @@ import type { Rect } from "../shared/types.js";
  * admitting partially-redacted text.
  */
 export const REDACTION_DARK_LUMINANCE = 40;
+export const REDACTION_WHITE_LUMINANCE = 215;
 
 /**
  * Fraction of a redaction box that must be dark for the box to count as applied.
  * A box that is only mostly covered still has legible edges.
  */
 export const REDACTION_MIN_DARK_FRACTION = 0.85;
+export const REDACTION_MIN_STAMP_FRACTION = 0.70;
 
 export type RedactionVerifyMethod = "pixel" | "page-pixels";
 
@@ -70,7 +72,8 @@ export function verifyCanvasRegions(
   canvas: HTMLCanvasElement,
   rects: Rect[],
   padding: number,
-  label: string
+  label: string,
+  options?: RedactionOptions
 ): RegionCoverage {
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) return { checked: 0, dark: 0, failures: [`${label}: canvas is unreadable`] };
@@ -78,6 +81,9 @@ export function verifyCanvasRegions(
   let checked = 0;
   let dark = 0;
   const failures: string[] = [];
+  const isWhiteout = options?.style === "whiteout";
+  const isStamp = options?.style === "stamp" || Boolean(options?.stampText);
+  const minFraction = isStamp ? REDACTION_MIN_STAMP_FRACTION : REDACTION_MIN_DARK_FRACTION;
 
   for (const rect of rects) {
     const box = paddedBounds(rect, padding, canvas.width, canvas.height);
@@ -96,11 +102,17 @@ export function verifyCanvasRegions(
     const pixels = data.length / 4;
     for (let i = 0; i < data.length; i += 4) {
       const luminance = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
-      if (luminance < REDACTION_DARK_LUMINANCE) covered += 1;
+      if (isWhiteout) {
+        if (luminance > REDACTION_WHITE_LUMINANCE || (data[i] >= 240 && data[i + 1] >= 240 && data[i + 2] >= 240)) {
+          covered += 1;
+        }
+      } else {
+        if (luminance < REDACTION_DARK_LUMINANCE) covered += 1;
+      }
     }
     const fraction = pixels === 0 ? 0 : covered / pixels;
     checked += 1;
-    if (fraction >= REDACTION_MIN_DARK_FRACTION) {
+    if (fraction >= minFraction) {
       dark += 1;
     } else {
       failures.push(
@@ -121,7 +133,8 @@ export function verifyCanvasRegions(
 export async function verifyEncodedPng(
   outputBytes: Uint8Array,
   rects: Rect[],
-  padding: number
+  padding: number,
+  options?: RedactionOptions
 ): Promise<RedactionVerification> {
   const copy = new Uint8Array(outputBytes);
   let bitmap: ImageBitmap | null = null;
@@ -135,7 +148,7 @@ export async function verifyEncodedPng(
       return { verified: false, method: "pixel", checkedRegions: 0, darkRegions: 0, failures: ["canvas is unreadable"] };
     }
     ctx.drawImage(bitmap, 0, 0);
-    const coverage = verifyCanvasRegions(canvas, rects, padding, "output");
+    const coverage = verifyCanvasRegions(canvas, rects, padding, "output", options);
     return {
       verified: coverage.failures.length === 0 && coverage.checked > 0,
       method: "pixel",

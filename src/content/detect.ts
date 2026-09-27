@@ -1,16 +1,33 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import type { FindingCategory } from "../shared/types.js";
-import { isValidSsn, isValidDea, isValidMbi, isValidNpi, isValidLuhn, isNonProviderBound } from "../validators/index.js";
+import {
+  isValidSsn,
+  isValidDea,
+  isValidMbi,
+  isValidNpi,
+  isValidLuhn,
+  isNonProviderBound,
+  isValidCanadianSin,
+  isValidNhsNumber,
+  isValidAadhaar,
+  isValidPanIndia,
+  isValidAustralianTfn,
+  isValidCpf,
+  isValidItin,
+  isValidCusip,
+  isValidIsin,
+  isValidSedol,
+  isValidLoinc,
+} from "../validators/index.js";
 
 /**
  * Local, deterministic detectors for visible-page text. These run entirely
  * on-device and are intentionally conservative: ambiguous matches are surfaced
  * as "possible sensitive data", never as definitive clinical/legal findings.
  *
- * Hardened identifier validity (SSN, DEA, MBI, NPI checksums, Luhn) is
- * evaluated by the shared `@governworld/identifier-validators` package — the
- * same rules the GovernWorld gateway core uses — so the on-device scanner and
- * the server-side detector can never drift.
+ * Hardened identifier validity (SSN, DEA, MBI, NPI checksums, Luhn, international
+ * tax/health IDs) is evaluated by the shared validator rules so detection can
+ * never drift between the gateway and the on-device scanner.
  */
 
 import type { CustomPattern } from "../shared/customPatterns.js";
@@ -27,6 +44,12 @@ export interface RawMatch {
 const CATEGORY_PRIORITY: FindingCategory[] = [
   "payment_card",
   "ssn",
+  "canadian_sin",
+  "uk_nhs",
+  "aadhaar",
+  "pan_india",
+  "australian_tfn",
+  "cpf",
   "npi",
   "dea",
   "mbi",
@@ -65,6 +88,36 @@ export function maskValue(category: FindingCategory, value: string): string {
       const digits = value.replace(/\D/g, "");
       if (digits.length < 4) return value.replace(/./g, "*");
       return `***-**-${digits.slice(-4)}`;
+    }
+    case "canadian_sin": {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length < 3) return value.replace(/./g, "*");
+      return `***-***-${digits.slice(-3)}`;
+    }
+    case "uk_nhs": {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length < 4) return value.replace(/./g, "*");
+      return `***-***-${digits.slice(-4)}`;
+    }
+    case "aadhaar": {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length < 4) return value.replace(/./g, "*");
+      return `****-****-${digits.slice(-4)}`;
+    }
+    case "pan_india": {
+      const clean = value.replace(/[\s-]/g, "").toUpperCase();
+      if (clean.length < 5) return value.replace(/./g, "*");
+      return `*****${clean.slice(5)}`;
+    }
+    case "australian_tfn": {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length < 3) return value.replace(/./g, "*");
+      return `***-***-${digits.slice(-3)}`;
+    }
+    case "cpf": {
+      const digits = value.replace(/\D/g, "");
+      if (digits.length < 2) return value.replace(/./g, "*");
+      return `***.***.***-${digits.slice(-2)}`;
     }
     case "payment_card": {
       const digits = value.replace(/\D/g, "");
@@ -129,6 +182,12 @@ export function placeholderLabelFor(category: FindingCategory): string {
     case "secrets": return "API KEY";
     case "possible_name": return "NAME";
     case "custom": return "CUSTOM";
+    case "canadian_sin": return "SIN";
+    case "uk_nhs": return "NHS";
+    case "aadhaar": return "AADHAAR";
+    case "pan_india": return "PAN";
+    case "australian_tfn": return "TFN";
+    case "cpf": return "CPF";
   }
 }
 
@@ -173,6 +232,8 @@ function detectPhones(text: string): RawMatch[] {
 const SSN_DASH_RE = /\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b/g;
 const SSN_BARE_RE = /\b(?!000|666|9\d\d)\d{3}(?!00)\d{2}(?!0000)\d{4}\b/g;
 const SSN_CUE_RE = /\b(?:ssn|social(?:\s+security)?(?:\s*(?:number|no|#))?)\b/i;
+const ITIN_CUE_RE = /\b(?:itin|individual\s+taxpayer(?:\s+identification)?(?:\s*(?:number|no|#))?)\b/i;
+const ITIN_RE = /\b9\d{2}[- ]\d{2}[- ]\d{4}\b|\b9\d{8}\b/g;
 
 function detectSsns(text: string): RawMatch[] {
   const out: RawMatch[] = [];
@@ -185,6 +246,204 @@ function detectSsns(text: string): RawMatch[] {
     const before = text.slice(Math.max(0, m.index - 40), m.index);
     if (!SSN_CUE_RE.test(before)) continue;
     out.push({ category: "ssn", confidence: 0.85, value: m[0], start: m.index, end: m.index + m[0].length });
+  }
+  for (const m of text.matchAll(ITIN_RE)) {
+    if (!isValidItin(m[0])) continue;
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    if (ITIN_CUE_RE.test(before) || SSN_CUE_RE.test(before)) {
+      out.push({ category: "ssn", confidence: 0.88, value: m[0], start: m.index, end: m.index + m[0].length });
+    }
+  }
+  return out;
+}
+
+// Canadian SIN
+const CANADIAN_SIN_DASH_RE = /\b(?!0|8)\d{3}[ -]\d{3}[ -]\d{3}\b/g;
+const CANADIAN_SIN_BARE_RE = /\b(?!0|8)\d{9}\b/g;
+const CANADIAN_SIN_CUE_RE = /\b(?:sin|social\s+insurance(?:\s*(?:number|no|#))?|nas|num[ée]ro\s+d['’]assurance\s+sociale)\b/i;
+
+function detectCanadianSins(text: string): RawMatch[] {
+  const out: RawMatch[] = [];
+  for (const m of text.matchAll(CANADIAN_SIN_DASH_RE)) {
+    if (!isValidCanadianSin(m[0])) continue;
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    const hasCue = CANADIAN_SIN_CUE_RE.test(before);
+    out.push({
+      category: "canadian_sin",
+      confidence: hasCue ? 0.95 : 0.90,
+      value: m[0],
+      start: m.index,
+      end: m.index + m[0].length,
+    });
+  }
+  for (const m of text.matchAll(CANADIAN_SIN_BARE_RE)) {
+    if (!isValidCanadianSin(m[0])) continue;
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    if (!CANADIAN_SIN_CUE_RE.test(before)) continue;
+    out.push({
+      category: "canadian_sin",
+      confidence: 0.85,
+      value: m[0],
+      start: m.index,
+      end: m.index + m[0].length,
+    });
+  }
+  return out;
+}
+
+// UK NHS Number
+const UK_NHS_FORMATTED_RE = /\b\d{3}[ -]\d{3}[ -]\d{4}\b/g;
+const UK_NHS_BARE_RE = /\b\d{10}\b/g;
+const UK_NHS_CUE_RE = /\b(?:nhs(?:\s*(?:number|no|#))?|national\s+health\s+service)\b/i;
+
+function detectUkNhs(text: string): RawMatch[] {
+  const out: RawMatch[] = [];
+  for (const m of text.matchAll(UK_NHS_FORMATTED_RE)) {
+    if (!isValidNhsNumber(m[0])) continue;
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    const hasCue = UK_NHS_CUE_RE.test(before);
+    out.push({
+      category: "uk_nhs",
+      confidence: hasCue ? 0.95 : 0.90,
+      value: m[0],
+      start: m.index,
+      end: m.index + m[0].length,
+    });
+  }
+  for (const m of text.matchAll(UK_NHS_BARE_RE)) {
+    if (!isValidNhsNumber(m[0])) continue;
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    if (!UK_NHS_CUE_RE.test(before)) continue;
+    out.push({
+      category: "uk_nhs",
+      confidence: 0.85,
+      value: m[0],
+      start: m.index,
+      end: m.index + m[0].length,
+    });
+  }
+  return out;
+}
+
+// Indian Aadhaar
+const AADHAAR_FORMATTED_RE = /\b[2-9]\d{3}[ -]\d{4}[ -]\d{4}\b/g;
+const AADHAAR_BARE_RE = /\b[2-9]\d{11}\b/g;
+const AADHAAR_CUE_RE = /\b(?:aadhaar|aadhar|uidai)(?:\s*(?:number|no|#))?\b/i;
+
+function detectAadhaar(text: string): RawMatch[] {
+  const out: RawMatch[] = [];
+  for (const m of text.matchAll(AADHAAR_FORMATTED_RE)) {
+    if (!isValidAadhaar(m[0])) continue;
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    const hasCue = AADHAAR_CUE_RE.test(before);
+    out.push({
+      category: "aadhaar",
+      confidence: hasCue ? 0.95 : 0.92,
+      value: m[0],
+      start: m.index,
+      end: m.index + m[0].length,
+    });
+  }
+  for (const m of text.matchAll(AADHAAR_BARE_RE)) {
+    if (!isValidAadhaar(m[0])) continue;
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    if (!AADHAAR_CUE_RE.test(before)) continue;
+    out.push({
+      category: "aadhaar",
+      confidence: 0.85,
+      value: m[0],
+      start: m.index,
+      end: m.index + m[0].length,
+    });
+  }
+  return out;
+}
+
+// Indian PAN
+const PAN_INDIA_RE = /\b[A-Z]{5}\d{4}[A-Z]\b/g;
+const PAN_INDIA_CUE_RE = /\b(?:pan(?:\s*(?:card|number|no|#))?|permanent\s+account\s+number)\b/i;
+
+function detectPanIndia(text: string): RawMatch[] {
+  const out: RawMatch[] = [];
+  for (const m of text.matchAll(PAN_INDIA_RE)) {
+    if (!isValidPanIndia(m[0])) continue;
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    const hasCue = PAN_INDIA_CUE_RE.test(before);
+    out.push({
+      category: "pan_india",
+      confidence: hasCue ? 0.95 : 0.90,
+      value: m[0],
+      start: m.index,
+      end: m.index + m[0].length,
+    });
+  }
+  return out;
+}
+
+// Australian TFN (Tax File Number)
+const AUSTRALIAN_TFN_FORMATTED_RE = /\b\d{3}[ -]\d{3}[ -]\d{2,3}\b/g;
+const AUSTRALIAN_TFN_BARE_RE = /\b\d{8,9}\b/g;
+const AUSTRALIAN_TFN_CUE_RE = /\b(?:tfn|tax\s+file\s+number)\b/i;
+
+function detectAustralianTfn(text: string): RawMatch[] {
+  const out: RawMatch[] = [];
+  for (const m of text.matchAll(AUSTRALIAN_TFN_FORMATTED_RE)) {
+    if (!isValidAustralianTfn(m[0])) continue;
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    const hasCue = AUSTRALIAN_TFN_CUE_RE.test(before);
+    out.push({
+      category: "australian_tfn",
+      confidence: hasCue ? 0.95 : 0.88,
+      value: m[0],
+      start: m.index,
+      end: m.index + m[0].length,
+    });
+  }
+  for (const m of text.matchAll(AUSTRALIAN_TFN_BARE_RE)) {
+    if (!isValidAustralianTfn(m[0])) continue;
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    if (!AUSTRALIAN_TFN_CUE_RE.test(before)) continue;
+    out.push({
+      category: "australian_tfn",
+      confidence: 0.85,
+      value: m[0],
+      start: m.index,
+      end: m.index + m[0].length,
+    });
+  }
+  return out;
+}
+
+// Brazilian CPF
+const CPF_FORMATTED_RE = /\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g;
+const CPF_BARE_RE = /\b\d{11}\b/g;
+const CPF_CUE_RE = /\b(?:cpf|cadastro\s+de\s+pessoas?\s+f[íi]sicas?)\b/i;
+
+function detectCpf(text: string): RawMatch[] {
+  const out: RawMatch[] = [];
+  for (const m of text.matchAll(CPF_FORMATTED_RE)) {
+    if (!isValidCpf(m[0])) continue;
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    const hasCue = CPF_CUE_RE.test(before);
+    out.push({
+      category: "cpf",
+      confidence: hasCue ? 0.95 : 0.92,
+      value: m[0],
+      start: m.index,
+      end: m.index + m[0].length,
+    });
+  }
+  for (const m of text.matchAll(CPF_BARE_RE)) {
+    if (!isValidCpf(m[0])) continue;
+    const before = text.slice(Math.max(0, m.index - 40), m.index);
+    if (!CPF_CUE_RE.test(before)) continue;
+    out.push({
+      category: "cpf",
+      confidence: 0.85,
+      value: m[0],
+      start: m.index,
+      end: m.index + m[0].length,
+    });
   }
   return out;
 }
@@ -463,6 +722,12 @@ const DETECTORS: Partial<Record<FindingCategory, (text: string) => RawMatch[]>> 
   payment_card: detectCards,
   secrets: detectSecrets,
   possible_name: detectNames,
+  canadian_sin: detectCanadianSins,
+  uk_nhs: detectUkNhs,
+  aadhaar: detectAadhaar,
+  pan_india: detectPanIndia,
+  australian_tfn: detectAustralianTfn,
+  cpf: detectCpf,
 };
 
 /** Resolve overlapping matches keeping the highest-priority, longest span. */

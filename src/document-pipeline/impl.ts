@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import type { DocumentPage, RedactedDocumentResult } from "./adapter.js";
-import type { DocKind, FindingCategory, Rect } from "../shared/types.js";
+import type { DocKind, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
 import { renderPdfPages, type RenderedPage } from "./pdf.js";
 import { ocrCanvas, ocrPages } from "./ocr.js";
 import { loadImagePage, type ImagePage } from "./image.js";
@@ -40,6 +40,7 @@ async function canvasToThumbnail(canvas: HTMLCanvasElement): Promise<string> {
 export interface PreviewInput extends PipelineInput {
   enabledCategories: FindingCategory[];
   maxPages: number;
+  ocrLanguage?: string;
 }
 
 export interface RedactOutput {
@@ -68,7 +69,7 @@ async function loadPages(
 
 export async function runDocumentPreview(input: PreviewInput): Promise<DocumentPage[]> {
   const { pages } = await loadPages(input, input.maxPages);
-  const ocrResults = await ocrPages(pages.map((p) => p.canvas));
+  const ocrResults = await ocrPages(pages.map((p) => p.canvas), input.ocrLanguage ?? "eng");
   const findings = findingsFromOcrPages(ocrResults, input.enabledCategories);
   const grouped = new Map<number, DocumentPage>();
   for (const page of pages) {
@@ -92,7 +93,8 @@ export async function runDocumentRedact(
   input: PipelineInput,
   boxes: { pageIndex: number; rects: Rect[] }[],
   maxPages: number,
-  padding = DEFAULT_PADDING
+  padding = DEFAULT_PADDING,
+  options?: RedactionOptions
 ): Promise<RedactOutput> {
   const { pages, flattenToPdf } = await loadPages(input, maxPages);
   const boxMap = new Map<number, Rect[]>();
@@ -105,8 +107,8 @@ export async function runDocumentRedact(
   for (const page of pages) {
     const rects = boxMap.get(page.index);
     if (!rects || rects.length === 0) continue;
-    applyBoxes(page.canvas, rects, padding);
-    const coverage = verifyCanvasRegions(page.canvas, rects, padding, `page ${page.index + 1}`);
+    applyBoxes(page.canvas, rects, padding, options);
+    const coverage = verifyCanvasRegions(page.canvas, rects, padding, `page ${page.index + 1}`, options);
     totals.checked += coverage.checked;
     totals.dark += coverage.dark;
     totals.failures.push(...coverage.failures);
@@ -133,6 +135,6 @@ export async function runDocumentRedact(
   // Image output is single-page, so the finished PNG can be re-decoded and
   // checked directly. That is the strongest claim available: these are the exact
   // bytes the browser will write to disk.
-  const verification = await verifyEncodedPng(outputBytes, boxMap.get(pages[0].index) ?? [], padding);
+  const verification = await verifyEncodedPng(outputBytes, boxMap.get(pages[0].index) ?? [], padding, options);
   return { outputBytes, outputMimeType: "image/png", outputName: `${base}-redacted.png`, redactedCount, verification };
 }

@@ -150,7 +150,21 @@
 
         <div id="doc-review" class="doc-review" hidden>
           <div id="doc-thumbs" class="doc-thumbs"></div>
-          <ul id="doc-findings" class="findings"></ul>
+          <div class="doc-style-controls" style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">
+            <div class="form-row" style="margin-top: 0;">
+              <label for="doc-style-select">Redaction style</label>
+              <select id="doc-style-select" class="preset-select">
+                <option value="blackout">Blackout (Solid black box)</option>
+                <option value="whiteout">Whiteout (Solid white box)</option>
+                <option value="stamp">Stamp (Box with centered label)</option>
+              </select>
+            </div>
+            <div id="doc-stamp-container" class="form-row" style="margin-top: 0;" hidden>
+              <label for="doc-stamp-text">Stamp label</label>
+              <input id="doc-stamp-text" type="text" placeholder="[REDACTED]" value="[REDACTED]" />
+            </div>
+          </div>
+          <ul id="doc-findings" class="findings" style="margin-top: 10px;"></ul>
           <div class="results__actions">
             <button id="doc-redact-btn" class="btn btn--primary" type="button" disabled>
               Redact selected &amp; download
@@ -203,6 +217,11 @@
                 <option value="hipaa">HIPAA (Healthcare)</option>
                 <option value="pci">PCI DSS (Payments)</option>
                 <option value="gdpr">GDPR (EU Personal Data)</option>
+                <option value="pipeda">PIPEDA (Canada Personal Data)</option>
+                <option value="uk_gdpr">UK GDPR / NHS (United Kingdom)</option>
+                <option value="india_dpdp">DPDP Act (India Privacy)</option>
+                <option value="australia_privacy">Privacy Act (Australia)</option>
+                <option value="brazil_lgpd">LGPD (Brazil Personal Data)</option>
                 <option value="developer">Developer (API keys &amp; secrets)</option>
               </select>
             </div>
@@ -216,6 +235,21 @@
               <input id="placeholder-toggle" type="checkbox" />
               <span>Show redaction labels on masks (e.g. <code>[SSN]</code>)</span>
             </label>
+            <label class="toggle-row">
+              <input id="paste-guard-toggle" type="checkbox" />
+              <span>Proactive Paste Shield (Chat &amp; LLM Guard)</span>
+            </label>
+            <div class="form-row" style="margin-top: 10px;">
+              <label for="ocr-language-select">Document OCR Language</label>
+              <select id="ocr-language-select" class="preset-select">
+                <option value="eng">English (eng)</option>
+                <option value="spa">Spanish (spa)</option>
+                <option value="fra">French (fra)</option>
+                <option value="deu">German (deu)</option>
+                <option value="jpn">Japanese (jpn)</option>
+                <option value="por">Portuguese (por)</option>
+              </select>
+            </div>
           </details>
 
           <details>
@@ -433,11 +467,13 @@
               <code>SSN</code>, <code>Medical Record Number (MRN)</code>, <code>Member ID</code>, <code>DOB</code>,
               <code>Provider NPI</code>, <code>DEA Number</code>, <code>Medicare Beneficiary ID (MBI)</code>,
               <code>Payment Cards (Luhn validated)</code>, <code>API Keys &amp; Secrets</code>, <code>Email</code>,
-              <code>US Phone</code>, <code>US Address</code>, and <code>Possible Names</code>.
+              <code>US Phone</code>, <code>US Address</code>, <code>Canadian SIN</code>, <code>UK NHS</code>,
+              <code>Indian Aadhaar</code>, <code>Indian PAN</code>, <code>Australian TFN</code>, <code>Brazilian CPF</code>, and <code>Possible Names</code>.
             </p>
             <p>
               Pre-configured compliance presets include <strong>HIPAA</strong> (Healthcare), <strong>PCI DSS</strong> (Payments),
-              <strong>GDPR</strong> (EU Personal Data), and <strong>Developer</strong> (API secrets).
+              <strong>GDPR</strong> (EU Personal Data), <strong>PIPEDA</strong> (Canada), <strong>UK GDPR / NHS</strong> (UK),
+              <strong>DPDP Act</strong> (India), <strong>Privacy Act</strong> (Australia), <strong>LGPD</strong> (Brazil), and <strong>Developer</strong> (API secrets).
             </p>
           </section>
 

@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
-import type { DocKind, Finding, FindingCategory, Rect } from "../shared/types.js";
+import type { DocKind, Finding, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
 import type { RedactionVerification } from "./verify.js";
 
 /**
@@ -31,6 +31,10 @@ export interface DocumentInput {
   previewPages: DocumentPage[];
   /** Detected categories present in the document (used for the redact summary). */
   categories: FindingCategory[];
+  /** Optional redaction styling and stamps. */
+  options?: RedactionOptions;
+  /** Optional OCR language code. */
+  ocrLanguage?: string;
 }
 
 export interface DocumentPage {
@@ -52,7 +56,7 @@ export interface RedactedDocumentResult {
   summary: { pages: number; redacted: number; categories: string[] };
   /**
    * Evidence that the redaction actually landed in the produced pixels. Callers
-   * must not report success on the strength of `outputBytes` alone.
+  * must not report success on the strength of `outputBytes` alone.
    */
   verification: RedactionVerification;
 }
@@ -67,7 +71,11 @@ export interface DocumentPipeline {
    * Produce a flattened redacted copy using the provided boxes.
    * The original bytes are never mutated.
    */
-  redact(input: DocumentInput, boxes: { pageIndex: number; rects: Rect[] }[]): Promise<RedactedDocumentResult>;
+  redact(
+    input: DocumentInput,
+    boxes: { pageIndex: number; rects: Rect[] }[],
+    options?: RedactionOptions
+  ): Promise<RedactedDocumentResult>;
 }
 
 export class UnavailableDocumentPipeline implements DocumentPipeline {

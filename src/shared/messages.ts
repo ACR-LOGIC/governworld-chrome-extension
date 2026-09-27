@@ -4,7 +4,7 @@ import {
   MAX_MESSAGE_BYTES,
   MESSAGE_TYPES,
 } from "./types.js";
-import type { DocKind, ExtensionMessage, Finding, ScanMode, DocPageMeta } from "./types.js";
+import type { DocKind, ExtensionMessage, Finding, ScanMode, DocPageMeta, RedactionOptions, RedactionStyle } from "./types.js";
 import { isAllowedGatewayOrigin, isCategory } from "./settings.js";
 import { parseCustomPattern } from "./customPatterns.js";
 import type { CustomPattern } from "./customPatterns.js";
@@ -85,6 +85,18 @@ function isMaskedPreview(category: FindingCategory, preview: string): boolean {
       return preview === "*********";
     case "secrets":
       return /^(?:[^\s*]\*{3,}|[\s*]+)$/.test(preview);
+    case "canadian_sin":
+      return /^(?:\*{3}-\*{3}-\d{3}|[\s*]+)$/.test(preview);
+    case "uk_nhs":
+      return /^(?:\*{3}-\*{3}-\d{4}|[\s*]+)$/.test(preview);
+    case "aadhaar":
+      return /^(?:\*{4}-\*{4}-\d{4}|[\s*]+)$/.test(preview);
+    case "pan_india":
+      return /^(?:\*{5}[0-9A-Za-z]{5}|[\s*]+)$/.test(preview);
+    case "australian_tfn":
+      return /^(?:\*{3}-\*{3}-\d{2,3}|[\s*]+)$/.test(preview);
+    case "cpf":
+      return /^(?:\*{3}\.\*{3}\.\*{3}-\d{2}|[\s*]+)$/.test(preview);
     case "possible_name":
     case "medical_record_number":
     case "member_id":
@@ -264,6 +276,32 @@ function normalizeCustomPattern(value: unknown): CustomPattern | null {
   return parsed.ok ? parsed.pattern : null;
 }
 
+export function normalizeRedactionOptions(value: unknown): RedactionOptions | undefined {
+  if (!isRecord(value)) return undefined;
+  let style: RedactionStyle | undefined;
+  if (value.style === "blackout" || value.style === "whiteout" || value.style === "stamp") {
+    style = value.style;
+  }
+  let stampText: string | undefined;
+  if (typeof value.stampText === "string" && value.stampText.length <= 100) {
+    stampText = value.stampText;
+  }
+  let padding: number | undefined;
+  if (typeof value.padding === "number" && Number.isFinite(value.padding) && value.padding >= 0 && value.padding <= 100) {
+    padding = value.padding;
+  }
+  let fillColor: string | undefined;
+  if (typeof value.fillColor === "string" && /^#[0-9a-fA-F]{6}$/.test(value.fillColor)) {
+    fillColor = value.fillColor;
+  }
+  return {
+    ...(style ? { style } : {}),
+    ...(stampText !== undefined ? { stampText } : {}),
+    ...(padding !== undefined ? { padding } : {}),
+    ...(fillColor ? { fillColor } : {}),
+  };
+}
+
 export function validateMessage(raw: unknown): ValidationResult {
   if (!isRecord(raw)) return { ok: false, error: "Message must be an object" };
   if (!withinSizeLimit(raw)) return { ok: false, error: "Message exceeds size limit" };
@@ -326,7 +364,22 @@ export function validateMessage(raw: unknown): ValidationResult {
         return { ok: false, error: "Invalid boxes" };
       }
       if (!isStringArray(raw.findingIds)) return { ok: false, error: "Invalid findingIds" };
-      return { ok: true, message: { type, requestId, docId: raw.docId, fileKey: raw.fileKey, name: raw.name, mimeType: raw.mimeType, kind: raw.kind, boxes: raw.boxes, findingIds: raw.findingIds } };
+      const options = normalizeRedactionOptions(raw.options);
+      return {
+        ok: true,
+        message: {
+          type,
+          requestId,
+          docId: raw.docId,
+          fileKey: raw.fileKey,
+          name: raw.name,
+          mimeType: raw.mimeType,
+          kind: raw.kind,
+          boxes: raw.boxes,
+          findingIds: raw.findingIds,
+          ...(options ? { options } : {}),
+        },
+      };
     }
     case "POPUP_DOC_DELIVERY_REPORT": {
       if (typeof raw.delivered !== "boolean") return { ok: false, error: "Invalid delivered" };
@@ -366,6 +419,24 @@ export function validateMessage(raw: unknown): ValidationResult {
       if (typeof raw.sessionId !== "string" || !raw.sessionId) return { ok: false, error: "Invalid sessionId" };
       if (typeof raw.text !== "string") return { ok: false, error: "Invalid text" };
       return { ok: true, message: { type, requestId, sessionId: raw.sessionId, text: raw.text } };
+    }
+    case "CONTEXT_REDACT_SELECTION":
+    case "CONTEXT_MASK_SELECTION": {
+      if (raw.selectionText !== undefined && typeof raw.selectionText !== "string") {
+        return { ok: false, error: "Invalid selectionText" };
+      }
+      if (raw.settings !== undefined && !isScanSettings(raw.settings)) {
+        return { ok: false, error: "Invalid settings" };
+      }
+      return {
+        ok: true,
+        message: {
+          type,
+          requestId,
+          ...(raw.selectionText !== undefined ? { selectionText: raw.selectionText as string } : {}),
+          ...(raw.settings !== undefined ? { settings: raw.settings } : {}),
+        },
+      };
     }
     case "POPUP_STATE": {
       const state = normalizePopupState(raw.state);

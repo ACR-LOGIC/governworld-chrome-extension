@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import type { DocumentPipeline, DocumentInput, DocumentPage, RedactedDocumentResult } from "./adapter.js";
-import type { Rect } from "../shared/types.js";
+import type { Rect, RedactionOptions } from "../shared/types.js";
 import {
   OFFSCREEN_CHANNEL,
   isOffscreenResponse,
@@ -136,6 +136,7 @@ export class BrowserDocumentPipeline implements DocumentPipeline {
         mimeType: input.mimeType,
         enabledCategories: input.enabledCategories,
         maxPages: input.maxPages,
+        ocrLanguage: input.ocrLanguage,
       });
       assertOk(response, "preview");
       if (response.op !== "preview") throw new Error("Unexpected offscreen response.");
@@ -147,9 +148,11 @@ export class BrowserDocumentPipeline implements DocumentPipeline {
 
   async redact(
     input: DocumentInput,
-    boxes: { pageIndex: number; rects: Rect[] }[]
+    boxes: { pageIndex: number; rects: Rect[] }[],
+    options?: RedactionOptions
   ): Promise<RedactedDocumentResult> {
     try {
+      const effectiveOptions = options ?? input.options;
       const response = await callOffscreen({
         channel: OFFSCREEN_CHANNEL,
         op: "redact",
@@ -159,7 +162,8 @@ export class BrowserDocumentPipeline implements DocumentPipeline {
         name: input.name,
         mimeType: input.mimeType,
         boxes,
-        padding: input.padding,
+        padding: effectiveOptions?.padding ?? input.padding,
+        options: effectiveOptions,
       });
       assertOk(response, "redact");
       if (response.op !== "redact") throw new Error("Unexpected offscreen response.");

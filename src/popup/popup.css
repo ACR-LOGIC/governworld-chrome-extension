@@ -729,15 +729,32 @@ body {
 .doc-thumbs {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 6px;
+  gap: 8px;
 }
 
-.doc-thumbs img {
+.doc-thumb-wrapper {
+  position: relative;
   width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  display: block;
+  overflow: hidden;
   background: var(--bg-elevated);
+  user-select: none;
+}
+
+.doc-thumb-wrapper img {
+  width: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+.doc-thumb-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
 }
 
 /* ---------- Sticky action footer ---------- */

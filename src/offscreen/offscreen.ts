@@ -51,6 +51,7 @@ port.onMessage.addListener((raw: unknown) => {
           mimeType: raw.mimeType,
           enabledCategories: raw.enabledCategories,
           maxPages: raw.maxPages,
+          ocrLanguage: raw.ocrLanguage,
         });
         port.postMessage({ channel: OFFSCREEN_CHANNEL, op: "preview", jobId, ok: true, pages });
         return;
@@ -59,7 +60,8 @@ port.onMessage.addListener((raw: unknown) => {
         { kind: raw.kind, bytes, name: raw.name, mimeType: raw.mimeType },
         raw.boxes,
         MAX_DOC_PAGES,
-        raw.padding
+        raw.padding,
+        raw.options
       );
       port.postMessage({
         channel: OFFSCREEN_CHANNEL,

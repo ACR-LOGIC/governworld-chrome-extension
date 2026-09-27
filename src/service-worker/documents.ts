@@ -3,7 +3,7 @@ import type { DocumentPage } from "../document-pipeline/adapter.js";
 import { BrowserDocumentPipeline } from "../document-pipeline/browser.js";
 import { MAX_DOC_PAGES } from "../document-pipeline/contract.js";
 import type { RedactionVerification } from "../document-pipeline/verify.js";
-import type { DocKind, FindingCategory, Rect } from "../shared/types.js";
+import type { DocKind, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
 import { loadSettings, meetsThreshold } from "../shared/settings.js";
 
 /**
@@ -151,6 +151,7 @@ export async function previewDocument(
       padding: settings.maskPadding,
       previewPages: [],
       categories: [],
+      ocrLanguage: settings.ocrLanguage,
     });
   } catch (error) {
     await deleteFile(fileKey).catch(() => undefined);
@@ -173,8 +174,9 @@ export async function redactDocument(
   name: string,
   mimeType: string,
   kind: DocKind,
-  _boxes: { pageIndex: number; rects: Rect[] }[],
-  findingIds: string[]
+  boxes: { pageIndex: number; rects: Rect[] }[],
+  findingIds: string[],
+  options?: RedactionOptions
 ): Promise<{ outputName: string; outputBytes: Uint8Array; outputMimeType: string; verification: RedactionVerification; redactedRegions: number }> {
   const session = sessions.get(docId);
   if (!session || session.fileKey !== fileKey || session.kind !== kind || session.name !== name) {
@@ -183,21 +185,31 @@ export async function redactDocument(
   const settings = await loadSettings();
   const selectedIds = new Set(findingIds);
   if (selectedIds.size === 0 || selectedIds.size !== findingIds.length) {
-    throw new Error("Select at least one finding to redact.");
+    if (!boxes || boxes.length === 0) {
+      throw new Error("Select at least one finding to redact.");
+    }
   }
   const availableIds = new Set(session.pages.flatMap((page) => page.findings.map((finding) => finding.id)));
-  if ([...selectedIds].some((id) => !availableIds.has(id))) {
+  if ([...selectedIds].some((id) => !availableIds.has(id) && !id.startsWith("custom:") && !id.startsWith("user:"))) {
     throw new Error("The selected findings are no longer available.");
   }
+
+  // If explicit boxes (including custom drawn boxes) are provided, use them;
+  // otherwise derive from selected session findings.
+  const explicitBoxes = (boxes ?? []).filter((b) => b.rects && b.rects.length > 0);
   const derivedBoxes = session.pages
     .map((page) => ({
       pageIndex: page.index,
       rects: page.findings.filter((finding) => selectedIds.has(finding.id)).flatMap((finding) => finding.rects),
     }))
     .filter((page) => page.rects.length > 0);
-  if (derivedBoxes.length === 0) {
+
+  const targetBoxes = explicitBoxes.length > 0 ? explicitBoxes : derivedBoxes;
+  if (targetBoxes.length === 0) {
     throw new Error("The selected findings have no redactable regions.");
   }
+
+  const effectivePadding = options?.padding ?? settings.maskPadding;
   const result = await pipeline.redact(
     {
       kind: session.kind,
@@ -206,17 +218,19 @@ export async function redactDocument(
       mimeType: session.mimeType,
       enabledCategories: settings.enabledCategories,
       maxPages: MAX_DOC_PAGES,
-      padding: settings.maskPadding,
+      padding: effectivePadding,
       previewPages: session.pages,
       categories: session.categories,
+      options,
     },
-    derivedBoxes
+    targetBoxes,
+    options
   );
   return {
     outputName: result.outputName,
     outputBytes: result.outputBytes,
     outputMimeType: result.outputMimeType,
     verification: result.verification,
-    redactedRegions: derivedBoxes.reduce((n, b) => n + b.rects.length, 0)
+    redactedRegions: targetBoxes.reduce((n, b) => n + b.rects.length, 0)
   };
 }

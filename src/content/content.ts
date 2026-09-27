@@ -6,6 +6,7 @@ import type { AttrScan } from "./attrs.js";
 import { detect, maskValue, maskContext, placeholderLabelFor } from "./detect.js";
 import { createOverlay } from "./overlay.js";
 import type { OverlayController } from "./overlay.js";
+import { initPasteGuard } from "./pasteGuard.js";
 import { validateMessage } from "../shared/messages.js";
 import type { Finding, FindingCategory, Rect, WorkerMessage } from "../shared/types.js";
 
@@ -19,6 +20,7 @@ import type { Finding, FindingCategory, Rect, WorkerMessage } from "../shared/ty
 const g = globalThis as unknown as Record<string, unknown>;
 if (g.__gwRedactionContentLoaded !== true) {
   g.__gwRedactionContentLoaded = true;
+  initPasteGuard();
 
   const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
 
@@ -242,59 +244,128 @@ if (g.__gwRedactionContentLoaded !== true) {
     }
     const msg = validation.message as WorkerMessage;
 
-    switch (msg.type) {
-      case "SCAN_PAGE": {
-        clearSession();
-        sessionId = msg.sessionId;
-        handleScan(msg.mode, msg.requestId, msg.settings);
-        sendResponse({ ok: true });
-        break;
-      }
-      case "APPLY_MASKS": {
-        if (msg.sessionId !== sessionId) {
-          sendResponse({ ok: false, error: "Stale session" });
-          break;
+    void (async () => {
+      try {
+        switch (msg.type) {
+          case "SCAN_PAGE": {
+            clearSession();
+            sessionId = msg.sessionId;
+            await handleScan(msg.mode, msg.requestId, msg.settings);
+            sendResponse({ ok: true });
+            break;
+          }
+          case "APPLY_MASKS": {
+            if (msg.sessionId !== sessionId) {
+              sendResponse({ ok: false, error: "Stale session" });
+              break;
+            }
+            const idSet = new Set(msg.findingIds);
+            findings = applySelectionExcludingAttrs(findings, idSet);
+            recomputeOverlay(4);
+            touchSession();
+            sendResponse({ ok: true });
+            break;
+          }
+          case "REMOVE_MASKS": {
+            if (msg.sessionId !== sessionId) {
+              sendResponse({ ok: false, error: "Stale session" });
+              break;
+            }
+            findings = findings.map((f) => ({ ...f, selected: false }));
+            overlay?.clear();
+            touchSession();
+            sendResponse({ ok: true });
+            break;
+          }
+          case "COPY_REDACTED_TEXT": {
+            if (msg.sessionId !== sessionId) {
+              sendResponse({ ok: false, error: "Stale session" });
+              break;
+            }
+            const idSet = new Set(msg.findingIds);
+            // Report-only attribute findings are never included in redacted copy.
+            const selectedFindings = applySelectionExcludingAttrs(findings, idSet).filter(
+              (f) => f.source !== "attr"
+            );
+            const text = buildRedactedText(segments, segmentStarts, combined.length, selectedFindings);
+            respond(
+              { type: "COPY_REDACTED_TEXT_RESULT", requestId: msg.requestId, sessionId, text },
+              msg.requestId
+            );
+            touchSession();
+            sendResponse({ ok: true });
+            break;
+          }
+          case "CONTEXT_REDACT_SELECTION": {
+            const selText = msg.selectionText ?? window.getSelection()?.toString() ?? "";
+            if (!selText) {
+              sendResponse({ ok: false, error: "No text selected" });
+              break;
+            }
+            let customPatterns: any[] = [];
+            try {
+              const stored = await chrome.storage.local.get("customPatterns");
+              if (Array.isArray(stored.customPatterns)) {
+                customPatterns = stored.customPatterns;
+              }
+            } catch {
+              // Ignore
+            }
+            const enabledCategories = msg.settings?.enabledCategories ?? [
+              "email", "phone", "ssn", "dob", "medical_record_number",
+              "member_id", "npi", "dea", "mbi", "address", "payment_card", "secrets", "possible_name"
+            ];
+            const matches = detect(selText, enabledCategories, customPatterns);
+            let redacted = selText;
+            const sorted = [...matches].sort((a, b) => b.start - a.start);
+            for (const m of sorted) {
+              const repl = msg.settings?.maskPlaceholders
+                ? placeholderLabelFor(m.category)
+                : "\u2588".repeat(m.end - m.start);
+              redacted = redacted.slice(0, m.start) + repl + redacted.slice(m.end);
+            }
+            if (navigator.clipboard?.writeText) {
+              await navigator.clipboard.writeText(redacted);
+            }
+            sendResponse({ ok: true, redactedText: redacted });
+            break;
+          }
+          case "CONTEXT_MASK_SELECTION": {
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+              sendResponse({ ok: false, error: "No active selection to mask" });
+              break;
+            }
+            if (!overlay) overlay = createOverlay(document);
+            placeholdersEnabled = msg.settings?.maskPlaceholders ?? false;
+            const range = sel.getRangeAt(0);
+            const rects = range.getClientRects();
+            const items: Array<{ kind: "highlight" | "mask"; label: string; placeholder?: string; x: number; y: number; width: number; height: number }> = [];
+            const padding = 4;
+            for (const r of rects) {
+              items.push({
+                kind: "mask",
+                label: "Selected text",
+                ...(placeholdersEnabled ? { placeholder: "[REDACTED]" } : {}),
+                x: r.x - padding,
+                y: r.y - padding,
+                width: r.width + padding * 2,
+                height: r.height + padding * 2,
+              });
+            }
+            overlay.render(items);
+            touchSession();
+            sendResponse({ ok: true });
+            break;
+          }
+          default:
+            sendResponse({ ok: false, error: "Unsupported content message" });
         }
-        const idSet = new Set(msg.findingIds);
-        findings = applySelectionExcludingAttrs(findings, idSet);
-        recomputeOverlay(4);
-        touchSession();
-        sendResponse({ ok: true });
-        break;
+      } catch (err) {
+        sendResponse({ ok: false, error: String(err) });
       }
-      case "REMOVE_MASKS": {
-        if (msg.sessionId !== sessionId) {
-          sendResponse({ ok: false, error: "Stale session" });
-          break;
-        }
-        findings = findings.map((f) => ({ ...f, selected: false }));
-        overlay?.clear();
-        touchSession();
-        sendResponse({ ok: true });
-        break;
-      }
-      case "COPY_REDACTED_TEXT": {
-        if (msg.sessionId !== sessionId) {
-          sendResponse({ ok: false, error: "Stale session" });
-          break;
-        }
-        const idSet = new Set(msg.findingIds);
-        // Report-only attribute findings are never included in redacted copy.
-        const selectedFindings = applySelectionExcludingAttrs(findings, idSet).filter(
-          (f) => f.source !== "attr"
-        );
-        const text = buildRedactedText(segments, segmentStarts, combined.length, selectedFindings);
-        respond(
-          { type: "COPY_REDACTED_TEXT_RESULT", requestId: msg.requestId, sessionId, text },
-          msg.requestId
-        );
-        touchSession();
-        sendResponse({ ok: true });
-        break;
-      }
-      default:
-        sendResponse({ ok: false, error: "Unsupported content message" });
-    }
+    })();
+    return true;
   });
 
   /**

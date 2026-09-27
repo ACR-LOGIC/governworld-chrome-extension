@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
-import type { DocKind, FindingCategory, Rect } from "../shared/types.js";
+import type { DocKind, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
 import type { DocumentPage } from "./adapter.js";
 import type { RedactionVerification } from "./verify.js";
 
@@ -50,6 +50,7 @@ export interface OffscreenPreviewRequest {
   mimeType: string;
   enabledCategories: FindingCategory[];
   maxPages: number;
+  ocrLanguage?: string;
 }
 
 export interface OffscreenRedactRequest {
@@ -63,6 +64,7 @@ export interface OffscreenRedactRequest {
   mimeType: string;
   boxes: { pageIndex: number; rects: Rect[] }[];
   padding: number;
+  options?: RedactionOptions;
 }
 
 export type OffscreenRequest = OffscreenPreviewRequest | OffscreenRedactRequest;
