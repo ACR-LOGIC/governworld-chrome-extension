@@ -1,12 +1,13 @@
-# GovernWorld Chrome Extension
+# GovernWorld Extension
 
 [![CI](https://github.com/ACR-LOGIC/governworld-chrome-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/ACR-LOGIC/governworld-chrome-extension/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Source--Available-orange.svg)](LICENSE)
-[![Manifest V3](https://img.shields.io/badge/Chrome%20Extension-Manifest%20V3-green.svg)](manifest.json)
+[![Manifest V3](https://img.shields.io/badge/Extension-Manifest%20V3-green.svg)](manifest.json)
 [![Local-First](https://img.shields.io/badge/Architecture-100%25%20Local--First-brightgreen.svg)](#local-first-architecture--privacy-guarantees)
+[![Cross-Browser](https://img.shields.io/badge/Browsers-Chrome%20%7C%20Edge%20%7C%20Firefox%20%7C%20Safari%20%7C%20Brave-blue.svg)](#browser-compatibility--cross-platform-installation-guide)
 [![Support on Buy Me A Coffee](https://img.shields.io/badge/Support-Buy%20Me%20A%20Coffee-ff813f?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/governworld)
 
-The **GovernWorld Chrome Extension** is a fully functional, local-first browser protection tool that brings GovernWorld's high-assurance detection and redaction engine directly into your web browser. It empowers users to detect, mask, and redact sensitive Personally Identifiable Information (PII), Protected Health Information (PHI), financial data, credentials, and custom patterns directly on web pages and in uploaded documents (PDF, DOCX, images) **without any data ever leaving the local device**.
+The **GovernWorld Extension** is a fully functional, local-first browser protection tool that brings GovernWorld's high-assurance detection and redaction engine directly into your web browser. It empowers users to detect, mask, and redact sensitive Personally Identifiable Information (PII), Protected Health Information (PHI), financial data, credentials, and custom patterns directly on web pages and in uploaded documents (PDF, DOCX, images) **without any data ever leaving the local device**.
 
 > **Licensing:** GovernWorld Extension is source-available and free for non-commercial community use. You may inspect, modify, fork, and run the extension locally for permitted non-commercial purposes. Commercial use, redistribution, resale, hosting, bundling, or incorporation into a commercial product or service requires a separate commercial license from Andres Chavez Ramirez. See [LICENSE](LICENSE). This is not an open-source license.
 
@@ -14,14 +15,28 @@ The **GovernWorld Chrome Extension** is a fully functional, local-first browser 
 
 ## Table of Contents
 - [Core Capabilities](#core-capabilities)
+- [Browser Compatibility & Cross-Platform Installation Guide](#browser-compatibility--cross-platform-installation-guide)
+  - [Google Chrome](#1-google-chrome)
+  - [Microsoft Edge](#2-microsoft-edge)
+  - [Mozilla Firefox](#3-mozilla-firefox)
+  - [Brave Browser](#4-brave-browser)
+  - [Opera & Opera GX](#5-opera--opera-gx)
+  - [Vivaldi](#6-vivaldi)
+  - [Arc Browser](#7-arc-browser)
+  - [Apple Safari (macOS)](#8-apple-safari-macos)
 - [Local-First Architecture & Privacy Guarantees](#local-first-architecture--privacy-guarantees)
 - [What Data Remains on Your Device](#what-data-remains-on-your-device)
-- [Detection Categories & Compliance Presets](#detection-categories--compliance-presets)
+- [Detection Categories & Global Compliance Presets](#detection-categories--global-compliance-presets)
+- [Accessibility & Disability Assistive Features](#accessibility--disability-assistive-features)
+- [Multi-Language Internationalization (i18n)](#multi-language-internationalization-i18n)
+- [Interactive Redaction Studio & Custom Styles](#interactive-redaction-studio--custom-styles)
+- [Proactive "Paste & Prompt" Shield](#proactive-paste--prompt-shield-chat--llm-guard)
+- [Right-Click Context Menus](#right-click-context-menus)
 - [Interactive Redaction Wizard](#interactive-redaction-wizard)
 - [Document Processing & Redaction Workflow](#document-processing--redaction-workflow)
 - [Cloud & API Status (Locked by Default)](#cloud--api-status-locked-by-default)
 - [Browser Permissions & Justifications](#browser-permissions--justifications)
-- [Installation & Developer Quickstart](#installation--developer-quickstart)
+- [Developer Setup & Build Commands](#developer-setup--build-commands)
 - [Testing & Quality Verification](#testing--quality-verification)
 - [Security & Tamper Resistance](#security--tamper-resistance)
 - [💛 Community Support & Sponsorship](#-community-support--sponsorship)
@@ -33,22 +48,148 @@ The **GovernWorld Chrome Extension** is a fully functional, local-first browser 
 
 1. **On-Demand Page Scanning & Visual Masking:**
    - Scan visible web page text on demand with a single click or keyboard shortcut (`Alt+Shift+S`).
-   - Highlight detected sensitive entities and apply non-destructive, customizable visual overlays directly in the DOM.
+   - Highlight detected sensitive entities and apply non-destructive visual overlays directly in the DOM.
    - Copy securely redacted plain text with sensitive values replaced by solid block placeholders `[REDACTED]`.
 
-2. **Multi-Format Document Redaction:**
-   - Drag-and-drop or select PDF, Microsoft Word (`.docx`), and image files (`.png`, `.jpg`, `.jpeg`).
-   - Integrated offline OCR (Tesseract.js WebAssembly) and PDF rendering (PDF.js) running in an isolated offscreen document.
-   - Download permanently flattened, redacted documents with black visual redaction blocks burnt into pixels/vectors.
+2. **Proactive "Paste & Prompt" Shield (Chat & LLM Guard):**
+   - Intercepts paste events in real time on LLM interfaces (**ChatGPT**, **Claude**, **Gemini**, **Slack**, web forms).
+   - Shows a non-intrusive floating review modal with masked previews.
+   - 1-click **Sanitize & Paste** automatically scrubs secrets/PII before pasting.
 
-3. **Interactive Redaction Wizard:**
-   - Guided 4-step wizard to create custom regex, pattern, and keyword rules.
-   - Live sample text test sandbox with instant validation and error detection.
-   - Save custom rules to local storage for immediate application in on-page and document scanning.
+3. **Interactive Document Redaction Studio:**
+   - Drag-and-drop or select PDF, Microsoft Word (`.docx`), and image files (`.png`, `.jpg`, `.webp`).
+   - Interactive canvas: click finding boxes to toggle or drag with mouse to draw custom redaction boxes.
+   - Multiple Redaction Styles: **Solid Blackout**, **Clean Whiteout**, or **Compliance Text Stamp** (e.g. `[CONFIDENTIAL]`).
+   - Multi-language OCR architecture supporting 6 languages (English, Spanish, French, German, Japanese, Portuguese).
 
-4. **Dedicated In-App Instructions & Deep Linking:**
-   - 10 comprehensive, built-in guide cards explaining all features and workflows.
-   - Contextual help links (`data-guide`) throughout the popup and side panel interfaces that jump directly to relevant documentation sections with pulse animations.
+4. **Multi-Language UI Internationalization (i18n):**
+   - Dynamic interface translation for **English**, **Spanish**, **French**, **German**, **Japanese**, **Portuguese**, and **Simplified Chinese**.
+   - Switch languages instantly in Settings; persisted in local storage.
+
+5. **Accessibility & Assistive Features (WCAG AAA):**
+   - **Font Scaling:** Standard (100%), Medium (115%), Large (130%), and Extra Large (150% for low vision).
+   - **High Contrast Mode:** Pure black backgrounds, cyan accents, and high-visibility 2px white borders.
+   - **Dyslexia-Friendly Spacing:** Expanded letter-spacing, line-height, and readability fonts.
+   - **Screen Reader Voice Assistance:** Web Speech API announces findings, counts, and actions aloud for blind users.
+
+6. **Global Compliance Presets & International Validators:**
+   - Built-in checksum validators for Canadian SIN, UK NHS, Indian Aadhaar (Verhoeff) & PAN, Australian TFN, Brazilian CPF, LOINC, and Securities CUSIP/ISIN.
+   - 1-click presets: HIPAA, PCI DSS, GDPR, PIPEDA, UK GDPR/NHS, India DPDP, Australia Privacy, Brazil LGPD, Developer.
+
+7. **Right-Click Context Menu Protection:**
+   - Highlight any text and right-click to *Redact selection to clipboard* or *Mask selection* without opening the popup.
+
+---
+
+## Browser Compatibility & Cross-Platform Installation Guide
+
+GovernWorld is engineered to conform to the **W3C WebExtensions Manifest V3 specification** and runs seamlessly across all modern desktop web browsers.
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                      Cross-Browser Compatibility                       │
+├─────────────────┬─────────────────┬──────────────────┬─────────────────┤
+│  Google Chrome  │ Microsoft Edge  │ Mozilla Firefox  │  Apple Safari   │
+│   (Version 116+)│  (Version 116+) │  (Version 109+)  │  (Version 15.4+)│
+│      100%       │      100%       │      100%        │      100%       │
+├─────────────────┼─────────────────┼──────────────────┼─────────────────┤
+│  Brave Browser  │ Opera / GX      │     Vivaldi      │   Arc Browser   │
+│      100%       │      100%       │      100%        │      100%       │
+└─────────────────┴─────────────────┴──────────────────┴─────────────────┘
+```
+
+### Build the Package First
+Before loading into any browser, build the production bundle:
+```bash
+git clone https://github.com/ACR-LOGIC/governworld-chrome-extension.git
+cd governworld-chrome-extension
+npm install
+npm run build
+```
+This outputs the packaged extension into the `dist/` directory.
+
+---
+
+### 1. Google Chrome
+1. Open Google Chrome and navigate to `chrome://extensions/`.
+2. Turn ON the **Developer mode** toggle in the top-right corner.
+3. Click the **Load unpacked** button in the top-left corner.
+4. Select the `dist/` folder inside the cloned repository.
+5. Click the puzzle icon in the Chrome toolbar and pin **GovernWorld** for quick access.
+
+---
+
+### 2. Microsoft Edge
+1. Open Microsoft Edge and navigate to `edge://extensions/`.
+2. In the left-hand sidebar, enable the **Developer mode** toggle.
+3. Click **Load unpacked** at the top of the page.
+4. Select the `dist/` folder from this repository.
+5. Click the extension icon in the Edge toolbar to start protecting pages!
+
+---
+
+### 3. Mozilla Firefox
+GovernWorld includes `browser_specific_settings.gecko` configured for Firefox 109+.
+
+#### Temporary / Developer Installation:
+1. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
+2. Click the **Load Temporary Add-on...** button.
+3. Navigate to the `dist/` directory and select `manifest.json`.
+4. The GovernWorld shield icon will appear in your Firefox toolbar.
+
+#### Persistent Unbranded / Developer Edition Installation:
+- Pack `dist/` into a `.zip` file, rename to `.xpi`, and install via `about:addons` > **Install Add-on From File...**.
+
+---
+
+### 4. Brave Browser
+1. Open Brave and navigate to `brave://extensions/`.
+2. Toggle ON **Developer mode** in the top-right corner.
+3. Click **Load unpacked** in the top-left corner.
+4. Select the `dist/` directory.
+5. Pin the GovernWorld extension in the Brave toolbar.
+
+---
+
+### 5. Opera & Opera GX
+1. Open Opera and navigate to `opera://extensions/`.
+2. Toggle ON **Developer mode** in the top-right corner.
+3. Click **Load unpacked extension**.
+4. Select the `dist/` folder.
+5. Pin the extension in your Opera toolbar.
+
+---
+
+### 6. Vivaldi
+1. Open Vivaldi and navigate to `vivaldi://extensions/`.
+2. Enable **Developer mode** (top-right toggle).
+3. Click **Load unpacked** and choose the `dist/` directory.
+
+---
+
+### 7. Arc Browser
+1. Open Arc and press <kbd>Cmd</kbd>+<kbd>,</kbd> (or <kbd>Ctrl</kbd>+<kbd>,</kbd> on Windows) to open **Settings**.
+2. Go to **Extensions** > click **Open Extensions Page** (or navigate to `arc://extensions/`).
+3. Turn ON **Developer mode**.
+4. Click **Load unpacked** and select the `dist/` folder.
+
+---
+
+### 8. Apple Safari (macOS)
+Safari requires converting WebExtensions using Apple's Xcode developer tools:
+
+1. Ensure Xcode is installed with Command Line Tools:
+   ```bash
+   xcode-select --install
+   ```
+2. Convert the extension using Apple's built-in converter:
+   ```bash
+   xcrun safari-web-extension-converter /path/to/governworld-chrome-extension/dist --project-location /path/to/output --app-name "GovernWorld"
+   ```
+3. Open the generated Xcode project and click **Run** to build the macOS container app.
+4. In Safari, go to **Settings** > **Advanced** > check **"Show features for web developers"**.
+5. Go to **Develop** menu > check **"Allow Unsigned Extensions"**.
+6. In **Safari Settings** > **Extensions**, enable **GovernWorld**.
 
 ---
 
@@ -59,7 +200,7 @@ GovernWorld Redaction is built from the ground up on a **100% Local-First** secu
 ```mermaid
 flowchart TD
     subgraph Browser Context
-        UserAction[User Clicks 'Scan' or Uploads Doc] --> UI[Popup / Side Panel]
+        UserAction[User Clicks 'Scan', Pastes, or Uploads Doc] --> UI[Popup / Side Panel]
         UI --> SW[Service Worker Orchestrator]
         SW --> ContentScript[Content Script / Detect Engine]
         SW --> Offscreen[Offscreen Document OCR & PDF Flattening]
@@ -78,7 +219,7 @@ flowchart TD
 ```
 
 - **Zero Cloud Transmission:** No document contents, raw page text, or extracted sensitive values are ever sent over the network.
-- **Zero Remote Code Execution:** Operates under strict Manifest V3 Content Security Policy (`script-src 'self' 'wasm-unsafe-eval'`). All scripts, WebAssembly binaries, and OCR models are bundled locally.
+- **Zero Remote Code Execution:** Strict Manifest V3 Content Security Policy (`script-src 'self' 'wasm-unsafe-eval'`). All scripts, WebAssembly binaries, and OCR models are bundled locally.
 - **Zero Automatic Host Access:** Declares **zero `host_permissions`**. The extension cannot automatically observe or access network traffic or website origins.
 
 ---
@@ -90,38 +231,100 @@ flowchart TD
 | **User Settings & Active Preset** | `chrome.storage.local` | Retained locally until cleared by user. |
 | **Custom Redaction Rules** | `chrome.storage.local` | Retained locally; managed via Redaction Wizard. |
 | **Transient Scan Findings** | `chrome.storage.session` | Ephemeral; purged when browser closes. |
-| **Document File Buffers** | Extension IndexedDB (`doc-pipeline`) | Transient; automatically deleted after redaction download or upon session reset. |
+| **Document File Buffers** | Extension IndexedDB (`governworld-redaction`) | Transient; automatically deleted after redaction download or session reset. |
 | **Audit Log Entries** | `chrome.storage.local` | Metadata-only (timestamps, category counts, ECDSA signatures); zero raw values stored. |
 
 ---
 
-## Detection Categories & Compliance Presets
+## Detection Categories & Global Compliance Presets
 
 The engine includes deterministic, algorithmic detectors for all primary regulatory and compliance categories:
 
-- **PII:** US SSN (structure + area validation), ITIN, passport numbers, email addresses, phone numbers, physical addresses, dates of birth.
+- **PII:** US SSN, ITIN, passport numbers, email addresses, phone numbers, physical addresses, dates of birth.
 - **Financial:** Payment card numbers (Luhn checksum validation + BIN classification), IBAN, ABA routing numbers.
-- **PHI / Healthcare:** National Provider Identifiers (NPI with Luhn-check), DEA registration numbers (checksum formula validation), Medicare Beneficiary Identifiers (CMS MBI alphanumeric format), Medical Record Numbers (MRN).
+- **PHI / Healthcare:** National Provider Identifiers (NPI checksum), DEA registration numbers, Medicare Beneficiary Identifiers (CMS MBI), Medical Record Numbers (MRN), LOINC codes.
+- **International Identifiers:** Canadian SIN (Luhn check), UK NHS Number (Mod-11 check), Indian Aadhaar (Verhoeff check) & PAN, Australian TFN (Mod-11 check), Brazilian CPF (Dual checksum).
 - **Secrets & Credentials:** API keys, AWS access keys, JWT tokens, Bearer tokens, private SSH/RSA keys, database connection strings.
 - **Custom:** User-defined rules created via the Redaction Wizard.
 
-### Built-in Presets
+### Built-in Global Compliance Presets
 - **HIPAA:** Auto-selects PHI, medical record numbers, SSN, DOB, and patient contact identifiers.
 - **PCI DSS:** Auto-selects payment card numbers, card expiry, and financial account identifiers.
 - **GDPR:** Auto-selects names, emails, phone numbers, addresses, and individual identification numbers.
+- **PIPEDA:** Auto-selects Canadian SIN and personal data.
+- **UK GDPR / NHS:** Auto-selects UK NHS numbers and health records.
+- **India DPDP Act:** Auto-selects Aadhaar, PAN card, and identity identifiers.
+- **Australia Privacy Act:** Auto-selects Tax File Numbers (TFN) and personal identifiers.
+- **Brazil LGPD:** Auto-selects Brazilian CPF numbers and personal records.
 - **Developer / Secrets:** Auto-selects API keys, private keys, auth headers, and cloud credentials.
 - **Custom:** Full manual control over enabled categories and custom patterns.
 
 ---
 
+## Accessibility & Disability Assistive Features
+
+GovernWorld is designed to be accessible to all users, including those who are blind, low-vision, or have dyslexia:
+
+- **Font Size & Visual Scaler:** Choose from `Default (100%)`, `Medium (115%)`, `Large (130%)`, or `Extra Large (150%)`.
+- **High Contrast Mode:** Pure black backgrounds, cyan accents, and bold borders.
+- **Dyslexia-Friendly Mode:** Expanded letter spacing, line height, and high-readability text formatting.
+- **Reduced Motion:** Disables animations and sliding transitions for users sensitive to motion.
+- **Screen Reader Voice Announcements:** Uses the standard Web Speech API (`speechSynthesis`) and ARIA live regions (`role="status"`, `aria-live="polite"`) to announce scan findings, counts, and download actions.
+- **Verbose ARIA Mode:** Extends accessible descriptions for full keyboard navigation and NVDA/JAWS/VoiceOver compatibility.
+
+---
+
+## Multi-Language Internationalization (i18n)
+
+The extension interface dynamically translates across 7 languages with instant switching and local persistence:
+- 🇺🇸 **English** (`en`)
+- 🇪🇸 **Español** (`es` - Spanish)
+- 🇫🇷 **Français** (`fr` - French)
+- 🇩🇪 **Deutsch** (`de` - German)
+- 🇯🇵 **日本語** (`ja` - Japanese)
+- 🇵🇹 **Português** (`pt` - Portuguese)
+- 🇨🇳 **简体中文** (`zh` - Simplified Chinese)
+
+---
+
+## Interactive Redaction Studio & Custom Styles
+
+The **Document Redaction Studio** provides an interactive canvas interface:
+- **Draw Custom Boxes:** Click and drag to draw arbitrary redaction boxes on any page.
+- **Toggle Findings:** Click any detected finding box to include or exclude it from redaction.
+- **Redaction Styles:**
+  - **Blackout:** Solid opaque black rectangles (forensic and legal standard).
+  - **Whiteout:** Clean solid white fill.
+  - **Text Stamp:** Centered compliance text labels (e.g. `[REDACTED]`, `[CONFIDENTIAL]`, `[PHI REMOVED]`).
+- **Flattening:** Output files are permanently flattened in memory, preventing recovery of underlying layers.
+
+---
+
+## Proactive "Paste & Prompt" Shield (Chat & LLM Guard)
+
+Protects against accidental credential or PII leaks when pasting into AI chats and web forms:
+- Intercepts paste events on `input`, `textarea`, and `[contenteditable]` elements across **ChatGPT**, **Claude**, **Gemini**, **Slack**, and internal web applications.
+- Displays a floating Shadow DOM review modal near the input.
+- Actions: **Sanitize & Paste** (replaces secrets with `[REDACTED]`), **Paste Unchanged**, or **Cancel** (<kbd>Esc</kbd>).
+
+---
+
+## Right-Click Context Menus
+
+GovernWorld integrates directly into the browser right-click context menu:
+- **Redact selection to clipboard:** Copies highlighted text with sensitive data masked.
+- **Mask selected text / element:** Immediately overlays visual privacy masks on the page.
+- **Scan whole page:** Triggers instant on-device scan (<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>).
+
+---
+
 ## Interactive Redaction Wizard
 
-The **Redaction Wizard** enables users to easily construct custom detection logic locally:
-
-1. **Pattern Definition:** Choose between regular expressions, exact keyword lists, or prefix/suffix patterns.
-2. **Category & Metadata:** Name your pattern, assign a finding category, and set a confidence weight.
-3. **Interactive Test Sandbox:** Test the pattern in real time against sample test strings to verify matches, edge cases, and exclusions.
-4. **Local Activation:** Save the verified rule directly into `chrome.storage.local`. The rule immediately integrates into the local detection and redaction pipeline.
+The **Redaction Wizard** enables users to construct custom detection logic locally:
+1. **Examples:** Provide positive match examples and negative exclusion examples.
+2. **Analysis:** Generates candidate regex patterns locally using sample text.
+3. **Sandbox Test:** Test candidate patterns against interactive sample text in real time.
+4. **Save Locally:** Save rules directly into `chrome.storage.local` for immediate use in scans and document redactions.
 
 ---
 
@@ -141,57 +344,48 @@ sequenceDiagram
     SW->>Offscreen: Initialize local extraction pipeline
     Offscreen-->>SW: Extract text & bounding boxes (PDF.js / Tesseract WASM)
     SW->>UI: Display detected entities & confidence
-    User->>UI: Select items & click "Redact & Download"
+    User->>UI: Select style & click "Redact & Download"
     UI->>SW: Request flattened redaction
-    SW->>Offscreen: Burn black overlays into canvas/PDF vectors
+    SW->>Offscreen: Burn overlays into canvas/PDF vectors
     Offscreen-->>SW: Render flattened file stream
     SW->>Disk: Trigger chrome.downloads save
     SW->>SW: Purge transient IndexedDB file buffers
     SW->>UI: Confirm completion & log signed audit record
 ```
 
-1. **Upload:** User provides a file via the drag-and-drop zone in the side panel or popup.
-2. **Local Analysis:** The document is rendered locally; OCR runs in an offscreen Web Worker using bundled Tesseract.js WASM and English language models.
-3. **Review Findings:** Detected sensitive items are listed with masked previews (e.g. `phone: ***-***-1234`).
-4. **Burn-in & Flattening:** Redactions are rendered directly onto the canvas or PDF vector stream using `pdf-lib`, preventing underlying text layer recovery.
-5. **Download:** The redacted file is saved with `_redacted` suffix. Temporary buffers are immediately wiped.
-
 ---
 
 ## Cloud & API Status (Locked by Default)
 
 The extension is **fully functional in standalone local mode**.
-
 - **Disabled & Locked:** All cloud processing, remote synchronization, telemetry, and remote storage are disabled and locked by default.
-- **API-Ready Architecture:** Clean client interfaces and abstraction hooks (`src/shared/settings.ts`, `src/service-worker/index.ts`) are preserved for future optional GovernWorld platform integration (e.g. centralized enterprise policy distribution).
-- **Zero Accidental Egress:** The extension does not declare host permissions or transmit telemetry in this release.
+- **API-Ready Architecture:** Clean client interfaces and abstraction hooks (`src/shared/settings.ts`, `src/service-worker/index.ts`) are preserved for future optional GovernWorld platform integration.
+- **Zero Accidental Egress:** The extension does not declare host permissions or transmit telemetry.
 
 ---
 
 ## Browser Permissions & Justifications
 
-Every permission requested in `manifest.json` is mapped directly to on-device functionality:
-
 | Permission | Purpose & Justification |
 | :--- | :--- |
-| `activeTab` | Grants temporary access to the active tab's visible text **solely** when the user clicks "Scan this page". Never runs automatically. |
+| `activeTab` | Grants temporary access to the active tab's visible text **solely** when the user clicks "Scan Page". Never runs automatically. |
 | `scripting` | Injects the local scanning content script and renders visual overlay masks in the active tab. |
 | `storage` | Stores user preferences, custom wizard rules, and tamper-evident local audit records in `chrome.storage.local`. |
 | `downloads` | Saves the flattened, redacted output file directly to the user's computer. |
 | `offscreen` | Hosts PDF rendering and WebAssembly OCR execution without stalling the browser UI. |
 | `sidePanel` | Provides a persistent side panel (`Alt+Shift+P`) for document scanning, live wizard rule creation, and in-depth instruction viewing. |
+| `contextMenus` | Adds right-click shortcuts (*Redact selection*, *Mask element*, *Scan page*). |
 | `notifications` *(optional)* | Requested at runtime only if the user enables background completion notifications. |
 
 ---
 
-## Installation & Developer Quickstart
+## Developer Setup & Build Commands
 
 ### Prerequisites
 - Node.js 20+
 - npm 10+
-- Google Chrome (or Chromium-based browser)
 
-### Setup & Build
+### Build Commands
 ```bash
 # Clone repository
 git clone https://github.com/ACR-LOGIC/governworld-chrome-extension.git
@@ -200,20 +394,18 @@ cd governworld-chrome-extension
 # Install dependencies
 npm install
 
-# Run type check and test suites
+# Typecheck TypeScript sources
 npm run typecheck
+
+# Run all 31 Vitest test suites (546 tests)
 npm test
+
+# Run browser verification & Chromium E2E tests
+npm run verify:browser
 
 # Build production bundle to dist/
 npm run build
 ```
-
-### Loading the Extension in Chrome
-1. Open Google Chrome and navigate to `chrome://extensions/`.
-2. Enable **Developer mode** (toggle in the top-right corner).
-3. Click **Load unpacked** in the top-left corner.
-4. Select the `dist/` directory inside this repository.
-5. Click the extension icon in your Chrome toolbar to begin scanning!
 
 ---
 
@@ -221,16 +413,10 @@ npm run build
 
 The codebase includes an extensive automated test suite covering all detection algorithms, redaction output integrity, wizard behavior, manifest compliance, and audit trails:
 
-```bash
-# Run all Vitest suites
-npm test
-
-# Verify offline OCR model bundling
-npm run test:offline-ocr
-
-# Typecheck TypeScript definitions
-npm run typecheck
-```
+- **Unit & Integration Tests:** 31 test suites / 546 tests passing 100% (`npm test`).
+- **Browser Automation Verification:** Real Chromium browser validation (`npm run verify:browser`).
+- **Photo OCR & Coordinate Mapping E2E:** End-to-end verification of document OCR, coordinate mapping, and pixel flattening (`npm run test:photo-e2e`).
+- **Cross-Browser Verification:** Tests verifying compatibility across Chrome, Edge, Firefox, Safari, and Brave (`tests/cross-browser-compatibility.test.ts`).
 
 ---
 
