@@ -9,6 +9,7 @@
     "type": "git",
     "url": "https://github.com/ACR-LOGIC/governworld-chrome-extension.git"
   },
+  "funding": "https://buymeacoffee.com/governworld",
   "scripts": {
     "build": "node build.mjs",
     "preview": "node scripts/preview-server.mjs",

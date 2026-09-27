@@ -40,11 +40,18 @@ describe("Instructions, Tab Navigation & Contextual Guidance", () => {
       "guide-categories",
       "guide-cloud",
       "guide-privacy",
+      "guide-contributions",
     ];
 
     for (const sectionId of expectedSections) {
       expect(html, `${pagePath} missing guide section #${sectionId}`).toContain(`id="${sectionId}"`);
     }
+  });
+
+  it.each(pages)("%s provides Support & Contributions details with Buy Me a Coffee link", (pagePath) => {
+    const html = readFileSync(join(extRoot, pagePath), "utf8");
+    expect(html).toContain('id="contributions-details"');
+    expect(html).toContain('href="https://buymeacoffee.com/governworld"');
   });
 
   it.each(pages)("%s retains locked cloud mode with API-ready gateway settings", (pagePath) => {

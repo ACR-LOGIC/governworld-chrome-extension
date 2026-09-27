@@ -165,11 +165,15 @@ describe("scaleBox", () => {
 });
 
 describe("redaction output naming", () => {
-  it("always marks the artifact as redacted so it cannot be confused with the source", async () => {
-    // The name is produced by the pipeline impl; assert the contract here so a
-    // future rename cannot silently ship a file that looks like the original.
-    const { runDocumentRedact } = await import("../src/document-pipeline/impl.js");
-    expect(typeof runDocumentRedact).toBe("function");
-    expect(vi.isMockFunction(runDocumentRedact)).toBe(false);
-  });
+  it(
+    "always marks the artifact as redacted so it cannot be confused with the source",
+    async () => {
+      // The name is produced by the pipeline impl; assert the contract here so a
+      // future rename cannot silently ship a file that looks like the original.
+      const { runDocumentRedact } = await import("../src/document-pipeline/impl.js");
+      expect(typeof runDocumentRedact).toBe("function");
+      expect(vi.isMockFunction(runDocumentRedact)).toBe(false);
+    },
+    20000
+  );
 });

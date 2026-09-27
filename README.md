@@ -4,6 +4,7 @@
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Manifest V3](https://img.shields.io/badge/Chrome%20Extension-Manifest%20V3-green.svg)](manifest.json)
 [![Local-First](https://img.shields.io/badge/Architecture-100%25%20Local--First-brightgreen.svg)](#local-first-architecture--privacy-guarantees)
+[![Support on Buy Me A Coffee](https://img.shields.io/badge/Support-Buy%20Me%20A%20Coffee-ff813f?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/governworld)
 
 The **GovernWorld Chrome Extension** is a fully functional, local-first browser protection tool that brings GovernWorld's high-assurance detection and redaction engine directly into your web browser. It empowers users to detect, mask, and redact sensitive Personally Identifiable Information (PII), Protected Health Information (PHI), financial data, credentials, and custom patterns directly on web pages and in uploaded documents (PDF, DOCX, images) **without any data ever leaving the local device**.
 
@@ -21,6 +22,7 @@ The **GovernWorld Chrome Extension** is a fully functional, local-first browser 
 - [Installation & Developer Quickstart](#installation--developer-quickstart)
 - [Testing & Quality Verification](#testing--quality-verification)
 - [Security & Tamper Resistance](#security--tamper-resistance)
+- [💛 Community Support & Sponsorship](#-community-support--sponsorship)
 - [License](#license)
 
 ---
@@ -235,6 +237,25 @@ npm run typecheck
 - **Signed Audit Trail:** Every scan, mask application, document export, and policy change generates an ECDSA P-256 signed audit record stored locally.
 - **Integrity Invariants:** Unit tests verify that audit logs fail closed if file downloads or delivery pipelines are intercepted.
 - For vulnerability reports or security inquiries, please see [SECURITY.md](SECURITY.md).
+
+---
+
+## 💛 Community Support & Sponsorship
+
+GovernWorld is **100% free, open-source, and local-only** to ensure your privacy is never compromised:
+- **Zero Cloud Transmission:** All PII/PHI scanning, OCR text extraction, and document flattening happen directly on your local device.
+- **Zero Data Monetization:** We never sell, log, monetize, or transmit your sensitive documents, scanned values, or browsing activity.
+- **Completely Free:** Every core capability is freely accessible to everyone.
+
+If GovernWorld saves you time or protects your sensitive workflows, you can support ongoing development, maintenance of offline models, and validator improvements:
+
+<p align="center">
+  <a href="https://buymeacoffee.com/governworld" target="_blank" rel="noopener noreferrer">
+    <img src="https://img.shields.io/badge/Support%20GovernWorld-Buy%20Me%20A%20Coffee-ff813f?style=for-the-badge&logo=buy-me-a-coffee&logoColor=white" alt="Support on Buy Me A Coffee" />
+  </a>
+</p>
+
+You can also contribute by submitting new regex/checksum patterns, opening issues, or contributing code as outlined in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 

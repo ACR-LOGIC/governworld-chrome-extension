@@ -12,6 +12,7 @@ build/
 coverage/
 .tmp*
 *.log
+*.traineddata
 .playwright/
 test-results/
 

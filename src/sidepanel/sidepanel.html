@@ -280,10 +280,41 @@
             <p id="account-status" class="footnote" role="status" aria-live="polite"></p>
           </details>
 
+          <details open id="contributions-details">
+            <summary>
+              <span>Support &amp; Contributions</span>
+              <span class="guide-badge" style="background: rgba(255, 129, 63, 0.15); color: #ff813f; border-color: rgba(255, 129, 63, 0.3); font-size: 10px; margin-left: 6px;">100% Free &amp; Local</span>
+            </summary>
+            <div class="contrib-card">
+              <div class="contrib-card__header">
+                <span class="contrib-card__icon" aria-hidden="true">☕</span>
+                <div class="contrib-card__title-box">
+                  <strong>GovernWorld is 100% Free &amp; Local-Only</strong>
+                  <span class="footnote">Zero data monetization, no paywalls, zero telemetry. Built to keep your sensitive data private.</span>
+                </div>
+              </div>
+              <p class="footnote">
+                Your voluntary support helps fund ongoing maintenance, open-source model updates, and offline validator improvements.
+              </p>
+              <a href="https://buymeacoffee.com/governworld" target="_blank" rel="noopener noreferrer" class="btn btn--coffee btn--block" id="buymeacoffee-link">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.9 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM2 21h18v-2H2v2z"/>
+                </svg>
+                <span>Support on Buy Me a Coffee</span>
+              </a>
+              <div class="contrib-sublinks">
+                <a href="https://github.com/ACR-LOGIC/governworld-chrome-extension" target="_blank" rel="noopener noreferrer" class="help-link help-link--sm">GitHub Repo ↗</a>
+                <button type="button" class="help-link help-link--sm" data-guide="guide-contributions" title="Learn why GovernWorld is free & local">Why Free &amp; Local? ↗</button>
+              </div>
+            </div>
+          </details>
+
           <p class="links">
             <a href="#" id="privacy-link" rel="noopener noreferrer">Privacy policy</a>
             <span aria-hidden="true">·</span>
-            <a href="https://github.com/ACR-LOGIC/governworld/issues" target="_blank" rel="noopener noreferrer">Support</a>
+            <a href="https://buymeacoffee.com/governworld" target="_blank" rel="noopener noreferrer" style="color: #ff813f; font-weight: 500;">☕ Contribute</a>
+            <span aria-hidden="true">·</span>
+            <a href="https://github.com/ACR-LOGIC/governworld-chrome-extension/issues" target="_blank" rel="noopener noreferrer">Support</a>
             <span aria-hidden="true">·</span>
             <button id="export-audit-btn" class="btn btn--link" type="button">Export audit log</button>
           </p>
@@ -432,6 +463,25 @@
               All protection actions generate an immutable, cryptographically signed audit log stored locally.
               Click <strong>Export audit log</strong> in Settings to download the JSONL audit ledger and its
               corresponding cryptographic signature for compliance verification.
+            </p>
+          </section>
+
+          <section id="guide-contributions" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">11. Free, Privacy-Respecting &amp; Community Supported</h3>
+              <span class="guide-badge" style="background: rgba(255, 129, 63, 0.15); color: #ff813f; border-color: rgba(255, 129, 63, 0.3);">Community Powered</span>
+            </div>
+            <p>
+              GovernWorld is designed to protect user privacy without compromise. Unlike traditional browser extensions:
+            </p>
+            <ul>
+              <li><strong>100% Local-First:</strong> All regex matching, OCR text recognition, DOM overlays, and document flattening happen entirely on your computer.</li>
+              <li><strong>Zero Data Monetization:</strong> We never log, sell, transmit, or inspect your documents, scanned text, or browsing history.</li>
+              <li><strong>Zero Paywalls for Local Security:</strong> Every core local detection and redaction capability is completely free.</li>
+            </ul>
+            <p>
+              If GovernWorld helps protect your workflow, consider supporting development, offline models, and validator maintenance via
+              <a href="https://buymeacoffee.com/governworld" target="_blank" rel="noopener noreferrer" style="color: #ff813f; font-weight: 600;">Buy Me a Coffee ☕</a>.
             </p>
           </section>
         </div>
