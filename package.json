@@ -1,0 +1,37 @@
+{
+  "name": "governworld-chrome-extension",
+  "version": "0.1.0",
+  "description": "GovernWorld Chrome Extension: Local-first PII/PHI detection, page visual masking, and flattened document redaction.",
+  "license": "Apache-2.0",
+  "author": "Andres Chavez Ramirez",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ACR-LOGIC/governworld-chrome-extension.git"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "preview": "node scripts/preview-server.mjs",
+    "fixtures:photo": "node scripts/make-photo-fixtures.mjs",
+    "test": "vitest run",
+    "test:offline-ocr": "node scripts/verify-offline-ocr.mjs",
+    "test:photo-e2e": "node tests/image-photo-e2e.browser.test.mjs",
+    "verify:browser": "node scripts/verify-browser.mjs && node tests/image-photo-e2e.browser.test.mjs",
+    "release:zip": "node scripts/make-release.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "mammoth": "^1.12.1",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.10.38",
+    "tesseract.js": "^5.1.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "@types/chrome": "^0.0.280",
+    "@types/node": "^26.2.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}

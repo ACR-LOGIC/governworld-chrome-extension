@@ -1,0 +1,104 @@
+<!-- Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved. -->
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Discharge Summary (Synthetic Demo)</title>
+    <style>
+      body { font-family: Georgia, "Times New Roman", serif; max-width: 760px; margin: 32px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.5; }
+      .letterhead { text-align: center; border-bottom: 2px solid #2b4a6f; padding-bottom: 12px; }
+      .letterhead h1 { margin: 0 0 2px; font-size: 24px; letter-spacing: 0.5px; }
+      .letterhead p { margin: 0; color: #444; font-size: 13px; }
+      .synthetic { background: #fff7e6; border: 1px solid #e6c98a; color: #5c4a00; font-size: 13px; padding: 10px 14px; margin: 20px 0; }
+      h2 { font-size: 16px; color: #2b4a6f; border-bottom: 1px solid #ccd6e0; padding-bottom: 4px; margin: 26px 0 10px; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid #e3e3e3; font-size: 14px; vertical-align: top; }
+      th { width: 34%; color: #444; font-weight: 600; }
+      form { border: 1px solid #ccd6e0; border-radius: 6px; padding: 12px 16px; margin: 20px 0; }
+      label { display: block; font-size: 14px; margin: 8px 0; }
+      .ignored { color: #888; font-size: 12px; }
+      .footer { color: #555; font-size: 12px; margin-top: 30px; border-top: 1px solid #ccd6e0; padding-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <div class="letterhead">
+      <h1>St. Mary's Community Hospital</h1>
+      <p>Patient Care Services &middot; Springfield, IL</p>
+    </div>
+
+    <div class="synthetic">
+      <strong>Synthetic demonstration record.</strong> This page is fictional discharge
+      paperwork generated for the GovernWorld Redaction demo. It contains no real
+      patient data, and no real personal information appears on this page.
+    </div>
+
+    <h2>Demo Form Controls</h2>
+    <form>
+      <label>Account password
+        <input type="password" value="password-value" autocomplete="current-password" />
+      </label>
+      <label>Saved card
+        <input autocomplete="cc-number" value="4111 1111 1111 1111" />
+      </label>
+    </form>
+    <div class="ignored" data-sensitive-scan-ignore>
+      Ignored by scanner: cc-4111111111111111
+    </div>
+
+    <h2>Discharge Summary</h2>
+    <table>
+      <tbody>
+        <tr><th>Patient name</th><td>Jane Doe</td></tr>
+        <tr><th>Date of birth</th><td>1984-03-14</td></tr>
+        <tr><th>Sex</th><td>F</td></tr>
+        <tr><th>MRN</th><td>44219</td></tr>
+        <tr><th>Member ID</th><td>M882134</td></tr>
+        <tr><th>SSN</th><td>123-45-6789</td></tr>
+        <tr><th>Phone</th><td>(415) 555-0199</td></tr>
+        <tr><th>Email</th><td>jane.doe@example.com</td></tr>
+        <tr><th>Address</th><td>742 Evergreen Terrace, Springfield, IL 62704</td></tr>
+        <tr><th>Payment method on file</th><td>4111 1111 1111 1111</td></tr>
+        <tr><th>Emergency contact</th><td>Mark Doe &middot; (415) 555-0142 &middot; mark.doe@example.net</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Hospitalization Summary</h2>
+    <table>
+      <tbody>
+        <tr><th>Admitted</th><td>2026-08-10</td></tr>
+        <tr><th>Discharged</th><td>2026-08-18</td></tr>
+        <tr><th>Attending physician</th><td>Dr. Evelyn Reed</td></tr>
+        <tr><th>Primary diagnosis</th><td>Acute bronchitis (J20.9)</td></tr>
+        <tr><th>Secondary diagnosis</th><td>Type 2 diabetes, well controlled (E11.9)</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Summary of Stay</h2>
+    <div class="narrative">
+      <p>
+        Ms. Doe was admitted on 2026-08-10 with a productive cough, wheezing, and
+        shortness of breath. Chest imaging showed changes consistent with acute
+        bronchitis. She was treated with inhaled bronchodilators, oral fluids, and
+        oxygen support as needed, and responded well. Blood glucose remained stable
+        on her home dose of metformin throughout the admission.
+      </p>
+      <p>
+        She was discharged on 2026-08-18 in stable condition, tolerating a normal
+        diet and ambulating without assistance.
+      </p>
+    </div>
+
+    <h2>Discharge Medications</h2>
+    <ul>
+      <li>Amoxicillin 500 mg &mdash; one capsule by mouth three times daily for 7 days.</li>
+      <li>Metformin 1000 mg &mdash; one tablet twice daily with meals.</li>
+      <li>Albuterol 90 mcg HFA inhaler &mdash; two puffs every 4 hours as needed for cough.</li>
+    </ul>
+
+    <div class="footer">
+      Demo page used to show GovernWorld Redaction on synthetic data. No real
+      personal information appears on this page.
+    </div>
+  </body>
+</html>

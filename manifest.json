@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "GovernWorld Redaction",
+  "version": "0.1.0",
+  "description": "Local-first PII/PHI detection and redaction for pages and documents you choose to scan. Content stays on this device.",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "permissions": ["activeTab", "scripting", "storage", "downloads", "offscreen", "sidePanel"],
+  "optional_permissions": ["notifications"],
+  "commands": {
+    "scan-page": {
+      "suggested_key": { "default": "Alt+Shift+S", "mac": "Command+Shift+S" },
+      "description": "Scan the current page for sensitive data"
+    },
+    "toggle-masks": {
+      "suggested_key": { "default": "Alt+Shift+M", "mac": "Command+Shift+M" },
+      "description": "Apply or remove page masks"
+    },
+    "open-side-panel": {
+      "suggested_key": { "default": "Alt+Shift+P", "mac": "Command+Shift+P" },
+      "description": "Open the GovernWorld side panel"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_title": "Scan page for sensitive data",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  }
+}

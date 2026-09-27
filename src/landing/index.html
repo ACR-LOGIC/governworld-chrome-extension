@@ -1,0 +1,840 @@
+<!-- Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved. -->
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="GovernWorld Extension — on-device detection and redaction of PII, PHI, payment card data, and API keys. Local-first, evidence-driven, auditable." />
+    <title>GovernWorld Extension — Privacy intelligence, on your device</title>
+    <link rel="icon" type="image/png" href="icons/icon-128.png" />
+    <style>
+      :root {
+        --bg: #070c17;
+        --surface: #0b1120;
+        --panel: #111a30;
+        --panel-raised: #0d1428;
+        --border: #23304d;
+        --border-strong: #33415f;
+        --text: #e6edf7;
+        --text-muted: #9fb0cd;
+        --text-faint: #66799c;
+        --accent: #22d3ee;
+        --accent-strong: #0ea5e9;
+        --accent-soft: rgba(34, 211, 238, 0.1);
+        --allow: #34d399;
+        --warn: #fbbf24;
+        --deny: #f87171;
+        --mono: "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+        --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+        --radius: 14px;
+        --radius-sm: 8px;
+      }
+
+      * { box-sizing: border-box; }
+
+      html { scroll-behavior: smooth; }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 16px;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+
+      ::selection { background: rgba(34, 211, 238, 0.28); }
+
+      a { color: var(--accent); text-decoration: none; transition: color 0.15s ease; }
+      a:hover { color: #67e8f9; }
+
+      .page {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 24px 96px;
+        position: relative;
+      }
+
+      /* ---------- Background treatment: restrained depth, no purple glow ---------- */
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background:
+          radial-gradient(1100px 500px at 50% -120px, rgba(34, 211, 238, 0.08), transparent 70%),
+          radial-gradient(900px 500px at 85% 15%, rgba(52, 211, 153, 0.05), transparent 70%);
+      }
+      .backdrop::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(35, 48, 77, 0.28) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(35, 48, 77, 0.28) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: radial-gradient(ellipse 90% 55% at 50% 0%, #000 0%, transparent 78%);
+        -webkit-mask-image: radial-gradient(ellipse 90% 55% at 50% 0%, #000 0%, transparent 78%);
+      }
+
+      /* ---------- Top nav ---------- */
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 22px 0 18px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 56px;
+        flex-wrap: wrap;
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .brand__mark {
+        display: grid;
+        place-items: center;
+        width: 44px;
+        height: 44px;
+        border-radius: 11px;
+        color: var(--accent);
+        border: 1px solid var(--border-strong);
+        background: linear-gradient(180deg, #101c33, #0b1222);
+        box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.06), 0 6px 24px -8px rgba(0, 0, 0, 0.8);
+      }
+      .brand__mark svg { width: 24px; height: 24px; }
+      .brand__name { font-weight: 700; letter-spacing: 0.01em; font-size: 16px; }
+      .brand__tagline { color: var(--text-faint); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+      .nav__links { display: flex; gap: 6px; flex-wrap: wrap; }
+      .nav__links a {
+        color: var(--text-muted);
+        font-size: 13px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        transition: color 0.15s ease, background 0.15s ease;
+      }
+      .nav__links a:hover { color: var(--text); background: var(--panel-raised); }
+
+      /* ---------- Hero ---------- */
+      .hero {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 40px;
+        align-items: center;
+        margin-bottom: 72px;
+      }
+      .hero__eyebrow {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+      .hero__eyebrow::before {
+        content: "";
+        width: 22px;
+        height: 1px;
+        background: var(--accent);
+        opacity: 0.7;
+      }
+      .hero h1 {
+        font-size: clamp(30px, 4.6vw, 46px);
+        line-height: 1.12;
+        letter-spacing: -0.02em;
+        margin: 0 0 18px;
+        font-weight: 700;
+      }
+      .hero h1 .accent { color: var(--accent); }
+      .hero__lede {
+        color: var(--text-muted);
+        font-size: 17px;
+        max-width: 520px;
+        margin: 0 0 28px;
+      }
+      .hero__cta { display: flex; gap: 12px; flex-wrap: wrap; }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--sans);
+        font-size: 14px;
+        font-weight: 600;
+        border-radius: 10px;
+        padding: 12px 22px;
+        min-height: 46px;
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+      }
+      .btn:active { transform: translateY(1px); }
+      .btn--primary {
+        background: var(--accent-strong);
+        color: #04121d;
+      }
+      .btn--primary:hover { background: var(--accent); box-shadow: 0 8px 28px -10px rgba(34, 211, 238, 0.5); }
+      .btn--ghost {
+        background: transparent;
+        color: var(--text-muted);
+        border-color: var(--border-strong);
+      }
+      .btn--ghost:hover { color: var(--text); border-color: #40557a; }
+      .hero__stats {
+        display: flex;
+        gap: 24px;
+        margin-top: 30px;
+        padding-top: 22px;
+        border-top: 1px solid var(--border);
+        flex-wrap: wrap;
+      }
+      .stat__value { font-family: var(--mono); font-size: 18px; font-weight: 600; color: var(--text); }
+      .stat__label { font-size: 12px; color: var(--text-faint); }
+
+      /* Hero visual: shield + live scan ticker */
+      .hero__visual { position: relative; }
+      .shield-stage {
+        position: relative;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: linear-gradient(180deg, var(--surface), #080d18);
+        padding: 44px 34px 36px;
+        overflow: hidden;
+        box-shadow: 0 30px 70px -30px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(148, 163, 184, 0.08);
+      }
+      .shield-stage__grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(35, 48, 77, 0.35) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(35, 48, 77, 0.35) 1px, transparent 1px);
+        background-size: 22px 22px;
+        mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, #000 0%, transparent 78%);
+        -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 40%, #000 0%, transparent 78%);
+      }
+      .shield-hero {
+        position: relative;
+        width: 150px;
+        height: 150px;
+        margin: 0 auto;
+        color: var(--accent);
+        filter: drop-shadow(0 0 24px rgba(34, 211, 238, 0.35));
+      }
+      .shield-hero svg { width: 100%; height: 100%; display: block; }
+
+      .scanline {
+        position: absolute;
+        left: 12%;
+        right: 12%;
+        height: 2px;
+        top: 30%;
+        background: linear-gradient(90deg, transparent, var(--accent), transparent);
+        opacity: 0.7;
+        animation: scan 3.4s ease-in-out infinite;
+        border-radius: 2px;
+      }
+      @keyframes scan {
+        0%, 100% { transform: translateY(0); opacity: 0.15; }
+        50% { transform: translateY(64px); opacity: 0.85; }
+      }
+
+      .ticker {
+        position: relative;
+        margin-top: 26px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        background: var(--panel-raised);
+        font-family: var(--mono);
+        font-size: 12px;
+        overflow: hidden;
+      }
+      .ticker__bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text-faint);
+        font-size: 11px;
+        letter-spacing: 0.05em;
+      }
+      .ticker__dots { display: flex; gap: 4px; }
+      .ticker__dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--border-strong); display: block; }
+      .ticker__line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 7px 12px;
+        border-bottom: 1px solid rgba(35, 48, 77, 0.6);
+        animation: ticker-in 0.3s ease both;
+      }
+      .ticker__line:last-child { border-bottom: 0; }
+      @keyframes ticker-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+      .ticker__cat { color: var(--text-muted); }
+      .ticker__redact {
+        background: var(--text);
+        color: transparent;
+        border-radius: 3px;
+        padding: 1px 8px;
+        position: relative;
+      }
+      .ticker__redact::after {
+        content: "▮▮▮▮";
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        color: var(--bg);
+        letter-spacing: 1px;
+        font-size: 9px;
+      }
+      .ticker__ok { color: var(--allow); }
+
+      /* ---------- Section shell ---------- */
+      section { margin-bottom: 72px; }
+      .section-head { max-width: 620px; margin-bottom: 30px; }
+      .section-head h2 {
+        font-size: clamp(22px, 3vw, 30px);
+        letter-spacing: -0.015em;
+        margin: 0 0 10px;
+      }
+      .section-head p { color: var(--text-muted); margin: 0; font-size: 15px; }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 14px;
+      }
+      .feature {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 22px;
+        transition: border-color 0.15s ease, transform 0.15s ease;
+      }
+      .feature:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+      .feature__icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        color: var(--accent);
+        background: var(--accent-soft);
+        border: 1px solid rgba(34, 211, 238, 0.22);
+        margin-bottom: 14px;
+      }
+      .feature__icon svg { width: 20px; height: 20px; }
+      .feature strong { display: block; margin-bottom: 6px; font-size: 15px; }
+      .feature span { color: var(--text-muted); font-size: 13px; line-height: 1.55; }
+
+      /* ---------- Two-column evidence panel ---------- */
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        align-items: stretch;
+      }
+      .panel-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 26px;
+      }
+      .panel-card h3 { margin: 0 0 14px; font-size: 17px; }
+
+      .list-check { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+      .list-check li { display: flex; gap: 12px; align-items: flex-start; }
+      .list-check .mark {
+        flex: none;
+        width: 20px;
+        height: 20px;
+        margin-top: 2px;
+        border-radius: 6px;
+        display: grid;
+        place-items: center;
+        background: rgba(52, 211, 153, 0.12);
+        border: 1px solid rgba(52, 211, 153, 0.3);
+        color: var(--allow);
+      }
+      .list-check .mark svg { width: 12px; height: 12px; }
+      .list-check strong { display: block; }
+      .list-check p { margin: 2px 0 0; color: var(--text-muted); font-size: 13px; }
+
+      /* Terminal-style evidence window */
+      .terminal {
+        background: #070c16;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.7;
+      }
+      .terminal__bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        background: var(--panel-raised);
+        border-bottom: 1px solid var(--border);
+        color: var(--text-faint);
+        font-size: 11px;
+        letter-spacing: 0.05em;
+      }
+      .terminal__body { padding: 16px 18px; overflow-x: auto; }
+      .terminal .t-line { white-space: pre; }
+      .terminal .t-dim { color: var(--text-faint); }
+      .terminal .t-accent { color: var(--accent); }
+      .terminal .t-allow { color: var(--allow); }
+      .terminal .t-warn { color: var(--warn); }
+      .terminal .t-redact { background: var(--text); color: transparent; border-radius: 2px; padding: 0 6px; }
+
+      /* ---------- Presets table ---------- */
+      .preset-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+      .preset-table th, .preset-table td {
+        text-align: left;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+        vertical-align: top;
+      }
+      .preset-table th { color: var(--text-faint); font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; }
+      .preset-table td { color: var(--text-muted); }
+      .preset-table td:first-child { color: var(--text); font-weight: 600; white-space: nowrap; }
+
+      /* ---------- Tabs ---------- */
+      .tabs {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 30px;
+      }
+      .tab {
+        appearance: none;
+        background: transparent;
+        border: 1px solid transparent;
+        border-bottom: 0;
+        border-radius: 9px 9px 0 0;
+        color: var(--text-muted);
+        font-family: var(--sans);
+        font-size: 14px;
+        font-weight: 500;
+        padding: 12px 20px;
+        min-height: 44px;
+        cursor: pointer;
+        transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+      }
+      .tab:hover { color: var(--text); }
+      .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+      .tab[aria-selected="true"] {
+        color: var(--text);
+        background: var(--panel);
+        border-color: var(--border);
+        position: relative;
+      }
+      .tab[aria-selected="true"]::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: -1px;
+        height: 2px;
+        background: var(--accent);
+      }
+      .panel { display: none; }
+      .panel[data-active="true"] { display: block; animation: panel-in 0.25s ease both; }
+      @keyframes panel-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+      .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 26px; margin-bottom: 16px; }
+      .card h3 { margin: 0 0 12px; font-size: 17px; }
+      .card p { color: var(--text-muted); margin: 0 0 12px; }
+      .card code, .card kbd {
+        font-family: var(--mono);
+        font-size: 13px;
+        background: var(--panel-raised);
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 1px 6px;
+        color: var(--accent);
+      }
+
+      /* ---------- About + footer ---------- */
+      .about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+      .footer {
+        margin-top: 64px;
+        padding-top: 24px;
+        border-top: 1px solid var(--border);
+        color: var(--text-faint);
+        font-size: 12.5px;
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; }
+        html { scroll-behavior: auto; }
+      }
+
+      @media (max-width: 860px) {
+        .hero, .split, .about-grid { grid-template-columns: 1fr; }
+        .hero { gap: 28px; }
+        .page { padding-bottom: 64px; }
+      }
+      @media (max-width: 560px) {
+        body { font-size: 15px; }
+        .nav__links { display: none; }
+        .preset-table { display: block; overflow-x: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="backdrop" aria-hidden="true"></div>
+
+    <main class="page">
+      <nav class="nav" aria-label="Primary">
+        <div class="brand">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="gwshield" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#22d3ee" />
+                  <stop offset="1" stop-color="#0ea5e9" />
+                </linearGradient>
+              </defs>
+              <path d="M24 4 L41 10 V23 C41 35 34 42 24 46 C14 42 7 35 7 23 V10 Z" fill="none" stroke="url(#gwshield)" stroke-width="2.6" />
+              <path d="M24 11 L35 14.6 V23 C35 31 30.6 36.4 24 39 C17.4 36.4 13 31 13 23 V14.6 Z" fill="none" stroke="#22d3ee" stroke-width="1.6" opacity="0.85" />
+              <rect x="16" y="24" width="16" height="4.4" rx="2.2" fill="#e6edf7" />
+              <circle cx="24" cy="32.4" r="1.8" fill="#34d399" />
+            </svg>
+          </span>
+          <span>
+            <span class="brand__name" style="display:block">GovernWorld</span>
+            <span class="brand__tagline">Privacy intelligence</span>
+          </span>
+        </div>
+        <div class="nav__links">
+          <a href="#overview">Overview</a>
+          <a href="#security">Security</a>
+          <a href="#privacy">Privacy</a>
+          <a href="#about-us">About Us</a>
+          <a href="#about-extension">About This Extension</a>
+        </div>
+      </nav>
+
+      <!-- Hero -->
+      <header class="hero">
+        <div>
+          <div class="hero__eyebrow">Local-first redaction · Manifest V3</div>
+          <h1>Detect and redact sensitive data <span class="accent">before it leaves your screen.</span></h1>
+          <p class="hero__lede">
+            GovernWorld scans pages and documents for PII, PHI, payment card data,
+            and API keys — entirely on your device. Review findings, apply in-browser
+            masks, and download flattened redacted copies. Nothing is uploaded.
+          </p>
+          <div class="hero__cta">
+            <button class="btn btn--primary" type="button" data-scroll="about-extension">See how it works</button>
+            <a class="btn btn--ghost" href="https://github.com/ACR-LOGIC/governworld" target="_blank" rel="noopener noreferrer">View the project</a>
+          </div>
+          <div class="hero__stats">
+            <div class="stat"><div class="stat__value">13</div><div class="stat__label">detection categories</div></div>
+            <div class="stat"><div class="stat__value">0</div><div class="stat__label">host permissions</div></div>
+            <div class="stat"><div class="stat__value">100%</div><div class="stat__label">on-device scanning</div></div>
+          </div>
+        </div>
+
+        <div class="hero__visual">
+          <div class="shield-stage">
+            <div class="shield-stage__grid" aria-hidden="true"></div>
+            <div class="shield-hero" aria-hidden="true">
+              <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="gws2" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#67e8f9" />
+                    <stop offset="1" stop-color="#0ea5e9" />
+                  </linearGradient>
+                </defs>
+                <path d="M24 3 L42 9.5 V23 C42 35.5 34.5 43 24 47 C13.5 43 6 35.5 6 23 V9.5 Z" fill="rgba(10,16,28,0.9)" stroke="url(#gws2)" stroke-width="2.4" />
+                <path d="M24 10 L36 13.8 V23 C36 31.5 31.4 37.2 24 40 C16.6 37.2 12 31.5 12 23 V13.8 Z" fill="rgba(34,211,238,0.06)" stroke="#22d3ee" stroke-width="1.4" />
+                <rect x="15" y="23" width="18" height="5" rx="2.5" fill="#e6edf7" />
+                <circle cx="24" cy="33" r="2.1" fill="#34d399" />
+              </svg>
+              <div class="scanline" aria-hidden="true"></div>
+            </div>
+            <div class="ticker" aria-hidden="true">
+              <div class="ticker__bar">
+                <span class="ticker__dots"><i></i><i></i><i></i></span>
+                <span>governworld · live scan · this device</span>
+              </div>
+              <div class="ticker__line"><span class="ticker__cat">email</span><span class="ticker__redact"></span></div>
+              <div class="ticker__line"><span class="ticker__cat">payment_card</span><span class="ticker__redact"></span></div>
+              <div class="ticker__line"><span class="ticker__cat">ssn</span><span class="ticker__redact"></span></div>
+              <div class="ticker__line"><span class="ticker__cat">api_key</span><span class="ticker__redact"></span></div>
+              <div class="ticker__line"><span class="ticker__cat">phone</span><span class="ticker__ok">— clean</span></div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Overview features -->
+      <section id="overview">
+        <div class="section-head">
+          <h2>Everything you scan stays yours.</h2>
+          <p>
+            One deliberate surface: find what's sensitive, decide what to mask,
+            and keep an auditable record of the choice.
+          </p>
+        </div>
+        <div class="feature-grid">
+          <div class="feature">
+            <div class="feature__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2" /><line x1="8" y1="8" x2="16" y2="8" /><line x1="8" y1="12" x2="14" y2="12" /><line x1="8" y1="16" x2="12" y2="16" /></svg>
+            </div>
+            <strong>Page scanning</strong>
+            <span>Scan the current page's visible text with one click and review every finding with confidence, category, and masked preview.</span>
+          </div>
+          <div class="feature">
+            <div class="feature__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l7 2.6v5.1c0 4.3-2.9 7.6-7 9.3-4.1-1.7-7-5-7-9.3V5.6L12 3z" /><path d="M9 12.2l2 2 4-4.2" /></svg>
+            </div>
+            <strong>Document redaction</strong>
+            <span>Drop in a PDF, image, or Word file and download a flattened, blacked-out copy. The original is never modified.</span>
+          </div>
+          <div class="feature">
+            <div class="feature__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9" /><path d="M8.5 12.2l2.4 2.4 4.6-5" /></svg>
+            </div>
+            <strong>Preset policies</strong>
+            <span>HIPAA, PCI DSS, GDPR, Developer, or fully custom category selection — reverting to Custom the moment you adjust a box.</span>
+          </div>
+          <div class="feature">
+            <div class="feature__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l8 3.5V11c0 5-3.4 8.6-8 11-4.6-2.4-8-6-8-11V5.5z" /><path d="M12 8v5" /><circle cx="12" cy="16.2" r="0.6" fill="currentColor" /></svg>
+            </div>
+            <strong>Signed audit trail</strong>
+            <span>Every scan, mask, and policy change is recorded in a tamper-evident, ECDSA-signed audit log.</span>
+          </div>
+          <div class="feature">
+            <div class="feature__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2" /><rect x="8" y="9" width="8" height="4" fill="currentColor" stroke="none" /><path d="M8 17h6" /></svg>
+            </div>
+            <strong>Redaction labels</strong>
+            <span>Optional white labels on mask blocks — [SSN], [DOB], [API KEY] — so you always know what was covered.</span>
+          </div>
+          <div class="feature">
+            <div class="feature__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            </div>
+            <strong>Local Logic Wizard &amp; Community</strong>
+             <span>Author custom regex patterns locally using sample text. Raw examples stay on your device. Community sharing is disabled until server authorization is configured.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Security / Privacy split -->
+      <section id="security">
+        <div class="section-head">
+          <h2>Security posture</h2>
+          <p>Fail-closed, least-privilege, and auditable — the extension never guesses about your data.</p>
+        </div>
+        <div class="split">
+          <div class="panel-card">
+            <h3>By design</h3>
+            <ul class="list-check">
+              <li>
+                <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="4 12 9 17 20 6" /></svg></span>
+                <div><strong>Minimal permissions</strong><p>activeTab, scripting, storage, downloads, offscreen, sidePanel — and zero host permissions. It never reads every tab.</p></div>
+              </li>
+              <li>
+                <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="4 12 9 17 20 6" /></svg></span>
+                <div><strong>No egress for scanning</strong><p>Scanning and OCR run on-device. The only optional network surface is opt-in account linking.</p></div>
+              </li>
+              <li>
+                <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="4 12 9 17 20 6" /></svg></span>
+                <div><strong>Pages are never mutated</strong><p>Masks are in-browser overlays. Redacted documents are flattened copies.</p></div>
+              </li>
+              <li>
+                <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="4 12 9 17 20 6" /></svg></span>
+                <div><strong>Fail-closed everywhere</strong><p>Unknown messages, malformed settings, and unrecognized keys are rejected — never silently allowed.</p></div>
+              </li>
+            </ul>
+          </div>
+
+          <div class="terminal" role="img" aria-label="Example of a signed audit log entry">
+            <div class="terminal__bar">
+              <span class="ticker__dots"><i></i><i></i><i></i></span>
+              <span>audit.log · ecdsa-p256 · signature attached</span>
+            </div>
+            <div class="terminal__body">
+              <div class="t-line"><span class="t-dim">2026-08-23T09:41:02Z</span> <span class="t-accent">preset_applied</span> <span class="t-dim">preset=</span><span>hipaa</span></div>
+              <div class="t-line"><span class="t-dim">2026-08-23T09:41:11Z</span> <span class="t-accent">preset_overridden</span> <span class="t-dim">→</span> <span class="t-warn">member_id</span> <span class="t-dim">unchecked</span></div>
+              <div class="t-line"><span class="t-dim">2026-08-23T09:42:01Z</span> <span class="t-accent">page_scan_completed</span> <span class="t-dim">host=</span>example.com <span class="t-dim">counts=</span>{ssn:1, card:1}</div>
+              <div class="t-line"><span class="t-dim">2026-08-23T09:42:12Z</span> <span class="t-accent">masks_applied</span> <span class="t-dim">finding_ids=</span>2</div>
+              <div class="t-line"><span class="t-dim">2026-08-23T09:42:20Z</span> <span class="t-accent">doc_redacted</span> <span class="t-dim">pages=</span>4 <span class="t-dim">sha256=</span><span class="t-accent">9f2c…</span></div>
+              <div class="t-line"><span class="t-allow">✓ signature verified · tamper-evident</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="privacy">
+        <div class="section-head">
+          <h2>Privacy promise</h2>
+          <p>Your content stays on your device. No raw values are stored, logged, or transmitted.</p>
+        </div>
+        <div class="feature-grid">
+          <div class="feature"><strong>Zero raw-data persistence</strong><span>Findings keep masked previews and counts only. Document bytes are staged for the review step, then removed.</span></div>
+          <div class="feature"><strong>Local OCR and rendering</strong><span>PDF engine and OCR are bundled — no third-party cloud processing.</span></div>
+          <div class="feature"><strong>Opt-in account linking</strong><span>A gateway origin and API key only if you want profile and checkout; it never enables content upload.</span></div>
+          <div class="feature"><strong>Honest limits</strong><span>A one-time notice reminds you detection is pattern-based and cannot guarantee completeness.</span></div>
+        </div>
+      </section>
+
+      <!-- Tabs -->
+      <section id="about-us">
+        <div class="section-head">
+          <h2>About</h2>
+          <p>Who builds this, and why it's local-first.</p>
+        </div>
+        <div class="about-grid">
+          <div class="card">
+            <h3>ACR LOGIC</h3>
+            <p>
+              GovernWorld is built by ACR LOGIC (founded by Andres Chavez Ramirez).
+              We build security and privacy tooling that keeps sensitive data
+              governed at the point of use — on the device, under your control —
+              while staying auditable and policy-driven for teams that need
+              compliance.
+            </p>
+            <p>
+              <a href="https://github.com/ACR-LOGIC/governworld" target="_blank" rel="noopener noreferrer">View the project on GitHub</a>
+            </p>
+          </div>
+          <div class="card">
+            <h3>Why local-first?</h3>
+            <p>
+              The fastest way to protect data is to never expose it. On-device
+              detection avoids the two biggest governance risks: accidental
+              uploads and third-party persistence. Managed plans extend the same
+              governance to AI traffic when you need server-side controls.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="about-extension">
+        <div class="section-head">
+          <h2>About this extension</h2>
+          <p>Version, permissions, and what it covers.</p>
+        </div>
+
+        <nav class="tabs" role="tablist" aria-label="GovernWorld Extension details">
+          <button class="tab" role="tab" aria-selected="true" data-tab="spec" id="tab-spec">Spec</button>
+          <button class="tab" role="tab" aria-selected="false" data-tab="categories" id="tab-categories">Categories</button>
+          <button class="tab" role="tab" aria-selected="false" data-tab="presets" id="tab-presets">Presets</button>
+          <button class="tab" role="tab" aria-selected="false" data-tab="verify" id="tab-verify">Verification</button>
+        </nav>
+
+        <section class="panel" data-active="true" data-panel="spec" role="tabpanel" aria-labelledby="tab-spec">
+          <div class="card">
+            <table class="preset-table">
+              <tbody>
+                <tr><td>Name</td><td>GovernWorld Redaction</td></tr>
+                <tr><td>Version</td><td>0.1.0</td></tr>
+                <tr><td>Manifest</td><td>MV3</td></tr>
+                <tr><td>Permissions</td><td><code>activeTab</code>, <code>scripting</code>, <code>storage</code>, <code>downloads</code>, <code>offscreen</code>, <code>sidePanel</code> + optional <code>notifications</code></td></tr>
+                <tr><td>Host permissions</td><td>None</td></tr>
+                <tr><td>Data</td><td>Fully on-device; no raw content stored or uploaded</td></tr>
+                <tr><td>Source</td><td><a href="https://github.com/ACR-LOGIC/governworld" target="_blank" rel="noopener noreferrer">github.com/ACR-LOGIC/governworld</a></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" data-panel="categories" role="tabpanel" aria-labelledby="tab-categories">
+          <div class="card">
+            <h3>Detection categories</h3>
+            <div class="feature-grid" style="grid-template-columns: repeat(auto-fill, minmax(220px, 1fr))">
+              <div class="feature"><strong>Email</strong><span>Email addresses</span></div>
+              <div class="feature"><strong>Phone</strong><span>US phone numbers</span></div>
+              <div class="feature"><strong>SSN</strong><span>Social Security numbers</span></div>
+              <div class="feature"><strong>Date of birth</strong><span>DOB values</span></div>
+              <div class="feature"><strong>Medical record number</strong><span>MRN identifiers</span></div>
+              <div class="feature"><strong>Member ID</strong><span>Member / patient IDs</span></div>
+              <div class="feature"><strong>NPI</strong><span>Provider NPI (Luhn-valid)</span></div>
+              <div class="feature"><strong>DEA</strong><span>DEA registration</span></div>
+              <div class="feature"><strong>MBI</strong><span>Medicare Beneficiary ID</span></div>
+              <div class="feature"><strong>Address</strong><span>US addresses</span></div>
+              <div class="feature"><strong>Payment card</strong><span>PAN (Luhn-validated)</span></div>
+              <div class="feature"><strong>API keys &amp; secrets</strong><span>OpenAI, Stripe, GitHub, AWS, JWT, private keys &amp; more</span></div>
+              <div class="feature"><strong>Possible name</strong><span>Name-like tokens</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel" data-panel="presets" role="tabpanel" aria-labelledby="tab-presets">
+          <div class="card">
+            <h3>Preset behavior</h3>
+            <table class="preset-table">
+              <thead>
+                <tr><th>Preset</th><th>Auto-selected categories</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>Custom</td><td>All boxes; you check/uncheck what matters</td></tr>
+                <tr><td>HIPAA (Healthcare)</td><td>MRN, member ID, NPI, DEA, MBI, SSN, DOB, address, phone, email, name</td></tr>
+                <tr><td>PCI DSS (Payments)</td><td>Payment card, SSN, address, phone, email</td></tr>
+                <tr><td>GDPR (EU Personal Data)</td><td>Email, phone, address, SSN, DOB, name, MRN, member ID</td></tr>
+                <tr><td>Developer</td><td>API keys &amp; secrets, email, phone</td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:14px">
+              Unchecking any box after selecting a preset reverts it to
+              <strong>Custom</strong> automatically, and the transition is
+              recorded in the signed audit log.
+            </p>
+          </div>
+        </section>
+
+        <section class="panel" data-panel="verify" role="tabpanel" aria-labelledby="tab-verify">
+          <div class="card">
+            <h3>Verification</h3>
+            <p>
+              Detection is pattern-based and runs locally. It is not guaranteed
+              to find every sensitive value. Always compare the redacted output
+              against the original before sharing or submitting.
+            </p>
+            <p>
+              The audit log is metadata-only and signed with ECDSA P-256, so any
+              post-hoc edit breaks verification.
+            </p>
+          </div>
+        </section>
+      </section>
+
+      <footer class="footer">
+        <span>Copyright (c) 2026 Andres Chavez Ramirez · ACR LOGIC</span>
+        <span>
+          <a href="https://github.com/ACR-LOGIC/governworld/issues" target="_blank" rel="noopener noreferrer">Support</a>
+          &nbsp;·&nbsp;
+          <a href="https://github.com/ACR-LOGIC/governworld" target="_blank" rel="noopener noreferrer">Project</a>
+        </span>
+      </footer>
+    </main>
+
+    <script src="landing.js" defer></script>
+  </body>
+</html>

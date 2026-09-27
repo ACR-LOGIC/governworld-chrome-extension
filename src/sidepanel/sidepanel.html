@@ -1,0 +1,573 @@
+<!-- Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved. -->
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>GovernWorld — Privacy Intelligence</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <main id="app" class="app">
+      <header class="app__header">
+        <div class="app__brand">
+          <span class="app__mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="gwshield-panel" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#22d3ee" />
+                  <stop offset="1" stop-color="#0ea5e9" />
+                </linearGradient>
+              </defs>
+              <path d="M24 4 L41 10 V23 C41 35 34 42 24 46 C14 42 7 35 7 23 V10 Z" fill="none" stroke="url(#gwshield-panel)" stroke-width="2.6" />
+              <path d="M24 11 L35 14.6 V23 C35 31 30.6 36.4 24 39 C17.4 36.4 13 31 13 23 V14.6 Z" fill="none" stroke="#22d3ee" stroke-width="1.6" opacity="0.85" />
+              <rect x="16" y="24" width="16" height="4.4" rx="2.2" fill="#e6edf7" />
+              <circle cx="24" cy="32.4" r="1.8" fill="#34d399" />
+            </svg>
+          </span>
+          <div class="app__brand-text">
+            <h1 class="app__title">GovernWorld</h1>
+            <span class="app__subtitle">Privacy Intelligence</span>
+          </div>
+        </div>
+        <button type="button" class="help-link help-link--sm" data-guide="guide-local-mode" title="How local-only processing works" style="margin-left: auto; margin-right: 6px;">
+          Local Only (?)
+        </button>
+        <span class="status-pill" role="status">
+          <span class="status-pill__dot" aria-hidden="true"></span>
+          <span id="mode-badge">Local processing</span>
+        </span>
+      </header>
+
+      <!-- Main Navigation Tabs -->
+      <nav class="app__tabs" role="tablist" aria-label="Main Navigation">
+        <button type="button" class="tab-btn tab-btn--active" data-tab="scanner" role="tab" aria-selected="true" id="tab-btn-scanner">Scanner</button>
+        <button type="button" class="tab-btn" data-tab="documents" role="tab" aria-selected="false" id="tab-btn-documents">Documents</button>
+        <button type="button" class="tab-btn" data-tab="wizard" role="tab" aria-selected="false" id="tab-btn-wizard">Wizard</button>
+        <button type="button" class="tab-btn" data-tab="settings" role="tab" aria-selected="false" id="tab-btn-settings">Settings</button>
+        <button type="button" class="tab-btn" data-tab="instructions" role="tab" aria-selected="false" id="tab-btn-instructions">Instructions</button>
+      </nav>
+
+      <!-- Tab 1: Scanner -->
+      <div id="tab-scanner" class="tab-panel tab-panel--active" role="tabpanel" aria-labelledby="tab-btn-scanner">
+        <div class="section-header">
+          <h2>Page Protection</h2>
+          <button type="button" class="help-link" data-guide="guide-page-scan" title="View page scanning instructions">How to scan ↗</button>
+        </div>
+
+        <section class="controls">
+          <button id="scan-btn" class="btn btn--primary btn--block" type="button">Scan Page</button>
+          <button id="clear-data-btn" class="btn btn--link" type="button">Clear session</button>
+        </section>
+
+        <section id="scan-summary" class="summary" hidden aria-label="Scan summary">
+          <svg class="summary__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path fill="none" stroke="currentColor" stroke-width="1.8" d="M8.5 12.2l2.3 2.3 4.7-4.8" />
+          </svg>
+          <div class="summary__text">
+            <strong id="summary-chars" class="summary__chars"></strong>
+            <p id="status" class="summary__note" role="status" aria-live="polite"></p>
+          </div>
+        </section>
+
+        <section id="results-section" class="results" hidden aria-label="Sensitive data findings">
+          <div class="results__bar">
+            <div class="section-header" style="flex: 1;">
+              <h2 class="results__title">Sensitive data findings</h2>
+              <button type="button" class="help-link help-link--sm" data-guide="guide-masking" title="Learn how masks work">Masking ↗</button>
+            </div>
+            <span id="results-count" class="count-badge"></span>
+            <button id="export-findings-btn" class="btn btn--ghost btn--sm" type="button" title="Export findings (CSV/JSON)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </button>
+          </div>
+          <ul id="findings-list" class="findings"></ul>
+        </section>
+
+        <footer class="app__footer">
+          <div class="results__actions">
+            <button id="apply-masks-btn" class="btn btn--primary" type="button">Apply selected masks</button>
+            <button id="undo-masks-btn" class="btn btn--ghost" type="button">Undo masks</button>
+            <button id="remove-masks-btn" class="btn btn--danger-ghost" type="button">Remove all masks</button>
+            <button id="copy-redacted-btn" class="btn btn--ghost" type="button">Copy redacted text</button>
+          </div>
+          <p class="footnote" id="footnote">
+            A page mask is an in-browser overlay only. While masks are active,
+            copied text is redacted. The source website is not changed.
+          </p>
+        </footer>
+      </div>
+
+      <!-- Tab 2: Document Redaction -->
+      <div id="tab-documents" class="tab-panel" hidden role="tabpanel" aria-labelledby="tab-btn-documents">
+        <div class="section-header">
+          <h2>Redact a Document</h2>
+          <button type="button" class="help-link" data-guide="guide-doc-redact" title="View document redaction instructions">Document guide ↗</button>
+        </div>
+
+        <p class="footnote">
+          PDF, image, and Word files are scanned on this device. Detected values are
+          covered in black and flattened into the copy you download. The
+          original file is never modified.
+        </p>
+
+        <div id="doc-dropzone" class="doc-dropzone" role="button" tabindex="0" aria-label="Drop a PDF or image here, or click to choose a file">
+          <label class="btn btn--ghost file-picker">
+            Choose a PDF, image, or Word document
+            <input id="doc-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.docx" hidden />
+          </label>
+          <p class="footnote">…or drag &amp; drop a file here</p>
+        </div>
+        <p id="doc-status" class="status" role="status" aria-live="polite"></p>
+
+        <div class="section-header" style="margin-top: 6px;">
+          <span style="font-size: 11px; color: var(--text-muted); font-weight: 500;">Verification Lifecycle</span>
+          <button type="button" class="help-link help-link--sm" data-guide="guide-verification" title="Learn about post-redaction verification">Verification ↗</button>
+        </div>
+
+        <ol id="doc-stages" class="stages" hidden aria-label="Redaction progress">
+          <li class="stages__item" data-stage="detected">
+            <span class="stages__marker" aria-hidden="true"></span>
+            <span class="stages__label">Detected</span>
+            <span class="stages__detail"></span>
+          </li>
+          <li class="stages__item" data-stage="redacted">
+            <span class="stages__marker" aria-hidden="true"></span>
+            <span class="stages__label">Redacted</span>
+            <span class="stages__detail"></span>
+          </li>
+          <li class="stages__item" data-stage="verified">
+            <span class="stages__marker" aria-hidden="true"></span>
+            <span class="stages__label">Verified</span>
+            <span class="stages__detail"></span>
+          </li>
+        </ol>
+
+        <div id="doc-review" class="doc-review" hidden>
+          <div id="doc-thumbs" class="doc-thumbs"></div>
+          <ul id="doc-findings" class="findings"></ul>
+          <div class="results__actions">
+            <button id="doc-redact-btn" class="btn btn--primary" type="button" disabled>
+              Redact selected &amp; download
+            </button>
+            <button id="doc-clear-btn" class="btn btn--ghost" type="button">Start over</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Redaction Wizard -->
+      <div id="tab-wizard" class="tab-panel" hidden role="tabpanel" aria-labelledby="tab-btn-wizard">
+        <div class="section-header">
+          <h2>Redaction Wizard</h2>
+          <button type="button" class="help-link" data-guide="guide-wizard" title="View wizard tutorial">Wizard guide ↗</button>
+        </div>
+        <p class="footnote">
+          Create and refine custom regex patterns locally using sample text. Raw examples stay on your device.
+        </p>
+        <div class="rulepack-actions">
+          <button id="open-wizard-btn" class="btn btn--primary btn--sm" type="button">Create Custom Rule</button>
+          <button id="link-community-btn" class="btn btn--ghost btn--sm" type="button" disabled>Community Account Unavailable</button>
+        </div>
+        <p id="community-account-status" class="footnote" role="status" aria-live="polite"></p>
+
+        <h3 class="results__title" style="margin-top: 12px; font-size: 12px;">My Custom Patterns</h3>
+        <ul id="custom-patterns-list" class="findings" style="margin-top: 6px;"></ul>
+        <p id="no-custom-patterns" class="footnote">No custom patterns created yet.</p>
+
+        <h3 class="results__title" style="margin-top: 12px; font-size: 12px;">Community Contribution Pack</h3>
+        <div class="rulepack-actions">
+          <button id="fetch-community-rules-btn" class="btn btn--ghost btn--sm" type="button" disabled>Community Rules Unavailable</button>
+        </div>
+        <ul id="community-rules-list" class="findings" style="margin-top: 6px;"></ul>
+      </div>
+
+      <!-- Tab 4: Settings -->
+      <div id="tab-settings" class="tab-panel" hidden role="tabpanel" aria-labelledby="tab-btn-settings">
+        <div class="section-header">
+          <h2>Detection &amp; Preferences</h2>
+          <button type="button" class="help-link" data-guide="guide-categories" title="Learn about detection categories">Categories guide ↗</button>
+        </div>
+
+        <section class="settings" aria-label="Settings">
+          <details open>
+            <summary>Detection settings</summary>
+            <div class="preset-selector" aria-label="Redaction presets">
+              <label for="preset-select" class="visually-hidden">Redaction preset</label>
+              <select id="preset-select" class="preset-select">
+                <option value="custom">Custom</option>
+                <option value="hipaa">HIPAA (Healthcare)</option>
+                <option value="pci">PCI DSS (Payments)</option>
+                <option value="gdpr">GDPR (EU Personal Data)</option>
+                <option value="developer">Developer (API keys &amp; secrets)</option>
+              </select>
+            </div>
+            <fieldset id="category-list" class="category-list" aria-label="Detection categories"></fieldset>
+            <p class="footnote">
+              Detection thresholds are applied automatically by the selected
+              protection preset. Switch to Custom to choose which categories are
+              protected.
+            </p>
+            <label class="toggle-row">
+              <input id="placeholder-toggle" type="checkbox" />
+              <span>Show redaction labels on masks (e.g. <code>[SSN]</code>)</span>
+            </label>
+          </details>
+
+          <details>
+            <summary>Notifications</summary>
+            <p class="footnote">
+              Get a notification when a scan finds sensitive data. Notifications are
+              requested only after you enable this toggle.
+            </p>
+            <label class="toggle-row">
+              <input id="notifications-toggle" type="checkbox" />
+              <span>Notify me when sensitive data is found</span>
+            </label>
+            <p id="notifications-status" class="footnote" role="status" aria-live="polite"></p>
+          </details>
+
+          <div class="section-header" style="margin-top: 10px;">
+            <h3>Execution Mode</h3>
+            <button type="button" class="help-link help-link--sm" data-guide="guide-cloud" title="Learn about cloud status and API readiness">Cloud info ↗</button>
+          </div>
+
+          <section class="segmented" aria-label="Scan mode">
+            <label class="segmented__option">
+              <input type="radio" name="mode" value="local" id="mode-local" />
+              <span>Local only</span>
+            </label>
+            <label
+              class="segmented__option"
+              title="Cloud analysis is unavailable until a gateway is deployed"
+            >
+              <input type="radio" name="mode" value="cloud" id="mode-cloud" disabled />
+              <span>Cloud</span>
+              <svg class="segmented__lock" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
+                <path d="M8 11V8a4 4 0 1 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.6" />
+              </svg>
+            </label>
+          </section>
+          <p id="cloud-notice" class="cloud-notice" hidden></p>
+          <p class="footnote">
+            Cloud analysis is disabled in this build — all scanning runs locally on this device.
+          </p>
+
+          <details id="account-details">
+            <summary>Account &amp; extension license</summary>
+            <p class="footnote">
+              Link this extension to your existing GovernWorld workspace to view your
+              profile and manage the extension add-on. Nothing is sent unless you
+              provide a gateway origin and API key below.
+            </p>
+            <div class="form-row">
+              <label for="gateway-origin-input">Gateway origin</label>
+              <input id="gateway-origin-input" type="url" inputmode="url" autocomplete="off" placeholder="https://api.example.com" />
+            </div>
+            <div class="form-row">
+              <label for="gateway-key-input">API key</label>
+              <input id="gateway-key-input" type="password" inputmode="text" autocomplete="off" placeholder="gw_live_…" />
+            </div>
+            <div class="rulepack-actions">
+              <button id="account-save-btn" class="btn btn--ghost btn--sm" type="button">Save account</button>
+              <button id="account-purchase-btn" class="btn btn--primary btn--sm" type="button" hidden>Buy extension add-on</button>
+            </div>
+            <p id="account-status" class="footnote" role="status" aria-live="polite"></p>
+          </details>
+
+          <p class="links">
+            <a href="#" id="privacy-link" rel="noopener noreferrer">Privacy policy</a>
+            <span aria-hidden="true">·</span>
+            <a href="https://github.com/ACR-LOGIC/governworld/issues" target="_blank" rel="noopener noreferrer">Support</a>
+            <span aria-hidden="true">·</span>
+            <button id="export-audit-btn" class="btn btn--link" type="button">Export audit log</button>
+          </p>
+        </section>
+      </div>
+
+      <!-- Tab 5: Instructions (Dedicated Guidance Tab) -->
+      <div id="tab-instructions" class="tab-panel" hidden role="tabpanel" aria-labelledby="tab-btn-instructions">
+        <div class="section-header">
+          <h2>Instructions &amp; User Guidance</h2>
+          <span class="guide-badge">Local-First</span>
+        </div>
+
+        <div class="guide-container">
+          <section id="guide-overview" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">1. Overview &amp; Architecture</h3>
+              <span class="guide-badge">Zero Egress</span>
+            </div>
+            <p>
+              GovernWorld brings enterprise-grade detection and redaction directly into your browser.
+              All pattern matching, OCR text recognition, visual overlay masking, and document flattening
+              execute <strong>entirely on this device</strong>. No document bytes, form values, or page text
+              leave your browser.
+            </p>
+          </section>
+
+          <section id="guide-local-mode" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">2. Local-Only Processing</h3>
+              <span class="guide-badge">Device Sandbox</span>
+            </div>
+            <p>
+              By default, GovernWorld operates in <strong>Local Only</strong> mode. Detection runs in isolated Web Workers
+              and browser sandboxes without network requests. Temporary in-memory session data is discarded automatically
+              upon session clear or tab closure.
+            </p>
+          </section>
+
+          <section id="guide-page-scan" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">3. Scanning Web Pages</h3>
+              <span class="guide-badge">Alt+Shift+S</span>
+            </div>
+            <ol>
+              <li>Navigate to any webpage containing sensitive information.</li>
+              <li>Click <strong>Scan Page</strong> in the extension popup or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>.</li>
+              <li>Review the categorized findings in the results list.</li>
+              <li>Check the findings you wish to protect and click <strong>Apply selected masks</strong>.</li>
+            </ol>
+          </section>
+
+          <section id="guide-masking" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">4. Visual Masking &amp; Clipboard Safety</h3>
+              <span class="guide-badge">DOM Overlays</span>
+            </div>
+            <p>
+              Page masks are <strong>non-destructive visual overlays</strong> rendered in a protected Shadow DOM.
+              The original website HTML and underlying server data are never mutated. While masks are active,
+              using <strong>Copy redacted text</strong> copies the sanitized text with solid redaction blocks.
+            </p>
+          </section>
+
+          <section id="guide-doc-redact" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">5. Document Scanning &amp; Redaction</h3>
+              <span class="guide-badge">PDF / DOCX / Image</span>
+            </div>
+            <ol>
+              <li>Switch to the <strong>Documents</strong> tab.</li>
+              <li>Drag and drop a PDF, Word document (<code>.docx</code>), or image (<code>.png</code>, <code>.jpg</code>, <code>.webp</code>).</li>
+              <li>Watch the live on-device processing status as optical recognition and detection run.</li>
+              <li>Inspect the page thumbnails and detected sensitive fields.</li>
+              <li>Click <strong>Redact selected &amp; download</strong> to receive a permanently flattened, redacted copy.</li>
+            </ol>
+          </section>
+
+          <section id="guide-verification" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">6. Verification Lifecycle</h3>
+              <span class="guide-badge">3-Stage Proof</span>
+            </div>
+            <p>
+              GovernWorld implements a rigorous 3-stage lifecycle for document security:
+            </p>
+            <ul>
+              <li><strong>Detected:</strong> Potential PII/PHI entities identified via deterministic rules.</li>
+              <li><strong>Redacted:</strong> Opaque blackout boxes rendered across target coordinates.</li>
+              <li><strong>Verified:</strong> Output bitmap re-evaluated on-device to prove zero readable pixel bleed before download.</li>
+            </ul>
+          </section>
+
+          <section id="guide-wizard" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">7. Redaction Wizard (Custom Rules)</h3>
+              <span class="guide-badge">Custom Logic</span>
+            </div>
+            <ol>
+              <li>Switch to the <strong>Wizard</strong> tab and click <strong>Create Custom Rule</strong>.</li>
+              <li>Enter positive examples (strings that should match) and negative examples (strings to ignore).</li>
+              <li>Click <strong>Analyze Examples</strong> to generate candidate regular expressions locally.</li>
+              <li>Select a proposed pattern, refine the regex, and test it against interactive sample text.</li>
+              <li>Assign a category lane, confidence rating, and label, then click <strong>Save Rule Locally</strong>.</li>
+            </ol>
+            <p>Saved rules immediately integrate into all subsequent page and document scans.</p>
+          </section>
+
+          <section id="guide-categories" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">8. Detection Categories &amp; Presets</h3>
+              <span class="guide-badge">Compliance</span>
+            </div>
+            <p>
+              GovernWorld includes built-in detectors for:
+              <code>SSN</code>, <code>Medical Record Number (MRN)</code>, <code>Member ID</code>, <code>DOB</code>,
+              <code>Provider NPI</code>, <code>DEA Number</code>, <code>Medicare Beneficiary ID (MBI)</code>,
+              <code>Payment Cards (Luhn validated)</code>, <code>API Keys &amp; Secrets</code>, <code>Email</code>,
+              <code>US Phone</code>, <code>US Address</code>, and <code>Possible Names</code>.
+            </p>
+            <p>
+              Pre-configured compliance presets include <strong>HIPAA</strong> (Healthcare), <strong>PCI DSS</strong> (Payments),
+              <strong>GDPR</strong> (EU Personal Data), and <strong>Developer</strong> (API secrets).
+            </p>
+          </section>
+
+          <section id="guide-cloud" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">9. Cloud Features &amp; API Connectivity</h3>
+              <span class="guide-badge">API Ready</span>
+            </div>
+            <p>
+              Cloud features are <strong>intentionally locked and disabled</strong> in this standalone release.
+              All processing remains strictly local. The extension architecture retains standardized API hooks
+              and gateway connectors so organizations can link enterprise workspace gateways in future deployments
+              without architectural changes.
+            </p>
+          </section>
+
+          <section id="guide-privacy" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">10. Audit Log &amp; Cryptographic Proof</h3>
+              <span class="guide-badge">Ed25519 Signed</span>
+            </div>
+            <p>
+              All protection actions generate an immutable, cryptographically signed audit log stored locally.
+              Click <strong>Export audit log</strong> in Settings to download the JSONL audit ledger and its
+              corresponding cryptographic signature for compliance verification.
+            </p>
+          </section>
+        </div>
+      </div>
+
+      <!-- Confirmation Dialogs -->
+      <dialog id="doc-confirm-dialog" class="dialog">
+        <p>
+          Download a flattened copy with selected values covered in black? The
+          original file is never modified.
+        </p>
+        <div class="dialog__actions">
+          <button id="doc-cancel" class="btn btn--ghost" type="button">Cancel</button>
+          <button id="doc-confirm" class="btn btn--primary" type="button">Download redacted copy</button>
+        </div>
+      </dialog>
+
+      <dialog id="copy-dialog" class="dialog">
+        <p>
+          The clipboard will contain redacted text. Sensitive values are
+          replaced with solid blocks. Continue?
+        </p>
+        <div class="dialog__actions">
+          <button id="copy-cancel" class="btn btn--ghost" type="button">Cancel</button>
+          <button id="copy-confirm" class="btn btn--primary" type="button">Copy redacted text</button>
+        </div>
+      </dialog>
+
+      <dialog id="verify-dialog" class="dialog">
+        <h3 class="dialog__title">Please verify your work</h3>
+        <p>
+          GovernWorld uses local, pattern-based detection. It does not guarantee
+          that every sensitive value is found. Review the results before sharing
+          or submitting — and always compare the redacted output against the
+          original for anything you cannot afford to expose.
+        </p>
+        <div class="dialog__actions">
+          <button id="verify-dismiss" class="btn btn--ghost" type="button">Dismiss</button>
+          <button id="verify-understood" class="btn btn--primary" type="button">I understand</button>
+        </div>
+      </dialog>
+
+      <!-- Redaction Wizard Dialog -->
+      <dialog id="wizard-dialog" class="dialog" style="max-width: 480px; width: 90%;">
+        <div id="wizard-step-1" class="wizard-step">
+          <h3 class="dialog__title">Redaction Wizard — Step 1: Examples</h3>
+          <p class="footnote">Enter sample positive matches (should match) and negative matches (should NOT match). Text is processed entirely in your browser.</p>
+          <div class="form-row">
+            <label for="wizard-pos-input">Positive Examples (one per line):</label>
+            <textarea id="wizard-pos-input" rows="4" style="font-family: var(--mono); font-size: 11px; background: var(--bg-inset); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px;" placeholder="POL-123456&#10;POL-987654"></textarea>
+          </div>
+          <div class="form-row">
+            <label for="wizard-neg-input">Negative Examples (one per line):</label>
+            <textarea id="wizard-neg-input" rows="3" style="font-family: var(--mono); font-size: 11px; background: var(--bg-inset); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px;" placeholder="POL-12&#10;ABC-123456"></textarea>
+          </div>
+          <div class="dialog__actions" style="margin-top: 12px;">
+            <button id="wizard-cancel-1" class="btn btn--ghost" type="button">Cancel</button>
+            <button id="wizard-analyze-btn" class="btn btn--primary" type="button">Analyze Examples (Local)</button>
+          </div>
+        </div>
+
+        <div id="wizard-step-2" class="wizard-step" hidden>
+          <h3 class="dialog__title">Step 2: Proposed Regexes</h3>
+          <p class="footnote">Select a suggested pattern or customize it in Step 3.</p>
+          <div id="wizard-proposals-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; margin-top: 8px;"></div>
+          <div class="dialog__actions" style="margin-top: 12px;">
+            <button id="wizard-back-2" class="btn btn--ghost" type="button">Back</button>
+            <button id="wizard-next-2" class="btn btn--primary" type="button">Use Selected</button>
+          </div>
+        </div>
+
+        <div id="wizard-step-3" class="wizard-step" hidden>
+          <h3 class="dialog__title">Step 3: Test &amp; Refine Pattern</h3>
+          <div class="form-row">
+            <label for="wizard-regex-input">Regex Pattern:</label>
+            <input id="wizard-regex-input" type="text" style="font-family: var(--mono);" />
+          </div>
+          <div class="form-row">
+            <label for="wizard-test-sample">Sample Test Text:</label>
+            <textarea id="wizard-test-sample" rows="3" style="font-family: var(--mono); font-size: 11px; background: var(--bg-inset); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px;"></textarea>
+          </div>
+          <div id="wizard-test-results-box" class="footnote" style="margin-top: 6px; font-family: var(--mono);"></div>
+          <div class="dialog__actions" style="margin-top: 12px;">
+            <button id="wizard-back-3" class="btn btn--ghost" type="button">Back</button>
+            <button id="wizard-next-3" class="btn btn--primary" type="button">Next: Rule Details</button>
+          </div>
+        </div>
+
+        <div id="wizard-step-4" class="wizard-step" hidden>
+          <h3 class="dialog__title">Step 4: Rule Metadata</h3>
+          <div class="form-row">
+            <label for="wizard-rule-name">Rule Label:</label>
+            <input id="wizard-rule-name" type="text" placeholder="e.g. Policy Number" />
+          </div>
+          <div class="form-row">
+            <label for="wizard-rule-category">Category Lane:</label>
+            <select id="wizard-rule-category" style="padding: 6px; background: var(--bg-inset); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
+              <option value="custom">Custom</option>
+              <option value="medical_record_number">Medical Record Number (MRN)</option>
+              <option value="member_id">Member ID</option>
+              <option value="ssn">SSN</option>
+              <option value="dob">DOB</option>
+              <option value="secrets">Secrets / API Keys</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="wizard-rule-confidence">Confidence (0.0 to 1.0):</label>
+            <input id="wizard-rule-confidence" type="number" min="0" max="1" step="0.05" value="0.85" />
+          </div>
+          <div class="dialog__actions" style="margin-top: 12px;">
+            <button id="wizard-back-4" class="btn btn--ghost" type="button">Back</button>
+            <button id="wizard-save-btn" class="btn btn--primary" type="button">Save Rule Locally</button>
+          </div>
+        </div>
+      </dialog>
+
+      <dialog id="contrib-consent-dialog" class="dialog">
+        <h3 class="dialog__title">Contribute Rule to Community?</h3>
+        <p class="footnote">
+          You are about to share this regex rule specification with the GovernWorld community.
+        </p>
+        <ul class="footnote" style="padding-left: 16px; margin: 6px 0;">
+          <li>The <strong>rule name, category, regex, flags, capture setting, confidence, optional context cues, and optional length bounds</strong> would be sent for review.</li>
+          <li>Raw examples, page content, document bytes, and page images are not included.</li>
+          <li>Community submission is disabled until server authorization and consent recording are configured.</li>
+        </ul>
+        <label class="toggle-row" style="margin: 10px 0;">
+          <input id="contrib-consent-checkbox" type="checkbox" />
+          <span>I confirm this rule specification contains no private data.</span>
+        </label>
+        <div class="dialog__actions">
+          <button id="contrib-cancel-btn" class="btn btn--ghost" type="button">Keep Local Only</button>
+          <button id="contrib-confirm-btn" class="btn btn--primary" type="button" disabled>Submit Contribution</button>
+        </div>
+      </dialog>
+    </main>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

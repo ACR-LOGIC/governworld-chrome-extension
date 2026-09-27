@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Build outputs
+dist/
+build/
+*.zip
+*.crx
+*.pem
+
+# Test & coverage
+coverage/
+.tmp*
+*.log
+.playwright/
+test-results/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.local
+*.secret
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
