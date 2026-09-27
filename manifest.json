@@ -4,6 +4,12 @@
   "version": "0.1.0",
   "description": "Local-first PII/PHI detection and redaction for pages and documents you choose to scan. Content stays on this device.",
   "minimum_chrome_version": "116",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "governworld@governworld.local",
+      "strict_min_version": "109.0"
+    }
+  },
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",

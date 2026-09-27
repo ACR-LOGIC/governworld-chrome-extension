@@ -887,7 +887,16 @@ chrome.commands.onCommand.addListener((command) => {
       const tab = await getActiveTab();
       const window = tab?.windowId != null ? tab.windowId : (await chrome.windows.getLastFocused()).id;
       if (window != null) {
-        await chrome.sidePanel.open({ windowId: window });
+        if (chrome.sidePanel && typeof chrome.sidePanel.open === "function") {
+          await chrome.sidePanel.open({ windowId: window });
+        } else if (chrome.windows && typeof chrome.windows.create === "function") {
+          await chrome.windows.create({
+            url: chrome.runtime.getURL("sidepanel.html"),
+            type: "popup",
+            width: 440,
+            height: 680,
+          });
+        }
       }
     }
   })().catch(() => undefined);
