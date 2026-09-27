@@ -1,6 +1,7 @@
 /* Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved. */
 
 :root {
+  --ui-scale: 1;
   --bg: #0a0f1a;
   --bg-elevated: #101827;
   --bg-inset: #0d1424;
@@ -24,6 +25,21 @@
   --radius-sm: 8px;
 }
 
+html[data-font-size="medium"],
+body[data-font-size="medium"] {
+  --ui-scale: 1.15;
+}
+
+html[data-font-size="large"],
+body[data-font-size="large"] {
+  --ui-scale: 1.30;
+}
+
+html[data-font-size="xlarge"],
+body[data-font-size="xlarge"] {
+  --ui-scale: 1.50;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -34,9 +50,96 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: calc(13px * var(--ui-scale));
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+}
+
+/* High Contrast Mode */
+html[data-high-contrast="true"],
+body[data-high-contrast="true"] {
+  --bg: #000000;
+  --bg-elevated: #080808;
+  --bg-inset: #000000;
+  --border: #ffffff;
+  --border-strong: #ffffff;
+  --text: #ffffff;
+  --text-muted: #f1f5f9;
+  --text-faint: #e2e8f0;
+  --accent: #00ffff;
+  --accent-strong: #00e5ff;
+  --accent-soft: rgba(0, 255, 255, 0.25);
+  --ok: #00ff66;
+  --ok-soft: rgba(0, 255, 102, 0.25);
+  --warning: #ffff00;
+  --warning-soft: rgba(255, 255, 0, 0.25);
+  --danger: #ff3333;
+  --danger-soft: rgba(255, 51, 51, 0.25);
+}
+
+html[data-high-contrast="true"] .btn,
+body[data-high-contrast="true"] .btn,
+html[data-high-contrast="true"] .tab-btn,
+body[data-high-contrast="true"] .tab-btn,
+html[data-high-contrast="true"] .preset-select,
+body[data-high-contrast="true"] .preset-select,
+html[data-high-contrast="true"] input,
+body[data-high-contrast="true"] input,
+html[data-high-contrast="true"] textarea,
+body[data-high-contrast="true"] textarea,
+html[data-high-contrast="true"] .dialog,
+body[data-high-contrast="true"] .dialog,
+html[data-high-contrast="true"] .guide-card,
+body[data-high-contrast="true"] .guide-card,
+html[data-high-contrast="true"] .summary,
+body[data-high-contrast="true"] .summary,
+html[data-high-contrast="true"] .shield-banner,
+body[data-high-contrast="true"] .shield-banner,
+html[data-high-contrast="true"] .context-tip-card,
+body[data-high-contrast="true"] .context-tip-card {
+  border-width: 2px !important;
+  border-color: #ffffff !important;
+}
+
+html[data-high-contrast="true"] .btn--primary,
+body[data-high-contrast="true"] .btn--primary {
+  background: #00ffff !important;
+  color: #000000 !important;
+  font-weight: 700 !important;
+}
+
+/* Dyslexia-Friendly Spacing & Font */
+html[data-dyslexia="true"],
+body[data-dyslexia="true"] {
+  letter-spacing: 0.07em !important;
+  word-spacing: 0.15em !important;
+  line-height: 1.8 !important;
+}
+
+html[data-dyslexia="true"] p,
+body[data-dyslexia="true"] p,
+html[data-dyslexia="true"] span,
+body[data-dyslexia="true"] span,
+html[data-dyslexia="true"] button,
+body[data-dyslexia="true"] button,
+html[data-dyslexia="true"] label,
+body[data-dyslexia="true"] label,
+html[data-dyslexia="true"] li,
+body[data-dyslexia="true"] li {
+  letter-spacing: 0.07em !important;
+  line-height: 1.8 !important;
+}
+
+/* Reduced Motion Mode */
+html[data-reduced-motion="true"] *,
+body[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+body[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after,
+body[data-reduced-motion="true"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
 }
 
 :focus-visible {
