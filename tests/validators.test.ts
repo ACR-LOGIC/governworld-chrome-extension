@@ -10,6 +10,10 @@ import {
   isValidLuhn,
   isValidNpi,
   isNonProviderBound,
+  isValidCusip,
+  isValidIsin,
+  isValidSedol,
+  isValidLoinc,
 } from "../src/validators/index.js";
 
 describe("isValidSsn", () => {
@@ -108,3 +112,65 @@ describe("isNonProviderBound", () => {
     expect(isNonProviderBound("Provider number ")).toBe(false);
   });
 });
+
+describe("isValidCusip", () => {
+  it("validates authentic CUSIP numbers with correct check digit", () => {
+    // Apple Inc CUSIP: 037833100
+    expect(isValidCusip("037833100")).toBe(true);
+    // Microsoft Corp CUSIP: 594918104
+    expect(isValidCusip("594918104")).toBe(true);
+  });
+
+  it("rejects invalid CUSIPs (bad check digit, wrong length, forbidden chars)", () => {
+    expect(isValidCusip("037833109")).toBe(false); // wrong check digit
+    expect(isValidCusip("03783310")).toBe(false); // too short
+    expect(isValidCusip("0378331000")).toBe(false); // too long
+  });
+});
+
+describe("isValidIsin", () => {
+  it("validates authentic ISIN codes with ISO 6166 checksum", () => {
+    // Apple Inc ISIN: US0378331005
+    expect(isValidIsin("US0378331005")).toBe(true);
+    // Microsoft ISIN: US5949181045
+    expect(isValidIsin("US5949181045")).toBe(true);
+  });
+
+  it("rejects invalid ISINs", () => {
+    expect(isValidIsin("US0378331000")).toBe(false); // wrong check digit
+    expect(isValidIsin("120378331005")).toBe(false); // country code must be 2 letters
+    expect(isValidIsin("US037833100")).toBe(false); // too short
+  });
+});
+
+describe("isValidSedol", () => {
+  it("validates authentic 7-character SEDOL codes", () => {
+    // British Telecom: 0925288
+    expect(isValidSedol("0925288")).toBe(true);
+    // BAE Systems: 0263494
+    expect(isValidSedol("0263494")).toBe(true);
+    // Modern alphanumeric SEDOL (e.g. B10RZP7)
+    expect(isValidSedol("B10RZP7")).toBe(true);
+  });
+
+  it("rejects invalid SEDOLs (vowels forbidden, bad check digit)", () => {
+    expect(isValidSedol("0925289")).toBe(false); // bad check digit
+    expect(isValidSedol("092A288")).toBe(false); // 'A' vowel forbidden in SEDOL
+  });
+});
+
+describe("isValidLoinc", () => {
+  it("validates valid LOINC codes with Mod-10 checksum", () => {
+    // Glucose in Serum/Plasma: 2345-7
+    expect(isValidLoinc("2345-7")).toBe(true);
+    // Hemoglobin A1c: 4548-4
+    expect(isValidLoinc("4548-4")).toBe(true);
+  });
+
+  it("rejects invalid LOINC codes", () => {
+    expect(isValidLoinc("2345-8")).toBe(false); // wrong check digit
+    expect(isValidLoinc("23457")).toBe(false); // missing hyphen
+    expect(isValidLoinc("abc-7")).toBe(false); // non-numeric
+  });
+});
+

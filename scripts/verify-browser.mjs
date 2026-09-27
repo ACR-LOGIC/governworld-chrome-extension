@@ -130,9 +130,23 @@ try {
     const page = await context.newPage();
     const settingsErrors = [];
     page.on("pageerror", (error) => settingsErrors.push(String(error)));
+    page.on("console", (msg) => console.log(`[${surface} console]`, msg.type(), msg.text()));
     await page.goto(`chrome-extension://${extensionId}/${surface}`, { waitUntil: "load" });
-    await page.click("details > summary");
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(500);
+    const settingsTab = await page.$("#tab-btn-settings");
+    if (settingsTab) {
+      await settingsTab.click();
+      await page.waitForTimeout(400);
+    }
+    const firstDetails = await page.$("details");
+    if (firstDetails) {
+      const isOpen = await firstDetails.evaluate((d) => d.open);
+      if (!isOpen) {
+        await page.click("details > summary");
+        await page.waitForTimeout(400);
+      }
+    }
+    await page.waitForSelector("#category-list input[type=checkbox]", { timeout: 5000 }).catch(() => undefined);
 
     const ui = await page.evaluate(() => ({
       categories: document.querySelectorAll("#category-list input[type=checkbox]").length,

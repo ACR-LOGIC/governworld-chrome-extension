@@ -4,15 +4,16 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GovernWorld — Privacy Intelligence</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <main id="app" class="app">
+    <main id="app" class="app" role="main">
       <header class="app__header">
         <div class="app__brand">
           <span class="app__mark" aria-hidden="true">
-            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <defs>
                 <linearGradient id="gwshield-popup" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0" stop-color="#22d3ee" />
@@ -33,7 +34,7 @@
         <button type="button" class="help-link help-link--sm" data-guide="guide-local-mode" title="How local-only processing works" style="margin-left: auto; margin-right: 6px;">
           Local Only (?)
         </button>
-        <span class="status-pill" role="status">
+        <span class="status-pill" role="status" aria-label="Processing Mode">
           <span class="status-pill__dot" aria-hidden="true"></span>
           <span id="mode-badge">Local processing</span>
         </span>
@@ -41,28 +42,52 @@
 
       <!-- Main Navigation Tabs -->
       <nav class="app__tabs" role="tablist" aria-label="Main Navigation">
-        <button type="button" class="tab-btn tab-btn--active" data-tab="scanner" role="tab" aria-selected="true" id="tab-btn-scanner">Scanner</button>
-        <button type="button" class="tab-btn" data-tab="documents" role="tab" aria-selected="false" id="tab-btn-documents">Documents</button>
-        <button type="button" class="tab-btn" data-tab="wizard" role="tab" aria-selected="false" id="tab-btn-wizard">Wizard</button>
-        <button type="button" class="tab-btn" data-tab="settings" role="tab" aria-selected="false" id="tab-btn-settings">Settings</button>
-        <button type="button" class="tab-btn" data-tab="instructions" role="tab" aria-selected="false" id="tab-btn-instructions">Instructions</button>
+        <button type="button" class="tab-btn tab-btn--active" data-tab="scanner" role="tab" aria-selected="true" id="tab-btn-scanner" aria-controls="tab-scanner">Scanner</button>
+        <button type="button" class="tab-btn" data-tab="documents" role="tab" aria-selected="false" id="tab-btn-documents" aria-controls="tab-documents">Documents</button>
+        <button type="button" class="tab-btn" data-tab="wizard" role="tab" aria-selected="false" id="tab-btn-wizard" aria-controls="tab-wizard">Wizard</button>
+        <button type="button" class="tab-btn" data-tab="settings" role="tab" aria-selected="false" id="tab-btn-settings" aria-controls="tab-settings">Settings</button>
+        <button type="button" class="tab-btn" data-tab="instructions" role="tab" aria-selected="false" id="tab-btn-instructions" aria-controls="tab-instructions">Instructions</button>
       </nav>
 
       <!-- Tab 1: Scanner -->
       <div id="tab-scanner" class="tab-panel tab-panel--active" role="tabpanel" aria-labelledby="tab-btn-scanner">
+        <!-- Proactive Paste & Prompt Shield Live Status Indicator -->
+        <div id="scanner-shield-status" class="shield-banner" role="status" aria-live="polite">
+          <span class="shield-banner__dot" aria-hidden="true"></span>
+          <div class="shield-banner__text">
+            <strong>Proactive Paste &amp; Prompt Shield: <span id="scanner-shield-label">Active</span></strong>
+            <span class="footnote">Guarding ChatGPT, Claude, LLMs &amp; web inputs against data leaks</span>
+          </div>
+          <button type="button" class="help-link help-link--sm" data-guide="guide-paste-guard" title="Learn how Paste Shield works" style="margin-left: auto;">
+            Info ↗
+          </button>
+        </div>
+
         <div class="section-header">
           <h2>Page Protection</h2>
           <button type="button" class="help-link" data-guide="guide-page-scan" title="View page scanning instructions">How to scan ↗</button>
         </div>
 
-        <section class="controls">
-          <button id="scan-btn" class="btn btn--primary btn--block" type="button">Scan Page</button>
-          <button id="open-side-panel-btn" class="btn btn--link" type="button">
-            Open side panel
-            <span class="visually-hidden">(keyboard shortcut: Alt+Shift+P)</span>
-          </button>
-          <button id="clear-data-btn" class="btn btn--link" type="button">Clear session</button>
+        <section class="controls" aria-label="Scanning controls">
+          <button id="scan-btn" class="btn btn--primary btn--block" type="button">Scan Page (Alt+Shift+S)</button>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <button id="open-side-panel-btn" class="btn btn--link" type="button">
+              Open side panel
+              <span class="visually-hidden">(keyboard shortcut: Alt+Shift+P)</span>
+            </button>
+            <button id="clear-data-btn" class="btn btn--link" type="button">Clear session</button>
+          </div>
         </section>
+
+        <!-- Right-Click Context Menu Quick Hint -->
+        <div class="context-tip-card" role="note" aria-label="Right-click shortcuts">
+          <span class="context-tip-card__icon" aria-hidden="true">⚡</span>
+          <div class="context-tip-card__body">
+            <strong>Right-Click Protection Menu</strong>
+            <p class="footnote">Select any text on the page &amp; right-click to instantly <em>Redact to clipboard</em> or <em>Mask selection</em> without opening popup.</p>
+          </div>
+          <button type="button" class="help-link help-link--sm" data-guide="guide-context-menus" title="View context menu guide">Menu guide ↗</button>
+        </div>
 
         <section id="scan-summary" class="summary" hidden aria-label="Scan summary">
           <svg class="summary__icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -82,15 +107,18 @@
               <button type="button" class="help-link help-link--sm" data-guide="guide-masking" title="Learn how masks work">Masking ↗</button>
             </div>
             <span id="results-count" class="count-badge"></span>
-            <button id="export-findings-btn" class="btn btn--ghost btn--sm" type="button" title="Export findings (CSV/JSON)">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-            </button>
+            <div class="results__tools" style="display: flex; gap: 4px;">
+              <button id="toggle-all-findings-btn" class="btn btn--ghost btn--sm" type="button" title="Select / Deselect all findings">Select All</button>
+              <button id="export-findings-btn" class="btn btn--ghost btn--sm" type="button" title="Export findings (CSV/JSON)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              </button>
+            </div>
           </div>
-          <ul id="findings-list" class="findings"></ul>
+          <ul id="findings-list" class="findings" role="list" aria-label="Detected findings list"></ul>
         </section>
 
         <footer class="app__footer">
@@ -107,25 +135,37 @@
         </footer>
       </div>
 
-      <!-- Tab 2: Document Redaction -->
+      <!-- Tab 2: Document Redaction Studio -->
       <div id="tab-documents" class="tab-panel" hidden role="tabpanel" aria-labelledby="tab-btn-documents">
         <div class="section-header">
-          <h2>Redact a Document</h2>
+          <h2>Interactive Redaction Studio</h2>
           <button type="button" class="help-link" data-guide="guide-doc-redact" title="View document redaction instructions">Document guide ↗</button>
         </div>
 
         <p class="footnote">
-          PDF, image, and Word files are scanned on this device. Detected values are
-          covered in black and flattened into the copy you download. The
-          original file is never modified.
+          PDF, Word (<code>.docx</code>), and Image files are scanned entirely on this device.
+          Detected values are masked with high-precision bounding boxes and permanently flattened into the copy you download.
         </p>
 
-        <div id="doc-dropzone" class="doc-dropzone" role="button" tabindex="0" aria-label="Drop a PDF or image here, or click to choose a file">
+        <!-- Document OCR Language Selector -->
+        <div class="form-row" style="margin-top: 2px;">
+          <label for="doc-ocr-language-select">Document Recognition Language</label>
+          <select id="doc-ocr-language-select" class="preset-select" aria-label="Document OCR language selection">
+            <option value="eng">🇺🇸 English (eng)</option>
+            <option value="spa">🇪🇸 Spanish (spa - Español)</option>
+            <option value="fra">🇫🇷 French (fra - Français)</option>
+            <option value="deu">🇩🇪 German (deu - Deutsch)</option>
+            <option value="jpn">🇯🇵 Japanese (jpn - 日本語)</option>
+            <option value="por">🇵🇹 Portuguese (por - Português)</option>
+          </select>
+        </div>
+
+        <div id="doc-dropzone" class="doc-dropzone" role="button" tabindex="0" aria-label="Drop a PDF, Word doc, or image here, or click to choose a file">
           <label class="btn btn--ghost file-picker">
             Choose a PDF, image, or Word document
             <input id="doc-file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.docx" hidden />
           </label>
-          <p class="footnote">…or drag &amp; drop a file here</p>
+          <p class="footnote">…or drag &amp; drop a file here (max 20 MB)</p>
         </div>
         <p id="doc-status" class="status" role="status" aria-live="polite"></p>
 
@@ -153,23 +193,58 @@
         </ol>
 
         <div id="doc-review" class="doc-review" hidden>
-          <div id="doc-thumbs" class="doc-thumbs"></div>
-          <div class="doc-style-controls" style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">
-            <div class="form-row" style="margin-top: 0;">
-              <label for="doc-style-select">Redaction style</label>
-              <select id="doc-style-select" class="preset-select">
-                <option value="blackout">Blackout (Solid black box)</option>
-                <option value="whiteout">Whiteout (Solid white box)</option>
-                <option value="stamp">Stamp (Box with centered label)</option>
-              </select>
-            </div>
-            <div id="doc-stamp-container" class="form-row" style="margin-top: 0;" hidden>
-              <label for="doc-stamp-text">Stamp label</label>
-              <input id="doc-stamp-text" type="text" placeholder="[REDACTED]" value="[REDACTED]" />
+          <!-- Studio Toolbar for Interactive Canvas -->
+          <div class="studio-toolbar" role="toolbar" aria-label="Document Studio canvas tools">
+            <span class="studio-toolbar__title">Canvas Studio Tools</span>
+            <div class="studio-toolbar__actions">
+              <button id="tool-draw-box" class="tool-btn tool-btn--active" type="button" title="Drag on canvas to draw custom redaction boxes">
+                ✏️ Draw Box
+              </button>
+              <button id="tool-clear-custom" class="tool-btn" type="button" title="Remove all manually drawn custom boxes">
+                🧹 Clear Drawn Boxes
+              </button>
+              <button id="tool-toggle-all-doc" class="tool-btn" type="button" title="Select or deselect all detected findings">
+                ☑️ Toggle All
+              </button>
             </div>
           </div>
-          <ul id="doc-findings" class="findings" style="margin-top: 10px;"></ul>
-          <div class="results__actions">
+
+          <div id="doc-thumbs" class="doc-thumbs" role="region" aria-label="Document page review thumbnails"></div>
+
+          <!-- Redaction Style Controls -->
+          <div class="doc-style-controls" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+            <div class="form-row" style="margin-top: 0;">
+              <label for="doc-style-select">Redaction Style</label>
+              <select id="doc-style-select" class="preset-select" aria-label="Redaction style selection">
+                <option value="blackout">Blackout (Solid opaque black box)</option>
+                <option value="whiteout">Whiteout (Solid opaque white box)</option>
+                <option value="stamp">Text Stamp (Box with centered text label)</option>
+              </select>
+            </div>
+
+            <div id="doc-stamp-container" class="form-row" style="margin-top: 0;" hidden>
+              <label for="doc-stamp-text">Stamp Text Label</label>
+              <div style="display: flex; gap: 6px;">
+                <input id="doc-stamp-text" type="text" placeholder="[REDACTED]" value="[REDACTED]" style="flex: 1;" />
+                <select id="doc-stamp-presets" class="preset-select" style="width: auto; min-width: 130px;" aria-label="Quick stamp label presets">
+                  <option value="[REDACTED]">[REDACTED]</option>
+                  <option value="[CONFIDENTIAL]">[CONFIDENTIAL]</option>
+                  <option value="[PHI REMOVED]">[PHI REMOVED]</option>
+                  <option value="[PII MASKED]">[PII MASKED]</option>
+                  <option value="[RESTRICTED]">[RESTRICTED]</option>
+                  <option value="[DE-IDENTIFIED]">[DE-IDENTIFIED]</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-header" style="margin-top: 10px;">
+            <h3 class="results__title" style="font-size: 12px;">Document Findings</h3>
+            <span id="doc-findings-count" class="count-badge"></span>
+          </div>
+          <ul id="doc-findings" class="findings" style="margin-top: 6px;" role="list"></ul>
+
+          <div class="results__actions" style="margin-top: 12px;">
             <button id="doc-redact-btn" class="btn btn--primary" type="button" disabled>
               Redact selected &amp; download
             </button>
@@ -185,7 +260,7 @@
           <button type="button" class="help-link" data-guide="guide-wizard" title="View wizard tutorial">Wizard guide ↗</button>
         </div>
         <p class="footnote">
-          Create and refine custom regex patterns locally using sample text. Raw examples stay on your device.
+          Create and refine custom regex patterns locally using sample text. Raw examples stay strictly on your device.
         </p>
         <div class="rulepack-actions">
           <button id="open-wizard-btn" class="btn btn--primary btn--sm" type="button">Create Custom Rule</button>
@@ -194,14 +269,14 @@
         <p id="community-account-status" class="footnote" role="status" aria-live="polite"></p>
 
         <h3 class="results__title" style="margin-top: 12px; font-size: 12px;">My Custom Patterns</h3>
-        <ul id="custom-patterns-list" class="findings" style="margin-top: 6px;"></ul>
+        <ul id="custom-patterns-list" class="findings" style="margin-top: 6px;" role="list"></ul>
         <p id="no-custom-patterns" class="footnote">No custom patterns created yet.</p>
 
         <h3 class="results__title" style="margin-top: 12px; font-size: 12px;">Community Contribution Pack</h3>
         <div class="rulepack-actions">
           <button id="fetch-community-rules-btn" class="btn btn--ghost btn--sm" type="button" disabled>Community Rules Unavailable</button>
         </div>
-        <ul id="community-rules-list" class="findings" style="margin-top: 6px;"></ul>
+        <ul id="community-rules-list" class="findings" style="margin-top: 6px;" role="list"></ul>
       </div>
 
       <!-- Tab 4: Settings -->
@@ -211,48 +286,75 @@
           <button type="button" class="help-link" data-guide="guide-categories" title="Learn about detection categories">Categories guide ↗</button>
         </div>
 
-        <section class="settings" aria-label="Settings">
+        <section class="settings" aria-label="Settings configuration">
           <details open>
-            <summary>Detection settings</summary>
-            <div class="preset-selector" aria-label="Redaction presets">
-              <label for="preset-select" class="visually-hidden">Redaction preset</label>
-              <select id="preset-select" class="preset-select">
-                <option value="custom">Custom</option>
-                <option value="hipaa">HIPAA (Healthcare)</option>
-                <option value="pci">PCI DSS (Payments)</option>
-                <option value="gdpr">GDPR (EU Personal Data)</option>
-                <option value="pipeda">PIPEDA (Canada Personal Data)</option>
-                <option value="uk_gdpr">UK GDPR / NHS (United Kingdom)</option>
-                <option value="india_dpdp">DPDP Act (India Privacy)</option>
-                <option value="australia_privacy">Privacy Act (Australia)</option>
-                <option value="brazil_lgpd">LGPD (Brazil Personal Data)</option>
-                <option value="developer">Developer (API keys &amp; secrets)</option>
+            <summary>Global Compliance Presets &amp; Detection Categories</summary>
+            <div class="preset-selector" aria-label="Redaction presets selection">
+              <label for="preset-select" style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;">Preset Configuration</label>
+              <select id="preset-select" class="preset-select" aria-label="Choose a compliance preset">
+                <option value="custom">⚙️ Custom Configuration</option>
+                <option value="hipaa">🏥 HIPAA (Healthcare &amp; PHI)</option>
+                <option value="pci">💳 PCI DSS (Payment Cards &amp; Financial)</option>
+                <option value="gdpr">🇪🇺 GDPR (EU Personal Data)</option>
+                <option value="pipeda">🇨🇦 PIPEDA (Canada SIN &amp; Personal Data)</option>
+                <option value="uk_gdpr">🇬🇧 UK GDPR / NHS (UK NHS &amp; Health Data)</option>
+                <option value="india_dpdp">🇮🇳 DPDP Act (India Aadhaar, PAN &amp; Privacy)</option>
+                <option value="australia_privacy">🇦🇺 Privacy Act (Australia TFN &amp; Privacy)</option>
+                <option value="brazil_lgpd">🇧🇷 LGPD (Brazil CPF &amp; Personal Data)</option>
+                <option value="developer">🔑 Developer (API Keys, Secrets &amp; Tokens)</option>
               </select>
             </div>
-            <fieldset id="category-list" class="category-list" aria-label="Detection categories"></fieldset>
+
+            <div class="category-filters-row" role="group" aria-label="Quick category filters">
+              <span class="footnote" style="font-weight: 500;">Quick Filter:</span>
+              <button id="cat-filter-all" class="btn btn--ghost btn--sm" type="button">All (19)</button>
+              <button id="cat-filter-health" class="btn btn--ghost btn--sm" type="button">Healthcare</button>
+              <button id="cat-filter-intl" class="btn btn--ghost btn--sm" type="button">International</button>
+              <button id="cat-filter-finance" class="btn btn--ghost btn--sm" type="button">Financial</button>
+              <button id="cat-filter-none" class="btn btn--ghost btn--sm" type="button">Clear</button>
+            </div>
+
+            <fieldset id="category-list" class="category-list" aria-label="Detection categories list"></fieldset>
             <p class="footnote">
               Detection thresholds are applied automatically by the selected
-              protection preset. Switch to Custom to choose which categories are
-              protected.
+              compliance preset. Switch to Custom to choose individual categories.
             </p>
-            <label class="toggle-row">
-              <input id="placeholder-toggle" type="checkbox" />
-              <span>Show redaction labels on masks (e.g. <code>[SSN]</code>)</span>
-            </label>
-            <label class="toggle-row">
-              <input id="paste-guard-toggle" type="checkbox" />
-              <span>Proactive Paste Shield (Chat &amp; LLM Guard)</span>
-            </label>
-            <div class="form-row" style="margin-top: 10px;">
-              <label for="ocr-language-select">Document OCR Language</label>
-              <select id="ocr-language-select" class="preset-select">
-                <option value="eng">English (eng)</option>
-                <option value="spa">Spanish (spa)</option>
-                <option value="fra">French (fra)</option>
-                <option value="deu">German (deu)</option>
-                <option value="jpn">Japanese (jpn)</option>
-                <option value="por">Portuguese (por)</option>
+
+            <div class="toggles-group" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
+              <label class="toggle-row">
+                <input id="placeholder-toggle" type="checkbox" role="switch" aria-checked="false" />
+                <span>Show redaction labels on masks (e.g. <code>[SSN]</code>, <code>[SIN]</code>, <code>[NHS]</code>)</span>
+              </label>
+
+              <label class="toggle-row">
+                <input id="paste-guard-toggle" type="checkbox" role="switch" aria-checked="true" />
+                <span>Proactive Paste &amp; Prompt Shield (Chat &amp; LLM Guard for ChatGPT, Claude, Forms)</span>
+              </label>
+            </div>
+
+            <div class="form-row" style="margin-top: 12px;">
+              <label for="ocr-language-select">Document OCR Language Architecture</label>
+              <select id="ocr-language-select" class="preset-select" aria-label="Select default OCR language">
+                <option value="eng">🇺🇸 English (eng)</option>
+                <option value="spa">🇪🇸 Spanish (spa - Español)</option>
+                <option value="fra">🇫🇷 French (fra - Français)</option>
+                <option value="deu">🇩🇪 German (deu - Deutsch)</option>
+                <option value="jpn">🇯🇵 Japanese (jpn - 日本語)</option>
+                <option value="por">🇵🇹 Portuguese (por - Português)</option>
               </select>
+            </div>
+          </details>
+
+          <details open>
+            <summary>Right-Click Context Menus &amp; Shortcuts</summary>
+            <div class="context-menus-card" style="margin-top: 6px; padding: 10px; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm);">
+              <p class="footnote" style="margin-bottom: 6px;">GovernWorld integrates directly into your browser's right-click context menu:</p>
+              <ul class="footnote" style="padding-left: 16px; margin: 0; display: flex; flex-direction: column; gap: 4px;">
+                <li><strong>Redact selection to clipboard:</strong> Copies highlighted text with sensitive data masked.</li>
+                <li><strong>Mask selected text / element:</strong> Immediately applies visual privacy overlays to the page.</li>
+                <li><strong>Scan whole page:</strong> Runs instant on-device scan (<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>).</li>
+                <li><strong>Toggle masks on/off:</strong> Quick shortcut (<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>).</li>
+              </ul>
             </div>
           </details>
 
@@ -263,7 +365,7 @@
               requested only after you enable this toggle.
             </p>
             <label class="toggle-row">
-              <input id="notifications-toggle" type="checkbox" />
+              <input id="notifications-toggle" type="checkbox" role="switch" aria-checked="false" />
               <span>Notify me when sensitive data is found</span>
             </label>
             <p id="notifications-status" class="footnote" role="status" aria-live="polite"></p>
@@ -366,7 +468,7 @@
           <span class="guide-badge">Local-First</span>
         </div>
 
-        <div class="guide-container">
+        <div class="guide-container" role="region" aria-label="Documentation guide sections">
           <section id="guide-overview" class="guide-card">
             <div class="guide-card__header">
               <h3 class="guide-card__title">1. Overview &amp; Architecture</h3>
@@ -424,10 +526,11 @@
             </div>
             <ol>
               <li>Switch to the <strong>Documents</strong> tab.</li>
+              <li>Select your target OCR language (English, Spanish, French, German, Japanese, Portuguese).</li>
               <li>Drag and drop a PDF, Word document (<code>.docx</code>), or image (<code>.png</code>, <code>.jpg</code>, <code>.webp</code>).</li>
-              <li>Watch the live on-device processing status as optical recognition and detection run.</li>
-              <li>Inspect the page thumbnails and detected sensitive fields.</li>
-              <li>Click <strong>Redact selected &amp; download</strong> to receive a permanently flattened, redacted copy.</li>
+              <li>Use the <strong>Studio Canvas Tools</strong> to draw custom redaction boxes or toggle detected items.</li>
+              <li>Select your desired Redaction Style (Blackout, Whiteout, or Custom Text Stamp).</li>
+              <li>Click <strong>Redact selected &amp; download</strong> to receive a permanently flattened copy.</li>
             </ol>
           </section>
 
@@ -441,7 +544,7 @@
             </p>
             <ul>
               <li><strong>Detected:</strong> Potential PII/PHI entities identified via deterministic rules.</li>
-              <li><strong>Redacted:</strong> Opaque blackout boxes rendered across target coordinates.</li>
+              <li><strong>Redacted:</strong> Opaque boxes painted across target coordinates.</li>
               <li><strong>Verified:</strong> Output bitmap re-evaluated on-device to prove zero readable pixel bleed before download.</li>
             </ul>
           </section>
@@ -463,40 +566,104 @@
 
           <section id="guide-categories" class="guide-card">
             <div class="guide-card__header">
-              <h3 class="guide-card__title">8. Detection Categories &amp; Presets</h3>
-              <span class="guide-badge">Compliance</span>
+              <h3 class="guide-card__title">8. Detection Categories &amp; Global Presets</h3>
+              <span class="guide-badge">Global Compliance</span>
             </div>
             <p>
-              GovernWorld includes built-in detectors for:
-              <code>SSN</code>, <code>Medical Record Number (MRN)</code>, <code>Member ID</code>, <code>DOB</code>,
-              <code>Provider NPI</code>, <code>DEA Number</code>, <code>Medicare Beneficiary ID (MBI)</code>,
+              GovernWorld includes built-in validators for:
+              <code>SSN</code>, <code>ITIN</code>, <code>Medical Record Number (MRN)</code>, <code>Member ID</code>, <code>DOB</code>,
+              <code>Provider NPI (checksum)</code>, <code>DEA Number</code>, <code>Medicare ID (MBI)</code>,
               <code>Payment Cards (Luhn validated)</code>, <code>API Keys &amp; Secrets</code>, <code>Email</code>,
-              <code>US Phone</code>, <code>US Address</code>, <code>Canadian SIN</code>, <code>UK NHS</code>,
-              <code>Indian Aadhaar</code>, <code>Indian PAN</code>, <code>Australian TFN</code>, <code>Brazilian CPF</code>, and <code>Possible Names</code>.
+              <code>US Phone</code>, <code>US Address</code>, <code>Canadian SIN</code>, <code>UK NHS Number</code>,
+              <code>Indian Aadhaar (Verhoeff)</code>, <code>Indian PAN</code>, <code>Australian TFN</code>, <code>Brazilian CPF</code>, and <code>Possible Names</code>.
             </p>
             <p>
-              Pre-configured compliance presets include <strong>HIPAA</strong> (Healthcare), <strong>PCI DSS</strong> (Payments),
-              <strong>GDPR</strong> (EU Personal Data), <strong>PIPEDA</strong> (Canada), <strong>UK GDPR / NHS</strong> (UK),
+              Pre-configured global presets:
+              <strong>HIPAA</strong> (Healthcare), <strong>PCI DSS</strong> (Payments),
+              <strong>GDPR</strong> (EU), <strong>PIPEDA</strong> (Canada), <strong>UK GDPR / NHS</strong> (UK),
               <strong>DPDP Act</strong> (India), <strong>Privacy Act</strong> (Australia), <strong>LGPD</strong> (Brazil), and <strong>Developer</strong> (API secrets).
             </p>
           </section>
 
+          <section id="guide-paste-guard" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">9. Proactive Paste &amp; Prompt Shield</h3>
+              <span class="guide-badge">Chat &amp; LLM Guard</span>
+            </div>
+            <p>
+              The Proactive Paste Shield intercepts clipboard paste events on input fields, textareas, and chat interfaces
+              (optimized for <strong>ChatGPT</strong>, <strong>Claude</strong>, <strong>Gemini</strong>, <strong>Slack</strong>, and web forms).
+              When sensitive data is detected:
+            </p>
+            <ul>
+              <li>A floating Shadow DOM review modal displays masked previews of the detected items.</li>
+              <li><strong>Sanitize &amp; Paste:</strong> Replaces detected secrets/PII with solid <code>[REDACTED]</code> blocks before pasting.</li>
+              <li><strong>Paste Unchanged:</strong> Pastes raw content if deliberately intended.</li>
+              <li><strong>Cancel:</strong> Aborts paste completely (<kbd>Esc</kbd>).</li>
+            </ul>
+          </section>
+
+          <section id="guide-context-menus" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">10. Right-Click Context Menus &amp; Shortcuts</h3>
+              <span class="guide-badge">Direct Access</span>
+            </div>
+            <p>
+              Perform privacy actions on any web page without needing to open the popup:
+            </p>
+            <ul>
+              <li><strong>Redact selection to clipboard:</strong> Highlight text and right-click to copy sanitized text with sensitive fields redacted.</li>
+              <li><strong>Mask selected text / element:</strong> Highlight an element and right-click to instantly overlay an in-browser privacy mask.</li>
+              <li><strong>Scan whole page:</strong> Right-click anywhere or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>.</li>
+              <li><strong>Toggle masks:</strong> Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>.</li>
+              <li><strong>Open Side Panel:</strong> Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>.</li>
+            </ul>
+          </section>
+
+          <section id="guide-ocr-languages" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">11. Multi-Language OCR Architecture</h3>
+              <span class="guide-badge">6 Languages</span>
+            </div>
+            <p>
+              GovernWorld's offline OCR engine processes document images and PDFs in 6 languages:
+              <strong>English</strong> (<code>eng</code>), <strong>Spanish</strong> (<code>spa</code>),
+              <strong>French</strong> (<code>fra</code>), <strong>German</strong> (<code>deu</code>),
+              <strong>Japanese</strong> (<code>jpn</code>), and <strong>Portuguese</strong> (<code>por</code>).
+              Select your target language in Document Studio or Settings.
+            </p>
+          </section>
+
+          <section id="guide-redaction-styles" class="guide-card">
+            <div class="guide-card__header">
+              <h3 class="guide-card__title">12. Document Redaction Styles</h3>
+              <span class="guide-badge">Styles &amp; Stamps</span>
+            </div>
+            <p>
+              Choose how redacted areas are rendered on exported PDF, Word, and Image files:
+            </p>
+            <ul>
+              <li><strong>Blackout:</strong> Solid opaque black rectangles (standard for legal &amp; forensic security).</li>
+              <li><strong>Whiteout:</strong> Clean white fill (ideal for printed forms and letterheads).</li>
+              <li><strong>Text Stamp:</strong> Opaque fill with centered labels such as <code>[REDACTED]</code>, <code>[CONFIDENTIAL]</code>, or <code>[PHI REMOVED]</code>.</li>
+            </ul>
+          </section>
+
           <section id="guide-cloud" class="guide-card">
             <div class="guide-card__header">
-              <h3 class="guide-card__title">9. Cloud Features &amp; API Connectivity</h3>
+              <h3 class="guide-card__title">13. Cloud Features &amp; API Connectivity</h3>
               <span class="guide-badge">API Ready</span>
             </div>
             <p>
               Cloud features are <strong>intentionally locked and disabled</strong> in this standalone release.
               All processing remains strictly local. The extension architecture retains standardized API hooks
-              and gateway connectors so organizations can link enterprise workspace gateways in future deployments
-              without architectural changes.
+              and gateway connectors so organizations can link enterprise workspace gateways in future deployments.
             </p>
           </section>
 
           <section id="guide-privacy" class="guide-card">
             <div class="guide-card__header">
-              <h3 class="guide-card__title">10. Audit Log &amp; Cryptographic Proof</h3>
+              <h3 class="guide-card__title">14. Audit Log &amp; Cryptographic Proof</h3>
               <span class="guide-badge">Ed25519 Signed</span>
             </div>
             <p>
@@ -508,7 +675,7 @@
 
           <section id="guide-contributions" class="guide-card">
             <div class="guide-card__header">
-              <h3 class="guide-card__title">11. Free, Privacy-Respecting &amp; Community Supported</h3>
+              <h3 class="guide-card__title">15. Free, Privacy-Respecting &amp; Community Supported</h3>
               <span class="guide-badge" style="background: rgba(255, 129, 63, 0.15); color: #ff813f; border-color: rgba(255, 129, 63, 0.3);">Community Powered</span>
             </div>
             <p>
@@ -528,9 +695,10 @@
       </div>
 
       <!-- Confirmation Dialogs -->
-      <dialog id="doc-confirm-dialog" class="dialog">
+      <dialog id="doc-confirm-dialog" class="dialog" aria-labelledby="doc-confirm-title">
+        <h3 id="doc-confirm-title" class="dialog__title">Confirm Document Redaction</h3>
         <p>
-          Download a flattened copy with selected values covered in black? The
+          Download a flattened copy with selected values permanently masked? The
           original file is never modified.
         </p>
         <div class="dialog__actions">
@@ -539,7 +707,8 @@
         </div>
       </dialog>
 
-      <dialog id="copy-dialog" class="dialog">
+      <dialog id="copy-dialog" class="dialog" aria-labelledby="copy-dialog-title">
+        <h3 id="copy-dialog-title" class="dialog__title">Copy Redacted Text</h3>
         <p>
           The clipboard will contain redacted text. Sensitive values are
           replaced with solid blocks. Continue?
@@ -550,8 +719,8 @@
         </div>
       </dialog>
 
-      <dialog id="verify-dialog" class="dialog">
-        <h3 class="dialog__title">Please verify your work</h3>
+      <dialog id="verify-dialog" class="dialog" aria-labelledby="verify-dialog-title">
+        <h3 id="verify-dialog-title" class="dialog__title">Please verify your work</h3>
         <p>
           GovernWorld uses local, pattern-based detection. It does not guarantee
           that every sensitive value is found. Review the results before sharing
@@ -565,7 +734,7 @@
       </dialog>
 
       <!-- Redaction Wizard Dialog -->
-      <dialog id="wizard-dialog" class="dialog" style="max-width: 480px; width: 90%;">
+      <dialog id="wizard-dialog" class="dialog" style="max-width: 480px; width: 90%;" aria-label="Redaction custom rule wizard">
         <div id="wizard-step-1" class="wizard-step">
           <h3 class="dialog__title">Redaction Wizard — Step 1: Examples</h3>
           <p class="footnote">Enter sample positive matches (should match) and negative matches (should NOT match). Text is processed entirely in your browser.</p>
@@ -638,8 +807,8 @@
         </div>
       </dialog>
 
-      <dialog id="contrib-consent-dialog" class="dialog">
-        <h3 class="dialog__title">Contribute Rule to Community?</h3>
+      <dialog id="contrib-consent-dialog" class="dialog" aria-labelledby="contrib-dialog-title">
+        <h3 id="contrib-dialog-title" class="dialog__title">Contribute Rule to Community?</h3>
         <p class="footnote">
           You are about to share this regex rule specification with the GovernWorld community.
         </p>

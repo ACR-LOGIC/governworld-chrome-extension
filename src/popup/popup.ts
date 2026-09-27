@@ -6,28 +6,70 @@ import type { DocKind, Finding, FindingCategory, PopupState, PopupMessage, ScanM
 import type { CustomPattern, CommunityAccount, CommunityRule } from "../shared/customPatterns.js";
 import type { WizardAnalysis } from "../shared/wizardAnalyzer.js";
 
-const CATEGORY_LABELS: Record<string, string> = {
+export const CATEGORY_LABELS: Record<string, string> = {
   email: "Email address",
   phone: "US phone number",
-  ssn: "Social Security number",
+  ssn: "Social Security number (SSN / ITIN)",
   dob: "Date of birth",
-  medical_record_number: "Medical record number",
+  medical_record_number: "Medical record number (MRN)",
   member_id: "Member / patient ID",
   npi: "Provider NPI",
   dea: "DEA registration",
-  mbi: "Medicare Beneficiary ID",
-  address: "US address",
-  payment_card: "Payment card",
+  mbi: "Medicare Beneficiary ID (MBI)",
+  address: "US street address",
+  payment_card: "Payment card (Luhn)",
   secrets: "API keys & secrets",
   possible_name: "Possible name",
   canadian_sin: "Canadian SIN",
   uk_nhs: "UK NHS Number",
   aadhaar: "Indian Aadhaar",
-  pan_india: "Indian PAN",
+  pan_india: "Indian PAN Card",
   australian_tfn: "Australian TFN",
   cpf: "Brazilian CPF",
   custom: "Custom pattern",
 };
+
+export const HEALTHCARE_CATEGORIES: FindingCategory[] = [
+  "medical_record_number",
+  "member_id",
+  "npi",
+  "dea",
+  "mbi",
+  "ssn",
+  "dob",
+  "address",
+  "phone",
+  "email",
+  "possible_name",
+  "uk_nhs",
+];
+
+export const INTERNATIONAL_CATEGORIES: FindingCategory[] = [
+  "canadian_sin",
+  "uk_nhs",
+  "aadhaar",
+  "pan_india",
+  "australian_tfn",
+  "cpf",
+  "email",
+  "phone",
+  "address",
+  "dob",
+  "possible_name",
+  "payment_card",
+];
+
+export const FINANCIAL_CATEGORIES: FindingCategory[] = [
+  "payment_card",
+  "ssn",
+  "canadian_sin",
+  "pan_india",
+  "australian_tfn",
+  "cpf",
+  "address",
+  "phone",
+  "email",
+];
 
 function confidenceLabel(confidence: number): string {
   if (confidence >= 0.9) return "High";
@@ -85,7 +127,7 @@ async function deleteFile(fileKey: string): Promise<void> {
   });
 }
 
-async function renderCategories(settings: { enabledCategories: FindingCategory[] }): Promise<void> {
+export async function renderCategories(settings: { enabledCategories: FindingCategory[] }): Promise<void> {
   const list = document.getElementById("category-list") as HTMLFieldSetElement | null;
   if (!list) return;
   list.replaceChildren();
@@ -95,9 +137,12 @@ async function renderCategories(settings: { enabledCategories: FindingCategory[]
     check.type = "checkbox";
     check.value = category;
     check.checked = settings.enabledCategories.includes(category);
-    const span = el("span", undefined, CATEGORY_LABELS[category]);
+    check.setAttribute("role", "switch");
+    check.setAttribute("aria-checked", check.checked ? "true" : "false");
+    const span = el("span", undefined, CATEGORY_LABELS[category] || category);
     label.append(check, span);
     check.addEventListener("change", async () => {
+      check.setAttribute("aria-checked", check.checked ? "true" : "false");
       const current = await loadSettings();
       const priorPreset = presetForCategories(current.enabledCategories);
       const set = new Set(current.enabledCategories);
@@ -122,7 +167,7 @@ async function renderCategories(settings: { enabledCategories: FindingCategory[]
 }
 
 /** The preset whose category set exactly matches the given set, else "custom". */
-function presetForCategories(enabledCategories: FindingCategory[]): PresetId {
+export function presetForCategories(enabledCategories: FindingCategory[]): PresetId {
   let matchedPreset: PresetId = "custom";
   for (const [presetId, categories] of Object.entries(PRESET_CATEGORIES)) {
     const presetSet = new Set(categories);
@@ -141,7 +186,7 @@ function updatePresetSelector(enabledCategories: FindingCategory[]): void {
   select.value = presetForCategories(enabledCategories);
 }
 
-async function applyPreset(presetId: PresetId): Promise<void> {
+export async function applyPreset(presetId: PresetId): Promise<void> {
   if (presetId === "custom") return;
   const categories = PRESET_CATEGORIES[presetId];
   if (!categories) return;
@@ -160,6 +205,13 @@ async function applyPreset(presetId: PresetId): Promise<void> {
   }
 }
 
+export async function applyCategoryFilter(categories: FindingCategory[]): Promise<void> {
+  const current = await loadSettings();
+  const valid = ALL_CATEGORIES.filter((c) => categories.includes(c));
+  await saveSettings({ ...current, enabledCategories: valid });
+  await renderCategories({ enabledCategories: valid });
+}
+
 function renderFindings(findings: Finding[]): void {
   const list = document.getElementById("findings-list") as HTMLUListElement | null;
   const count = document.getElementById("results-count") as HTMLSpanElement | null;
@@ -175,23 +227,26 @@ function renderFindings(findings: Finding[]): void {
     if (reportOnly) item.classList.add("finding--report-only");
     let check: HTMLInputElement | null = null;
     if (!reportOnly) {
-      check = document.createElement("input");
-      check.type = "checkbox";
-      check.className = "finding__check";
-      check.value = finding.id;
-      check.checked = finding.selected;
-      check.setAttribute("aria-label", `Select ${CATEGORY_LABELS[finding.category]} finding`);
-      check.addEventListener("change", () => {
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.className = "finding__check";
+      checkbox.value = finding.id;
+      checkbox.checked = finding.selected;
+      checkbox.setAttribute("aria-checked", finding.selected ? "true" : "false");
+      checkbox.setAttribute("aria-label", `Select ${CATEGORY_LABELS[finding.category] || finding.category} finding`);
+      checkbox.addEventListener("change", () => {
+        checkbox.setAttribute("aria-checked", checkbox.checked ? "true" : "false");
         const checked = [...list.querySelectorAll("input[type='checkbox']:checked")].map(
           (c) => (c as HTMLInputElement).value
         );
         void sendMessage({ type: "POPUP_APPLY_MASKS", requestId: requestId(), findingIds: checked });
       });
+      check = checkbox;
     }
 
     const main = el("div", "finding__main");
     const head = el("div", "finding__head");
-    const category = el("div", "finding__category", CATEGORY_LABELS[finding.category]);
+    const category = el("div", "finding__category", CATEGORY_LABELS[finding.category] || finding.category);
     head.append(category);
     if (reportOnly) {
       const attrBadge = el(
@@ -236,7 +291,7 @@ function renderState(state: PopupState): void {
   }
   if (scanBtn) {
     scanBtn.disabled = state.scanning;
-    scanBtn.textContent = state.scanning ? "Scanning…" : "Scan Page";
+    scanBtn.textContent = state.scanning ? "Scanning…" : "Scan Page (Alt+Shift+S)";
   }
 
   if (summary && status && summaryChars) {
@@ -392,6 +447,7 @@ function detectDocKind(file: File, bytes: ArrayBuffer): DocKind {
 
 let lastDoc: DocUiState | null = null;
 const selectedDocFindingIds = new Set<string>();
+let currentStudioTool: "draw" | "erase" = "draw";
 
 function setDocStatus(message: string, isError: boolean): void {
   const status = document.getElementById("doc-status") as HTMLParagraphElement | null;
@@ -443,7 +499,7 @@ function resetDocStages(): void {
 
 const overlayRedrawers: (() => void)[] = [];
 
-function redrawAllOverlays(): void {
+export function redrawAllOverlays(): void {
   for (const redraw of overlayRedrawers) {
     try {
       redraw();
@@ -462,12 +518,17 @@ function updateDocRedactBtn(): void {
 
 function renderDocFindings(): void {
   const list = document.getElementById("doc-findings") as HTMLUListElement | null;
+  const countBadge = document.getElementById("doc-findings-count") as HTMLSpanElement | null;
   if (!list) return;
   list.replaceChildren();
   if (!lastDoc) {
+    if (countBadge) countBadge.textContent = "0";
     updateDocRedactBtn();
     return;
   }
+  const totalFindings = lastDoc.pages.reduce((n, p) => n + p.findings.length, 0);
+  if (countBadge) countBadge.textContent = `${totalFindings} detected`;
+
   for (const page of lastDoc.pages) {
     for (const finding of page.findings) {
       const item = el("li", "finding");
@@ -475,8 +536,10 @@ function renderDocFindings(): void {
       check.type = "checkbox";
       check.className = "finding__check";
       check.checked = selectedDocFindingIds.has(finding.id);
+      check.setAttribute("aria-checked", check.checked ? "true" : "false");
       check.setAttribute("aria-label", `Select ${CATEGORY_LABELS[finding.category] || finding.category} finding on page ${page.index + 1}`);
       check.addEventListener("change", () => {
+        check.setAttribute("aria-checked", check.checked ? "true" : "false");
         if (check.checked) selectedDocFindingIds.add(finding.id);
         else selectedDocFindingIds.delete(finding.id);
         updateDocRedactBtn();
@@ -488,7 +551,7 @@ function renderDocFindings(): void {
       const category = el("div", "finding__category", CATEGORY_LABELS[finding.category] || finding.category);
       head.append(category);
       if (finding.category === "custom") {
-        const customBadge = el("span", "finding__badge-attr", "Custom Box");
+        const customBadge = el("span", "finding__badge-attr", "Drawn Box");
         head.append(customBadge);
       }
       const preview = el("div", "finding__preview", finding.preview);
@@ -520,12 +583,15 @@ function renderDoc(state: DocUiState): void {
 
   const review = document.getElementById("doc-review") as HTMLElement | null;
   const thumbs = document.getElementById("doc-thumbs") as HTMLElement | null;
+  const docStyleSelect = document.getElementById("doc-style-select") as HTMLSelectElement | null;
+  const docStampText = document.getElementById("doc-stamp-text") as HTMLInputElement | null;
+
   if (review) review.hidden = false;
   if (thumbs) {
     thumbs.replaceChildren();
     for (const page of state.pages) {
       const wrapper = el("div", "doc-thumb-wrapper");
-      wrapper.setAttribute("title", "Click a finding to toggle, or click and drag to draw a custom redaction box");
+      wrapper.setAttribute("title", "Click a finding to toggle, or drag to draw a custom redaction box");
 
       const img = document.createElement("img");
       img.src = page.previewDataUrl;
@@ -559,6 +625,8 @@ function renderDoc(state: DocUiState): void {
 
         const scaleX = canvas.width / (page.widthPx || canvas.width || 1);
         const scaleY = canvas.height / (page.heightPx || canvas.height || 1);
+        const style = docStyleSelect?.value || "blackout";
+        const stampLabel = docStampText?.value?.trim() || "[REDACTED]";
 
         for (const finding of page.findings) {
           const isSelected = selectedDocFindingIds.has(finding.id);
@@ -569,12 +637,36 @@ function renderDoc(state: DocUiState): void {
             const rh = r.height * scaleY;
 
             if (isSelected) {
-              ctx.fillStyle = finding.category === "custom" ? "rgba(239, 68, 68, 0.45)" : "rgba(15, 23, 42, 0.75)";
-              ctx.fillRect(rx, ry, rw, rh);
-              ctx.strokeStyle = finding.category === "custom" ? "rgba(239, 68, 68, 0.95)" : "rgba(34, 211, 238, 0.9)";
-              ctx.lineWidth = 1.5;
-              ctx.setLineDash([]);
-              ctx.strokeRect(rx, ry, rw, rh);
+              if (style === "whiteout") {
+                ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
+                ctx.fillRect(rx, ry, rw, rh);
+                ctx.strokeStyle = "rgba(30, 41, 59, 0.9)";
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([]);
+                ctx.strokeRect(rx, ry, rw, rh);
+              } else if (style === "stamp") {
+                ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
+                ctx.fillRect(rx, ry, rw, rh);
+                ctx.strokeStyle = "rgba(34, 211, 238, 0.95)";
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([]);
+                ctx.strokeRect(rx, ry, rw, rh);
+
+                if (rw > 20 && rh > 10) {
+                  ctx.fillStyle = "#ffffff";
+                  ctx.font = "bold 9px sans-serif";
+                  ctx.textAlign = "center";
+                  ctx.textBaseline = "middle";
+                  ctx.fillText(stampLabel, rx + rw / 2, ry + rh / 2, rw - 4);
+                }
+              } else {
+                ctx.fillStyle = finding.category === "custom" ? "rgba(239, 68, 68, 0.55)" : "rgba(15, 23, 42, 0.85)";
+                ctx.fillRect(rx, ry, rw, rh);
+                ctx.strokeStyle = finding.category === "custom" ? "rgba(239, 68, 68, 0.95)" : "rgba(34, 211, 238, 0.9)";
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([]);
+                ctx.strokeRect(rx, ry, rw, rh);
+              }
             } else {
               ctx.strokeStyle = "rgba(148, 163, 184, 0.6)";
               ctx.lineWidth = 1;
@@ -610,12 +702,14 @@ function renderDoc(state: DocUiState): void {
         const pageX = mouseX / scaleX;
         const pageY = mouseY / scaleY;
 
+        let hitFindingIndex = -1;
         let hitFinding: Finding | null = null;
         for (let i = page.findings.length - 1; i >= 0; i--) {
           const f = page.findings[i];
           for (const r of f.rects) {
             if (pageX >= r.x && pageX <= r.x + r.width && pageY >= r.y && pageY <= r.y + r.height) {
               hitFinding = f;
+              hitFindingIndex = i;
               break;
             }
           }
@@ -623,6 +717,15 @@ function renderDoc(state: DocUiState): void {
         }
 
         if (hitFinding) {
+          if (currentStudioTool === "erase" && hitFinding.category === "custom") {
+            // Delete custom box
+            page.findings.splice(hitFindingIndex, 1);
+            selectedDocFindingIds.delete(hitFinding.id);
+            renderDocFindings();
+            redrawAllOverlays();
+            return;
+          }
+
           if (selectedDocFindingIds.has(hitFinding.id)) {
             selectedDocFindingIds.delete(hitFinding.id);
           } else {
@@ -772,12 +875,21 @@ function initTabs(): void {
   });
 }
 
+function updatePasteShieldBanner(enabled: boolean): void {
+  const banner = document.getElementById("scanner-shield-status");
+  const label = document.getElementById("scanner-shield-label");
+  if (!banner || !label) return;
+  banner.classList.toggle("shield-banner--inactive", !enabled);
+  label.textContent = enabled ? "Active" : "Disabled";
+}
+
 /** Shared popup/panel bootstrap. */
 export async function initPopup(): Promise<void> {
   initTabs();
 
   const settings = await loadSettings();
   await renderCategories(settings);
+  updatePasteShieldBanner(settings.pasteGuardEnabled);
 
   const scanBtn = document.getElementById("scan-btn") as HTMLButtonElement | null;
   const clearDataBtn = document.getElementById("clear-data-btn") as HTMLButtonElement | null;
@@ -851,6 +963,17 @@ export async function initPopup(): Promise<void> {
     void sendMessage({ type: "POPUP_COPY_REDACTED", requestId: requestId(), findingIds: ids });
   });
 
+  // Select / Deselect all findings in scanner
+  const toggleAllFindingsBtn = document.getElementById("toggle-all-findings-btn") as HTMLButtonElement | null;
+  toggleAllFindingsBtn?.addEventListener("click", () => {
+    if (!lastState || lastState.findings.length === 0) return;
+    const anyUnselected = lastState.findings.some((f) => !f.selected && f.source !== "attr");
+    const findingIds = anyUnselected
+      ? lastState.findings.filter((f) => f.source !== "attr").map((f) => f.id)
+      : [];
+    void sendMessage({ type: "POPUP_APPLY_MASKS", requestId: requestId(), findingIds });
+  });
+
   const exportBtn = document.getElementById("export-findings-btn") as HTMLButtonElement | null;
   exportBtn?.addEventListener("click", async () => {
     if (!lastState || lastState.findings.length === 0) return;
@@ -884,17 +1007,28 @@ export async function initPopup(): Promise<void> {
     }
   });
 
+  // Document Style & OCR Language Selectors
   const docStyleSelect = document.getElementById("doc-style-select") as HTMLSelectElement | null;
   const docStampContainer = document.getElementById("doc-stamp-container") as HTMLDivElement | null;
   const docStampText = document.getElementById("doc-stamp-text") as HTMLInputElement | null;
+  const docStampPresets = document.getElementById("doc-stamp-presets") as HTMLSelectElement | null;
+  const docOcrLangSelect = document.getElementById("doc-ocr-language-select") as HTMLSelectElement | null;
   const ocrLangSelect = document.getElementById("ocr-language-select") as HTMLSelectElement | null;
+
+  const syncOcrLanguage = async (val: string) => {
+    if (ocrLangSelect && ocrLangSelect.value !== val) ocrLangSelect.value = val;
+    if (docOcrLangSelect && docOcrLangSelect.value !== val) docOcrLangSelect.value = val;
+    const current = await loadSettings();
+    await saveSettings({ ...current, ocrLanguage: val });
+  };
 
   if (ocrLangSelect) {
     ocrLangSelect.value = settings.ocrLanguage || "eng";
-    ocrLangSelect.addEventListener("change", async () => {
-      const current = await loadSettings();
-      await saveSettings({ ...current, ocrLanguage: ocrLangSelect.value });
-    });
+    ocrLangSelect.addEventListener("change", () => void syncOcrLanguage(ocrLangSelect.value));
+  }
+  if (docOcrLangSelect) {
+    docOcrLangSelect.value = settings.ocrLanguage || "eng";
+    docOcrLangSelect.addEventListener("change", () => void syncOcrLanguage(docOcrLangSelect.value));
   }
 
   if (docStyleSelect) {
@@ -902,8 +1036,60 @@ export async function initPopup(): Promise<void> {
       if (docStampContainer) {
         docStampContainer.hidden = docStyleSelect.value !== "stamp";
       }
+      redrawAllOverlays();
     });
   }
+
+  if (docStampPresets && docStampText) {
+    docStampPresets.addEventListener("change", () => {
+      docStampText.value = docStampPresets.value;
+      redrawAllOverlays();
+    });
+  }
+
+  if (docStampText) {
+    docStampText.addEventListener("input", () => {
+      redrawAllOverlays();
+    });
+  }
+
+  // Document Studio Canvas Tools
+  const toolDrawBox = document.getElementById("tool-draw-box") as HTMLButtonElement | null;
+  const toolClearCustom = document.getElementById("tool-clear-custom") as HTMLButtonElement | null;
+  const toolToggleAllDoc = document.getElementById("tool-toggle-all-doc") as HTMLButtonElement | null;
+
+  toolDrawBox?.addEventListener("click", () => {
+    currentStudioTool = "draw";
+    toolDrawBox.classList.add("tool-btn--active");
+  });
+
+  toolClearCustom?.addEventListener("click", () => {
+    if (!lastDoc) return;
+    for (const page of lastDoc.pages) {
+      page.findings = page.findings.filter((f) => {
+        if (f.category === "custom") {
+          selectedDocFindingIds.delete(f.id);
+          return false;
+        }
+        return true;
+      });
+    }
+    renderDocFindings();
+    redrawAllOverlays();
+  });
+
+  toolToggleAllDoc?.addEventListener("click", () => {
+    if (!lastDoc) return;
+    const allFindings = lastDoc.pages.flatMap((p) => p.findings);
+    const anyUnselected = allFindings.some((f) => !selectedDocFindingIds.has(f.id));
+    if (anyUnselected) {
+      for (const f of allFindings) selectedDocFindingIds.add(f.id);
+    } else {
+      selectedDocFindingIds.clear();
+    }
+    renderDocFindings();
+    redrawAllOverlays();
+  });
 
   docRedactBtn?.addEventListener("click", () => {
     if (!lastDoc || selectedDocFindingIds.size === 0) return;
@@ -1002,10 +1188,19 @@ export async function initPopup(): Promise<void> {
     await applyPreset(presetId);
   });
 
+  // Category Filter Buttons
+  document.getElementById("cat-filter-all")?.addEventListener("click", () => void applyCategoryFilter(ALL_CATEGORIES));
+  document.getElementById("cat-filter-health")?.addEventListener("click", () => void applyCategoryFilter(HEALTHCARE_CATEGORIES));
+  document.getElementById("cat-filter-intl")?.addEventListener("click", () => void applyCategoryFilter(INTERNATIONAL_CATEGORIES));
+  document.getElementById("cat-filter-finance")?.addEventListener("click", () => void applyCategoryFilter(FINANCIAL_CATEGORIES));
+  document.getElementById("cat-filter-none")?.addEventListener("click", () => void applyCategoryFilter([]));
+
   const placeholderToggle = document.getElementById("placeholder-toggle") as HTMLInputElement | null;
   if (placeholderToggle) {
     placeholderToggle.checked = settings.maskPlaceholders;
+    placeholderToggle.setAttribute("aria-checked", placeholderToggle.checked ? "true" : "false");
     placeholderToggle.addEventListener("change", async () => {
+      placeholderToggle.setAttribute("aria-checked", placeholderToggle.checked ? "true" : "false");
       const current = await loadSettings();
       await saveSettings({ ...current, maskPlaceholders: placeholderToggle.checked });
     });
@@ -1014,9 +1209,12 @@ export async function initPopup(): Promise<void> {
   const pasteGuardToggle = document.getElementById("paste-guard-toggle") as HTMLInputElement | null;
   if (pasteGuardToggle) {
     pasteGuardToggle.checked = settings.pasteGuardEnabled;
+    pasteGuardToggle.setAttribute("aria-checked", pasteGuardToggle.checked ? "true" : "false");
     pasteGuardToggle.addEventListener("change", async () => {
+      pasteGuardToggle.setAttribute("aria-checked", pasteGuardToggle.checked ? "true" : "false");
       const current = await loadSettings();
       await saveSettings({ ...current, pasteGuardEnabled: pasteGuardToggle.checked });
+      updatePasteShieldBanner(pasteGuardToggle.checked);
     });
   }
 
@@ -1029,7 +1227,9 @@ export async function initPopup(): Promise<void> {
   const notificationsStatus = document.getElementById("notifications-status") as HTMLParagraphElement | null;
   if (notificationsToggle) {
     notificationsToggle.checked = settings.notificationsEnabled;
+    notificationsToggle.setAttribute("aria-checked", notificationsToggle.checked ? "true" : "false");
     notificationsToggle.addEventListener("change", () => {
+      notificationsToggle.setAttribute("aria-checked", notificationsToggle.checked ? "true" : "false");
       void chrome.runtime.sendMessage({
         type: "POPUP_SET_NOTIFICATIONS",
         requestId: requestId(),
@@ -1514,7 +1714,10 @@ export async function initPopup(): Promise<void> {
       return;
     }
     if (message.type === "POPUP_NOTIFICATIONS_STATE") {
-      if (notificationsToggle) notificationsToggle.checked = message.granted;
+      if (notificationsToggle) {
+        notificationsToggle.checked = message.granted;
+        notificationsToggle.setAttribute("aria-checked", message.granted ? "true" : "false");
+      }
       if (notificationsStatus) {
         notificationsStatus.textContent = message.granted
           ? "Notifications enabled."
@@ -1600,7 +1803,9 @@ export async function initPopup(): Promise<void> {
             card.append(title, code, meta);
             card.addEventListener("click", () => {
               selectedProposalIndex = i;
-              [...wizardProposalsContainer.children].forEach((c) => ((c as HTMLElement).style.borderColor = "var(--border)"));
+              Array.from(wizardProposalsContainer.children).forEach((c) => {
+                (c as HTMLElement).style.borderColor = "var(--border)";
+              });
               card.style.borderColor = "var(--accent)";
             });
             if (i === 0) card.style.borderColor = "var(--accent)";
@@ -1613,28 +1818,16 @@ export async function initPopup(): Promise<void> {
     }
     if (message.type === "POPUP_WIZARD_TEST_RESULT") {
       if (wizardTestResultsBox) {
-        const matches = message.testResult.filter((result) => result.matched).length;
-        if (matches > 0) {
-          wizardTestResultsBox.textContent = `✓ Valid regex — ${matches} matches found in sample.`;
-          wizardTestResultsBox.style.color = "#34d399";
-        } else {
-          wizardTestResultsBox.textContent = "No matches found in the sample.";
-          wizardTestResultsBox.style.color = "#f87171";
-        }
-      }
-      return;
-    }
-    if (message.type === "POPUP_COMMUNITY_CONTRIBUTE_RESULT") {
-      if (message.success) {
-        alert("Rule contributed successfully to the GovernWorld community!");
-      } else {
-        alert(`Contribution failed: ${message.error ?? "Unknown error"}`);
+        const matchesCount = message.testResult.reduce(
+          (sum, r) => sum + (r.matched ? r.matchCount : 0),
+          0
+        );
+        wizardTestResultsBox.textContent = `Pattern matched ${matchesCount} instance(s) in sample text.`;
+        wizardTestResultsBox.style.color = matchesCount > 0 ? "var(--ok)" : "var(--warning)";
       }
       return;
     }
   });
 
   void sendMessage({ type: "POPUP_GET_STATE", requestId: requestId() });
-  void chrome.runtime.sendMessage({ type: "POPUP_CUSTOM_PATTERNS_GET", requestId: requestId() });
-  void chrome.runtime.sendMessage({ type: "POPUP_COMMUNITY_ACCOUNT_GET", requestId: requestId() });
 }
