@@ -1,10 +1,36 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import { validateMessage } from "../shared/messages.js";
-import { ALL_CATEGORIES, loadSettings, saveSettings, PRESET_CATEGORIES, PRESET_LABELS, type PresetId, type Settings } from "../shared/settings.js";
+import {
+  ALL_CATEGORIES,
+  loadSettings,
+  saveSettings,
+  resetSettings,
+  PRESET_CATEGORIES,
+  PRESET_LABELS,
+  type PresetId,
+  type Settings,
+  type LanguageCode,
+  type FontSizeScale,
+  type SessionTimeoutOption,
+} from "../shared/settings.js";
 import { recordAudit } from "../shared/audit.js";
-import type { DocKind, Finding, FindingCategory, PopupState, PopupMessage, ScanMode, DocPageMeta, PopupFromWorker, Rect, RedactionStyle } from "../shared/types.js";
+import { t, getCategoryLabel, getPresetLabel } from "../shared/i18n.js";
+import type {
+  DocKind,
+  Finding,
+  FindingCategory,
+  PopupState,
+  PopupMessage,
+  ScanMode,
+  DocPageMeta,
+  PopupFromWorker,
+  Rect,
+  RedactionStyle,
+} from "../shared/types.js";
 import type { CustomPattern, CommunityAccount, CommunityRule } from "../shared/customPatterns.js";
 import type { WizardAnalysis } from "../shared/wizardAnalyzer.js";
+
+export let currentLang: LanguageCode = "en";
 
 export const CATEGORY_LABELS: Record<string, string> = {
   email: "Email address",
@@ -127,9 +153,137 @@ async function deleteFile(fileKey: string): Promise<void> {
   });
 }
 
-export async function renderCategories(settings: { enabledCategories: FindingCategory[] }): Promise<void> {
+/** Web Speech API Speech Synthesis and Screen Reader Live Region for audio announcements */
+export function speakAnnouncement(text: string, settings?: Settings): void {
+  // Update dedicated ARIA live region for screen reader accessibility
+  let liveRegion = document.getElementById("sr-announcements");
+  if (!liveRegion) {
+    liveRegion = document.createElement("div");
+    liveRegion.id = "sr-announcements";
+    liveRegion.className = "visually-hidden";
+    liveRegion.setAttribute("role", "status");
+    liveRegion.setAttribute("aria-live", "polite");
+    liveRegion.setAttribute("aria-atomic", "true");
+    document.body.appendChild(liveRegion);
+  }
+  liveRegion.textContent = "";
+  liveRegion.textContent = text;
+
+  if (!settings?.speechAnnouncements) return;
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  try {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    const langMap: Record<LanguageCode, string> = {
+      en: "en-US",
+      es: "es-ES",
+      fr: "fr-FR",
+      de: "de-DE",
+      ja: "ja-JP",
+      pt: "pt-BR",
+      zh: "zh-CN",
+    };
+    utterance.lang = langMap[settings.language] || "en-US";
+    utterance.rate = 1.0;
+    window.speechSynthesis.speak(utterance);
+  } catch {
+    // Non-blocking catch
+  }
+}
+
+export function applyUiLanguage(lang: LanguageCode): void {
+  currentLang = lang;
+  document.documentElement.lang = lang;
+  document.querySelectorAll<HTMLElement>("[data-i18n]").forEach((element) => {
+    const key = element.getAttribute("data-i18n");
+    if (key) {
+      element.textContent = t(lang, key);
+    }
+  });
+  document.querySelectorAll<HTMLElement>("[data-i18n-html]").forEach((element) => {
+    const key = element.getAttribute("data-i18n-html");
+    if (key) {
+      element.innerHTML = t(lang, key);
+    }
+  });
+  document.querySelectorAll<HTMLElement>("[data-i18n-title]").forEach((element) => {
+    const key = element.getAttribute("data-i18n-title");
+    if (key) {
+      element.title = t(lang, key);
+    }
+  });
+  document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("[data-i18n-placeholder]").forEach((element) => {
+    const key = element.getAttribute("data-i18n-placeholder");
+    if (key) {
+      element.placeholder = t(lang, key);
+    }
+  });
+  document.querySelectorAll<HTMLElement>("[data-i18n-aria-label]").forEach((element) => {
+    const key = element.getAttribute("data-i18n-aria-label");
+    if (key) {
+      element.setAttribute("aria-label", t(lang, key));
+    }
+  });
+
+  const presetSelect = document.getElementById("preset-select") as HTMLSelectElement | null;
+  if (presetSelect) {
+    Array.from(presetSelect.options).forEach((opt) => {
+      opt.textContent = getPresetLabel(lang, opt.value);
+    });
+  }
+}
+
+export function applyAccessibilitySettings(settings: Settings): void {
+  const root = document.documentElement;
+  const body = document.body;
+
+  root.setAttribute("data-font-size", settings.fontSize);
+  body.setAttribute("data-font-size", settings.fontSize);
+
+  root.setAttribute("data-high-contrast", String(settings.highContrast));
+  body.setAttribute("data-high-contrast", String(settings.highContrast));
+
+  root.setAttribute("data-dyslexia", String(settings.dyslexiaMode));
+  body.setAttribute("data-dyslexia", String(settings.dyslexiaMode));
+
+  root.setAttribute("data-reduced-motion", String(settings.reducedMotion));
+  body.setAttribute("data-reduced-motion", String(settings.reducedMotion));
+
+  // Handle Verbose ARIA Mode
+  const scanBtn = document.getElementById("scan-btn");
+  const applyMasksBtn = document.getElementById("apply-masks-btn");
+  const docDropzone = document.getElementById("doc-dropzone");
+  const docRedactBtn = document.getElementById("doc-redact-btn");
+
+  if (settings.ariaVerboseMode) {
+    scanBtn?.setAttribute(
+      "aria-label",
+      "Scan current webpage for protected health information, financial data, and personal identifiers"
+    );
+    applyMasksBtn?.setAttribute(
+      "aria-label",
+      "Applies non-destructive visual privacy overlays over sensitive text on the active page"
+    );
+    docDropzone?.setAttribute(
+      "aria-label",
+      "Upload PDF, Word document, or image to redact sensitive data locally with pixel-level verification"
+    );
+    docRedactBtn?.setAttribute(
+      "aria-label",
+      "Permanently redacts selected sensitive findings into a flattened downloadable file copy"
+    );
+  } else {
+    scanBtn?.setAttribute("aria-label", "Scan Page (Alt+Shift+S)");
+    applyMasksBtn?.setAttribute("aria-label", "Apply selected masks");
+    docDropzone?.setAttribute("aria-label", "Document upload dropzone");
+    docRedactBtn?.setAttribute("aria-label", "Redact selected and download");
+  }
+}
+
+export async function renderCategories(settings: { enabledCategories: FindingCategory[]; language?: LanguageCode }): Promise<void> {
   const list = document.getElementById("category-list") as HTMLFieldSetElement | null;
   if (!list) return;
+  const lang = settings.language || currentLang || "en";
   list.replaceChildren();
   for (const category of ALL_CATEGORIES) {
     const label = el("label");
@@ -139,7 +293,7 @@ export async function renderCategories(settings: { enabledCategories: FindingCat
     check.checked = settings.enabledCategories.includes(category);
     check.setAttribute("role", "switch");
     check.setAttribute("aria-checked", check.checked ? "true" : "false");
-    const span = el("span", undefined, CATEGORY_LABELS[category] || category);
+    const span = el("span", undefined, getCategoryLabel(lang, category));
     label.append(check, span);
     check.addEventListener("change", async () => {
       check.setAttribute("aria-checked", check.checked ? "true" : "false");
@@ -150,7 +304,7 @@ export async function renderCategories(settings: { enabledCategories: FindingCat
       else set.delete(category);
       const next = ALL_CATEGORIES.filter((c) => set.has(c));
       await saveSettings({ ...current, enabledCategories: next });
-      await renderCategories({ enabledCategories: next });
+      await renderCategories({ enabledCategories: next, language: current.language });
       if (priorPreset !== "custom") {
         await recordAudit({
           ts: new Date().toISOString(),
@@ -193,7 +347,7 @@ export async function applyPreset(presetId: PresetId): Promise<void> {
   const current = await loadSettings();
   const previousPreset = presetForCategories(current.enabledCategories);
   await saveSettings({ ...current, enabledCategories: categories });
-  await renderCategories({ enabledCategories: categories });
+  await renderCategories({ enabledCategories: categories, language: current.language });
   if (previousPreset !== presetId) {
     await recordAudit({
       ts: new Date().toISOString(),
@@ -209,7 +363,7 @@ export async function applyCategoryFilter(categories: FindingCategory[]): Promis
   const current = await loadSettings();
   const valid = ALL_CATEGORIES.filter((c) => categories.includes(c));
   await saveSettings({ ...current, enabledCategories: valid });
-  await renderCategories({ enabledCategories: valid });
+  await renderCategories({ enabledCategories: valid, language: current.language });
 }
 
 function renderFindings(findings: Finding[]): void {
@@ -233,7 +387,7 @@ function renderFindings(findings: Finding[]): void {
       checkbox.value = finding.id;
       checkbox.checked = finding.selected;
       checkbox.setAttribute("aria-checked", finding.selected ? "true" : "false");
-      checkbox.setAttribute("aria-label", `Select ${CATEGORY_LABELS[finding.category] || finding.category} finding`);
+      checkbox.setAttribute("aria-label", `Select ${getCategoryLabel(currentLang, finding.category)} finding`);
       checkbox.addEventListener("change", () => {
         checkbox.setAttribute("aria-checked", checkbox.checked ? "true" : "false");
         const checked = [...list.querySelectorAll("input[type='checkbox']:checked")].map(
@@ -246,7 +400,7 @@ function renderFindings(findings: Finding[]): void {
 
     const main = el("div", "finding__main");
     const head = el("div", "finding__head");
-    const category = el("div", "finding__category", CATEGORY_LABELS[finding.category] || finding.category);
+    const category = el("div", "finding__category", getCategoryLabel(currentLang, finding.category));
     head.append(category);
     if (reportOnly) {
       const attrBadge = el(
@@ -273,7 +427,11 @@ function renderFindings(findings: Finding[]): void {
     }
     list.appendChild(item);
   }
-  applyBtn.textContent = `Apply selected masks (${selected})`;
+  if (selected > 0) {
+    applyBtn.textContent = `${t(currentLang, "apply_masks_btn")} (${selected})`;
+  } else {
+    applyBtn.textContent = t(currentLang, "apply_masks_btn");
+  }
 }
 
 function renderState(state: PopupState): void {
@@ -286,12 +444,12 @@ function renderState(state: PopupState): void {
   const summaryChars = document.getElementById("summary-chars") as HTMLElement | null;
 
   if (badge) {
-    badge.textContent = state.mode === "cloud" ? "Cloud processing" : "Local processing";
+    badge.textContent = state.mode === "cloud" ? t(currentLang, "cloud_processing") : t(currentLang, "local_processing");
     badge.classList.toggle("badge--cloud", state.mode === "cloud");
   }
   if (scanBtn) {
     scanBtn.disabled = state.scanning;
-    scanBtn.textContent = state.scanning ? "Scanning…" : "Scan Page (Alt+Shift+S)";
+    scanBtn.textContent = state.scanning ? t(currentLang, "scanning_btn") : t(currentLang, "scan_page_btn");
   }
 
   if (summary && status && summaryChars) {
@@ -301,14 +459,14 @@ function renderState(state: PopupState): void {
       status.classList.add("status--error");
       summaryChars.textContent = "";
     } else if (state.scanning) {
-      status.textContent = "Scanning visible text…";
+      status.textContent = t(currentLang, "status_scanning_text");
       status.classList.remove("status--error");
       summaryChars.textContent = "";
     } else if (state.scanned) {
-      summaryChars.textContent = `${state.visibleChars.toLocaleString()} characters analyzed`;
+      summaryChars.textContent = t(currentLang, "status_chars_analyzed", { count: state.visibleChars.toLocaleString() });
       status.textContent = state.truncated
-        ? "Page was large; results may be partial."
-        : "Analysis completed securely on this device.";
+        ? t(currentLang, "status_partial_results")
+        : t(currentLang, "status_completed_securely");
       status.classList.remove("status--error");
     } else {
       status.textContent = "";
@@ -324,8 +482,7 @@ function renderState(state: PopupState): void {
   if (cloudNotice) {
     cloudNotice.hidden = state.mode !== "cloud" || !state.consentRequired;
     if (!cloudNotice.hidden) {
-      cloudNotice.textContent =
-        "Cloud analysis is disabled by default. No content leaves this device until you enable a gateway origin in settings.";
+      cloudNotice.textContent = t(currentLang, "cloud_notice_text");
     }
   }
 
@@ -365,7 +522,7 @@ function findingsToCsv(findings: Finding[]): string {
     const pageMatch = f.nodeId.match(/^doc:(\d+):/);
     const page = pageMatch ? parseInt(pageMatch[1], 10) + 1 : "N/A";
     return [
-      CATEGORY_LABELS[f.category] ?? f.category,
+      getCategoryLabel(currentLang, f.category),
       `"${f.preview.replace(/"/g, '""')}"`,
       `${Math.round(f.confidence * 100)}%`,
       f.source,
@@ -386,7 +543,7 @@ function findingsToJson(findings: Finding[]): string {
     findings: findings.map((f) => ({
       id: f.id,
       category: f.category,
-      categoryLabel: CATEGORY_LABELS[f.category] ?? f.category,
+      categoryLabel: getCategoryLabel(currentLang, f.category),
       confidence: f.confidence,
       source: f.source,
       attribute: f.attribute ?? null,
@@ -537,7 +694,7 @@ function renderDocFindings(): void {
       check.className = "finding__check";
       check.checked = selectedDocFindingIds.has(finding.id);
       check.setAttribute("aria-checked", check.checked ? "true" : "false");
-      check.setAttribute("aria-label", `Select ${CATEGORY_LABELS[finding.category] || finding.category} finding on page ${page.index + 1}`);
+      check.setAttribute("aria-label", `Select ${getCategoryLabel(currentLang, finding.category)} finding on page ${page.index + 1}`);
       check.addEventListener("change", () => {
         check.setAttribute("aria-checked", check.checked ? "true" : "false");
         if (check.checked) selectedDocFindingIds.add(finding.id);
@@ -548,7 +705,7 @@ function renderDocFindings(): void {
 
       const main = el("div", "finding__main");
       const head = el("div", "finding__head");
-      const category = el("div", "finding__category", CATEGORY_LABELS[finding.category] || finding.category);
+      const category = el("div", "finding__category", getCategoryLabel(currentLang, finding.category));
       head.append(category);
       if (finding.category === "custom") {
         const customBadge = el("span", "finding__badge-attr", "Drawn Box");
@@ -581,12 +738,17 @@ function renderDoc(state: DocUiState): void {
     }
   }
 
-  const review = document.getElementById("doc-review") as HTMLElement | null;
+  const workspace = document.getElementById("doc-workspace") as HTMLElement | null;
   const thumbs = document.getElementById("doc-thumbs") as HTMLElement | null;
+  const docFilename = document.getElementById("doc-filename") as HTMLElement | null;
+  const docPageCount = document.getElementById("doc-page-count") as HTMLElement | null;
   const docStyleSelect = document.getElementById("doc-style-select") as HTMLSelectElement | null;
   const docStampText = document.getElementById("doc-stamp-text") as HTMLInputElement | null;
 
-  if (review) review.hidden = false;
+  if (docFilename) docFilename.textContent = state.name;
+  if (docPageCount) docPageCount.textContent = `${state.pages.length} page${state.pages.length === 1 ? "" : "s"}`;
+  if (workspace) workspace.hidden = false;
+
   if (thumbs) {
     thumbs.replaceChildren();
     for (const page of state.pages) {
@@ -599,207 +761,146 @@ function renderDoc(state: DocUiState): void {
       img.loading = "lazy";
 
       const canvas = document.createElement("canvas");
-      canvas.className = "doc-thumb-overlay";
-      canvas.setAttribute("aria-label", `Page ${page.index + 1} interactive redaction canvas`);
-
-      wrapper.append(img, canvas);
-      thumbs.appendChild(wrapper);
-
-      let isDragging = false;
-      let startX = 0;
-      let startY = 0;
-      let dragBox: { x: number; y: number; width: number; height: number } | null = null;
+      canvas.className = "doc-thumb-canvas";
+      canvas.width = page.widthPx;
+      canvas.height = page.heightPx;
 
       const redraw = () => {
-        const rect = wrapper.getBoundingClientRect();
-        const width = Math.max(1, Math.round(rect.width || img.naturalWidth || 120));
-        const height = Math.max(1, Math.round(rect.height || img.naturalHeight || 160));
-        if (canvas.width !== width || canvas.height !== height) {
-          canvas.width = width;
-          canvas.height = height;
-        }
-
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        const scaleX = canvas.width / (page.widthPx || canvas.width || 1);
-        const scaleY = canvas.height / (page.heightPx || canvas.height || 1);
-        const style = docStyleSelect?.value || "blackout";
+        const style = (docStyleSelect?.value as RedactionStyle) || "blackout";
         const stampLabel = docStampText?.value?.trim() || "[REDACTED]";
 
         for (const finding of page.findings) {
-          const isSelected = selectedDocFindingIds.has(finding.id);
-          for (const r of finding.rects) {
-            const rx = r.x * scaleX;
-            const ry = r.y * scaleY;
-            const rw = r.width * scaleX;
-            const rh = r.height * scaleY;
-
-            if (isSelected) {
-              if (style === "whiteout") {
-                ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
-                ctx.fillRect(rx, ry, rw, rh);
-                ctx.strokeStyle = "rgba(30, 41, 59, 0.9)";
-                ctx.lineWidth = 1.5;
-                ctx.setLineDash([]);
-                ctx.strokeRect(rx, ry, rw, rh);
-              } else if (style === "stamp") {
-                ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
-                ctx.fillRect(rx, ry, rw, rh);
-                ctx.strokeStyle = "rgba(34, 211, 238, 0.95)";
-                ctx.lineWidth = 1.5;
-                ctx.setLineDash([]);
-                ctx.strokeRect(rx, ry, rw, rh);
-
-                if (rw > 20 && rh > 10) {
-                  ctx.fillStyle = "#ffffff";
-                  ctx.font = "bold 9px sans-serif";
-                  ctx.textAlign = "center";
-                  ctx.textBaseline = "middle";
-                  ctx.fillText(stampLabel, rx + rw / 2, ry + rh / 2, rw - 4);
-                }
-              } else {
-                ctx.fillStyle = finding.category === "custom" ? "rgba(239, 68, 68, 0.55)" : "rgba(15, 23, 42, 0.85)";
-                ctx.fillRect(rx, ry, rw, rh);
-                ctx.strokeStyle = finding.category === "custom" ? "rgba(239, 68, 68, 0.95)" : "rgba(34, 211, 238, 0.9)";
-                ctx.lineWidth = 1.5;
-                ctx.setLineDash([]);
-                ctx.strokeRect(rx, ry, rw, rh);
-              }
-            } else {
-              ctx.strokeStyle = "rgba(148, 163, 184, 0.6)";
+          if (!selectedDocFindingIds.has(finding.id)) continue;
+          for (const rect of finding.rects) {
+            if (style === "blackout") {
+              ctx.fillStyle = "#000000";
+              ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+            } else if (style === "whiteout") {
+              ctx.fillStyle = "#ffffff";
+              ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+              ctx.strokeStyle = "#cccccc";
               ctx.lineWidth = 1;
-              ctx.setLineDash([3, 3]);
-              ctx.strokeRect(rx, ry, rw, rh);
-              ctx.setLineDash([]);
+              ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+            } else if (style === "stamp") {
+              ctx.fillStyle = "#000000";
+              ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+              ctx.fillStyle = "#ffffff";
+              const fontSize = Math.max(10, Math.min(rect.height * 0.7, 16));
+              ctx.font = `bold ${fontSize}px sans-serif`;
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillText(stampLabel, rect.x + rect.width / 2, rect.y + rect.height / 2, rect.width - 4);
             }
           }
-        }
-
-        if (dragBox) {
-          ctx.fillStyle = "rgba(34, 211, 238, 0.25)";
-          ctx.fillRect(dragBox.x, dragBox.y, dragBox.width, dragBox.height);
-          ctx.strokeStyle = "rgba(34, 211, 238, 0.95)";
-          ctx.lineWidth = 1.5;
-          ctx.setLineDash([4, 2]);
-          ctx.strokeRect(dragBox.x, dragBox.y, dragBox.width, dragBox.height);
-          ctx.setLineDash([]);
         }
       };
 
       overlayRedrawers.push(redraw);
-      img.addEventListener("load", redraw);
-      window.addEventListener("resize", redraw);
+      redraw();
+
+      let isDrawing = false;
+      let startX = 0;
+      let startY = 0;
+
+      const getCoords = (e: MouseEvent) => {
+        const bounds = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / bounds.width;
+        const scaleY = canvas.height / bounds.height;
+        return {
+          x: Math.round((e.clientX - bounds.left) * scaleX),
+          y: Math.round((e.clientY - bounds.top) * scaleY),
+        };
+      };
 
       canvas.addEventListener("mousedown", (e) => {
-        const bcr = canvas.getBoundingClientRect();
-        const mouseX = (e.clientX - bcr.left) * (canvas.width / (bcr.width || 1));
-        const mouseY = (e.clientY - bcr.top) * (canvas.height / (bcr.height || 1));
-
-        const scaleX = canvas.width / (page.widthPx || canvas.width || 1);
-        const scaleY = canvas.height / (page.heightPx || canvas.height || 1);
-        const pageX = mouseX / scaleX;
-        const pageY = mouseY / scaleY;
-
-        let hitFindingIndex = -1;
-        let hitFinding: Finding | null = null;
-        for (let i = page.findings.length - 1; i >= 0; i--) {
-          const f = page.findings[i];
-          for (const r of f.rects) {
-            if (pageX >= r.x && pageX <= r.x + r.width && pageY >= r.y && pageY <= r.y + r.height) {
-              hitFinding = f;
-              hitFindingIndex = i;
-              break;
-            }
-          }
-          if (hitFinding) break;
+        if (currentStudioTool === "draw") {
+          isDrawing = true;
+          const { x, y } = getCoords(e);
+          startX = x;
+          startY = y;
         }
-
-        if (hitFinding) {
-          if (currentStudioTool === "erase" && hitFinding.category === "custom") {
-            // Delete custom box
-            page.findings.splice(hitFindingIndex, 1);
-            selectedDocFindingIds.delete(hitFinding.id);
-            renderDocFindings();
-            redrawAllOverlays();
-            return;
-          }
-
-          if (selectedDocFindingIds.has(hitFinding.id)) {
-            selectedDocFindingIds.delete(hitFinding.id);
-          } else {
-            selectedDocFindingIds.add(hitFinding.id);
-          }
-          renderDocFindings();
-          redrawAllOverlays();
-          return;
-        }
-
-        isDragging = true;
-        startX = mouseX;
-        startY = mouseY;
-        dragBox = { x: mouseX, y: mouseY, width: 0, height: 0 };
-        redraw();
       });
 
       canvas.addEventListener("mousemove", (e) => {
-        if (!isDragging) return;
-        const bcr = canvas.getBoundingClientRect();
-        const curX = (e.clientX - bcr.left) * (canvas.width / (bcr.width || 1));
-        const curY = (e.clientY - bcr.top) * (canvas.height / (bcr.height || 1));
-
-        dragBox = {
-          x: Math.min(startX, curX),
-          y: Math.min(startY, curY),
-          width: Math.abs(curX - startX),
-          height: Math.abs(curY - startY),
-        };
+        if (!isDrawing) return;
+        const { x, y } = getCoords(e);
         redraw();
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.strokeStyle = "#00ffff";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 2]);
+          ctx.strokeRect(
+            Math.min(startX, x),
+            Math.min(startY, y),
+            Math.abs(x - startX),
+            Math.abs(y - startY)
+          );
+          ctx.setLineDash([]);
+        }
       });
 
-      const finishDrag = () => {
-        if (!isDragging) return;
-        isDragging = false;
-        if (dragBox && dragBox.width > 4 && dragBox.height > 4) {
-          const scaleX = canvas.width / (page.widthPx || canvas.width || 1);
-          const scaleY = canvas.height / (page.heightPx || canvas.height || 1);
-          const customRect: Rect = {
-            x: Math.round(dragBox.x / scaleX),
-            y: Math.round(dragBox.y / scaleY),
-            width: Math.round(dragBox.width / scaleX),
-            height: Math.round(dragBox.height / scaleY),
-          };
-          const customId = `custom:${requestId()}`;
-          const customFinding: Finding = {
-            id: customId,
-            category: "custom",
-            confidence: 1.0,
-            source: "custom-pattern",
-            preview: "[Custom Redaction]",
-            nodeId: "",
-            startOffset: 0,
-            endOffset: 0,
-            rects: [customRect],
-            contextPreview: `Drawn bounding box (${customRect.width}×${customRect.height}px)`,
-            selected: true,
-          };
-          page.findings.push(customFinding);
-          selectedDocFindingIds.add(customId);
-          renderDocFindings();
+      const finishDraw = (e: MouseEvent) => {
+        if (!isDrawing) return;
+        isDrawing = false;
+        const { x, y } = getCoords(e);
+        const rx = Math.min(startX, x);
+        const ry = Math.min(startY, y);
+        const rw = Math.abs(x - startX);
+        const rh = Math.abs(y - startY);
+
+        if (rw < 8 || rh < 8) {
+          const clickedFinding = page.findings.find((f) =>
+            f.rects.some((r) => rx >= r.x && rx <= r.x + r.width && ry >= r.y && ry <= r.y + r.height)
+          );
+          if (clickedFinding) {
+            if (selectedDocFindingIds.has(clickedFinding.id)) {
+              selectedDocFindingIds.delete(clickedFinding.id);
+            } else {
+              selectedDocFindingIds.add(clickedFinding.id);
+            }
+            renderDocFindings();
+            redrawAllOverlays();
+          }
+          return;
         }
-        dragBox = null;
-        redraw();
+
+        const customFinding: Finding = {
+          id: requestId(),
+          category: "custom",
+          confidence: 1.0,
+          source: "local-rules",
+          preview: `Custom Area (${rw}x${rh})`,
+          nodeId: `doc:${page.index}:custom`,
+          startOffset: 0,
+          endOffset: 0,
+          rects: [{ x: rx, y: ry, width: rw, height: rh }],
+          selected: true,
+        };
+
+        page.findings.push(customFinding);
+        selectedDocFindingIds.add(customFinding.id);
+        renderDocFindings();
+        redrawAllOverlays();
       };
 
-      canvas.addEventListener("mouseup", finishDrag);
-      canvas.addEventListener("mouseleave", finishDrag);
+      canvas.addEventListener("mouseup", finishDraw);
+      canvas.addEventListener("mouseleave", () => {
+        if (isDrawing) {
+          isDrawing = false;
+          redraw();
+        }
+      });
 
-      setTimeout(redraw, 0);
+      wrapper.append(img, canvas);
+      thumbs.appendChild(wrapper);
     }
   }
+
   renderDocFindings();
-  redrawAllOverlays();
 }
 
 function buildDocBoxes(): { pageIndex: number; rects: Rect[] }[] {
@@ -817,7 +918,7 @@ function buildDocBoxes(): { pageIndex: number; rects: Rect[] }[] {
 }
 
 function clearDocUi(): void {
-  const review = document.getElementById("doc-review") as HTMLElement | null;
+  const workspace = document.getElementById("doc-workspace") as HTMLElement | null;
   const thumbs = document.getElementById("doc-thumbs") as HTMLElement | null;
   const list = document.getElementById("doc-findings") as HTMLUListElement | null;
   const redactBtn = document.getElementById("doc-redact-btn") as HTMLButtonElement | null;
@@ -825,7 +926,7 @@ function clearDocUi(): void {
   lastDoc = null;
   selectedDocFindingIds.clear();
   overlayRedrawers.length = 0;
-  if (review) review.hidden = true;
+  if (workspace) workspace.hidden = true;
   if (thumbs) thumbs.replaceChildren();
   if (list) list.replaceChildren();
   if (redactBtn) redactBtn.disabled = true;
@@ -880,7 +981,7 @@ function updatePasteShieldBanner(enabled: boolean): void {
   const label = document.getElementById("scanner-shield-label");
   if (!banner || !label) return;
   banner.classList.toggle("shield-banner--inactive", !enabled);
-  label.textContent = enabled ? "Active" : "Disabled";
+  label.textContent = enabled ? t(currentLang, "shield_active") : t(currentLang, "shield_disabled");
 }
 
 /** Shared popup/panel bootstrap. */
@@ -888,6 +989,9 @@ export async function initPopup(): Promise<void> {
   initTabs();
 
   const settings = await loadSettings();
+  currentLang = settings.language;
+  applyUiLanguage(settings.language);
+  applyAccessibilitySettings(settings);
   await renderCategories(settings);
   updatePasteShieldBanner(settings.pasteGuardEnabled);
 
@@ -910,7 +1014,7 @@ export async function initPopup(): Promise<void> {
     privacyLink.rel = "noopener noreferrer";
   }
 
-  const docFile = document.getElementById("doc-file") as HTMLInputElement | null;
+  const docFile = document.getElementById("doc-file-input") as HTMLInputElement | null;
   const docRedactBtn = document.getElementById("doc-redact-btn") as HTMLButtonElement | null;
   const docClearBtn = document.getElementById("doc-clear-btn") as HTMLButtonElement | null;
   const docConfirmDialog = document.getElementById("doc-confirm-dialog") as HTMLDialogElement | null;
@@ -919,13 +1023,17 @@ export async function initPopup(): Promise<void> {
 
   let lastState: PopupState | null = null;
 
-  scanBtn?.addEventListener("click", () => {
-    const mode: ScanMode = lastState?.mode ?? settings.mode;
+  scanBtn?.addEventListener("click", async () => {
+    const current = await loadSettings();
+    speakAnnouncement(t(current.language, "speech_scan_start"), current);
+    const mode: ScanMode = lastState?.mode ?? current.mode;
     void sendMessage({ type: "POPUP_SCAN", requestId: requestId(), mode });
   });
 
-  clearDataBtn?.addEventListener("click", () => {
+  clearDataBtn?.addEventListener("click", async () => {
     void sendMessage({ type: "POPUP_CLEAR_DATA", requestId: requestId() });
+    const current = await loadSettings();
+    speakAnnouncement(t(current.language, "speech_session_cleared"), current);
   });
 
   document.getElementById("open-side-panel-btn")?.addEventListener("click", async () => {
@@ -937,13 +1045,21 @@ export async function initPopup(): Promise<void> {
     }
   });
 
-  applyMasksBtn?.addEventListener("click", () => {
+  applyMasksBtn?.addEventListener("click", async () => {
     if (!lastState) return;
-    void sendMessage({ type: "POPUP_APPLY_MASKS", requestId: requestId(), findingIds: currentSelectedIds(lastState) });
+    const ids = currentSelectedIds(lastState);
+    void sendMessage({ type: "POPUP_APPLY_MASKS", requestId: requestId(), findingIds: ids });
+    const current = await loadSettings();
+    speakAnnouncement(t(current.language, "speech_masks_applied", { count: ids.length }), current);
+    if (current.autoCopySanitized && ids.length > 0) {
+      void sendMessage({ type: "POPUP_COPY_REDACTED", requestId: requestId(), findingIds: ids });
+    }
   });
 
-  removeMasksBtn?.addEventListener("click", () => {
+  removeMasksBtn?.addEventListener("click", async () => {
     void sendMessage({ type: "POPUP_REMOVE_MASKS", requestId: requestId() });
+    const current = await loadSettings();
+    speakAnnouncement(t(current.language, "speech_masks_removed"), current);
   });
 
   document.getElementById("undo-masks-btn")?.addEventListener("click", () => {
@@ -961,6 +1077,8 @@ export async function initPopup(): Promise<void> {
     if (!lastState) return;
     const ids = currentSelectedIds(lastState);
     void sendMessage({ type: "POPUP_COPY_REDACTED", requestId: requestId(), findingIds: ids });
+    const current = await loadSettings();
+    speakAnnouncement(t(current.language, "speech_copied_redacted"), current);
   });
 
   // Select / Deselect all findings in scanner
@@ -1032,6 +1150,7 @@ export async function initPopup(): Promise<void> {
   }
 
   if (docStyleSelect) {
+    docStyleSelect.value = settings.defaultRedactionStyle || "blackout";
     docStyleSelect.addEventListener("change", () => {
       if (docStampContainer) {
         docStampContainer.hidden = docStyleSelect.value !== "stamp";
@@ -1048,6 +1167,7 @@ export async function initPopup(): Promise<void> {
   }
 
   if (docStampText) {
+    docStampText.value = settings.defaultStampText || "[REDACTED]";
     docStampText.addEventListener("input", () => {
       redrawAllOverlays();
     });
@@ -1098,15 +1218,16 @@ export async function initPopup(): Promise<void> {
 
   docCancel?.addEventListener("click", () => docConfirmDialog?.close());
 
-  docConfirm?.addEventListener("click", () => {
+  docConfirm?.addEventListener("click", async () => {
     docConfirmDialog?.close();
     if (!lastDoc) return;
     const boxes = buildDocBoxes();
     const ids = [...selectedDocFindingIds];
     if (boxes.length === 0) return;
     setDocStatus("Preparing redacted copy…", false);
-    const style = (docStyleSelect?.value as RedactionStyle) || "blackout";
-    const stampText = docStampText?.value?.trim() || "[REDACTED]";
+    const current = await loadSettings();
+    const style = (docStyleSelect?.value as RedactionStyle) || current.defaultRedactionStyle || "blackout";
+    const stampText = docStampText?.value?.trim() || current.defaultStampText || "[REDACTED]";
     void sendMessage({
       type: "POPUP_DOC_REDACT",
       requestId: requestId(),
@@ -1120,7 +1241,8 @@ export async function initPopup(): Promise<void> {
       options: {
         style,
         stampText,
-        padding: settings.maskPadding,
+        padding: current.maskPadding,
+        fillColor: current.maskColor,
       },
     });
   });
@@ -1217,6 +1339,264 @@ export async function initPopup(): Promise<void> {
       updatePasteShieldBanner(pasteGuardToggle.checked);
     });
   }
+
+  // --- General & Appearance Controls ---
+  const langSelect = document.getElementById("lang-select") as HTMLSelectElement | null;
+  if (langSelect) {
+    langSelect.value = settings.language;
+    langSelect.addEventListener("change", async () => {
+      const newLang = langSelect.value as LanguageCode;
+      const current = await loadSettings();
+      const updated = { ...current, language: newLang };
+      await saveSettings(updated);
+      applyUiLanguage(newLang);
+      await renderCategories({ enabledCategories: updated.enabledCategories, language: newLang });
+      speakAnnouncement(t(newLang, "speech_settings_saved"), updated);
+    });
+  }
+
+  const fontSizeSelect = document.getElementById("font-size-select") as HTMLSelectElement | null;
+  if (fontSizeSelect) {
+    fontSizeSelect.value = settings.fontSize;
+    fontSizeSelect.addEventListener("change", async () => {
+      const newSize = fontSizeSelect.value as FontSizeScale;
+      const current = await loadSettings();
+      const updated = { ...current, fontSize: newSize };
+      await saveSettings(updated);
+      applyAccessibilitySettings(updated);
+      speakAnnouncement(t(updated.language, "speech_settings_saved"), updated);
+    });
+  }
+
+  const highContrastToggle = document.getElementById("high-contrast-toggle") as HTMLInputElement | null;
+  if (highContrastToggle) {
+    highContrastToggle.checked = settings.highContrast;
+    highContrastToggle.setAttribute("aria-checked", settings.highContrast ? "true" : "false");
+    highContrastToggle.addEventListener("change", async () => {
+      highContrastToggle.setAttribute("aria-checked", highContrastToggle.checked ? "true" : "false");
+      const current = await loadSettings();
+      const updated = { ...current, highContrast: highContrastToggle.checked };
+      await saveSettings(updated);
+      applyAccessibilitySettings(updated);
+      speakAnnouncement(t(updated.language, "speech_settings_saved"), updated);
+    });
+  }
+
+  const dyslexiaToggle = document.getElementById("dyslexia-toggle") as HTMLInputElement | null;
+  if (dyslexiaToggle) {
+    dyslexiaToggle.checked = settings.dyslexiaMode;
+    dyslexiaToggle.setAttribute("aria-checked", settings.dyslexiaMode ? "true" : "false");
+    dyslexiaToggle.addEventListener("change", async () => {
+      dyslexiaToggle.setAttribute("aria-checked", dyslexiaToggle.checked ? "true" : "false");
+      const current = await loadSettings();
+      const updated = { ...current, dyslexiaMode: dyslexiaToggle.checked };
+      await saveSettings(updated);
+      applyAccessibilitySettings(updated);
+      speakAnnouncement(t(updated.language, "speech_settings_saved"), updated);
+    });
+  }
+
+  const reducedMotionToggle = document.getElementById("reduced-motion-toggle") as HTMLInputElement | null;
+  if (reducedMotionToggle) {
+    reducedMotionToggle.checked = settings.reducedMotion;
+    reducedMotionToggle.setAttribute("aria-checked", settings.reducedMotion ? "true" : "false");
+    reducedMotionToggle.addEventListener("change", async () => {
+      reducedMotionToggle.setAttribute("aria-checked", reducedMotionToggle.checked ? "true" : "false");
+      const current = await loadSettings();
+      const updated = { ...current, reducedMotion: reducedMotionToggle.checked };
+      await saveSettings(updated);
+      applyAccessibilitySettings(updated);
+      speakAnnouncement(t(updated.language, "speech_settings_saved"), updated);
+    });
+  }
+
+  // --- Accessibility & Assistive Tools Controls ---
+  const speechToggle = document.getElementById("speech-toggle") as HTMLInputElement | null;
+  if (speechToggle) {
+    speechToggle.checked = settings.speechAnnouncements;
+    speechToggle.setAttribute("aria-checked", settings.speechAnnouncements ? "true" : "false");
+    speechToggle.addEventListener("change", async () => {
+      speechToggle.setAttribute("aria-checked", speechToggle.checked ? "true" : "false");
+      const current = await loadSettings();
+      const updated = { ...current, speechAnnouncements: speechToggle.checked };
+      await saveSettings(updated);
+      speakAnnouncement(t(updated.language, "speech_settings_saved"), updated);
+    });
+  }
+
+  const verboseAriaToggle = document.getElementById("verbose-aria-toggle") as HTMLInputElement | null;
+  if (verboseAriaToggle) {
+    verboseAriaToggle.checked = settings.ariaVerboseMode;
+    verboseAriaToggle.setAttribute("aria-checked", settings.ariaVerboseMode ? "true" : "false");
+    verboseAriaToggle.addEventListener("change", async () => {
+      verboseAriaToggle.setAttribute("aria-checked", verboseAriaToggle.checked ? "true" : "false");
+      const current = await loadSettings();
+      const updated = { ...current, ariaVerboseMode: verboseAriaToggle.checked };
+      await saveSettings(updated);
+    });
+  }
+
+  // --- Mask Padding & Color Controls ---
+  const maskPaddingSelect = document.getElementById("mask-padding-select") as HTMLSelectElement | null;
+  if (maskPaddingSelect) {
+    maskPaddingSelect.value = String(settings.maskPadding);
+    maskPaddingSelect.addEventListener("change", async () => {
+      const pad = parseInt(maskPaddingSelect.value, 10) || 4;
+      const current = await loadSettings();
+      await saveSettings({ ...current, maskPadding: pad });
+    });
+  }
+
+  const maskColorSelect = document.getElementById("mask-color-select") as HTMLSelectElement | null;
+  if (maskColorSelect) {
+    maskColorSelect.value = settings.maskColor;
+    maskColorSelect.addEventListener("change", async () => {
+      const current = await loadSettings();
+      await saveSettings({ ...current, maskColor: maskColorSelect.value });
+    });
+  }
+
+  // --- Proactive Protection & Context Menus Controls ---
+  const contextMenusToggle = document.getElementById("context-menus-toggle") as HTMLInputElement | null;
+  if (contextMenusToggle) {
+    contextMenusToggle.checked = settings.contextMenusEnabled;
+    contextMenusToggle.setAttribute("aria-checked", settings.contextMenusEnabled ? "true" : "false");
+    contextMenusToggle.addEventListener("change", async () => {
+      contextMenusToggle.setAttribute("aria-checked", contextMenusToggle.checked ? "true" : "false");
+      const current = await loadSettings();
+      await saveSettings({ ...current, contextMenusEnabled: contextMenusToggle.checked });
+    });
+  }
+
+  // --- Auto-Copy & Session Timeout Controls ---
+  const autoCopyToggle = document.getElementById("auto-copy-toggle") as HTMLInputElement | null;
+  if (autoCopyToggle) {
+    autoCopyToggle.checked = settings.autoCopySanitized;
+    autoCopyToggle.setAttribute("aria-checked", settings.autoCopySanitized ? "true" : "false");
+    autoCopyToggle.addEventListener("change", async () => {
+      autoCopyToggle.setAttribute("aria-checked", autoCopyToggle.checked ? "true" : "false");
+      const current = await loadSettings();
+      await saveSettings({ ...current, autoCopySanitized: autoCopyToggle.checked });
+    });
+  }
+
+  const sessionTimeoutSelect = document.getElementById("session-timeout-select") as HTMLSelectElement | null;
+  if (sessionTimeoutSelect) {
+    sessionTimeoutSelect.value = settings.sessionTimeout;
+    sessionTimeoutSelect.addEventListener("change", async () => {
+      const current = await loadSettings();
+      await saveSettings({ ...current, sessionTimeout: sessionTimeoutSelect.value as SessionTimeoutOption });
+    });
+  }
+
+  // --- Document Studio Defaults ---
+  const defaultDocStyleSelect = document.getElementById("default-doc-style-select") as HTMLSelectElement | null;
+  if (defaultDocStyleSelect) {
+    defaultDocStyleSelect.value = settings.defaultRedactionStyle;
+    defaultDocStyleSelect.addEventListener("change", async () => {
+      const current = await loadSettings();
+      await saveSettings({ ...current, defaultRedactionStyle: defaultDocStyleSelect.value as RedactionStyle });
+      if (docStyleSelect) docStyleSelect.value = defaultDocStyleSelect.value;
+    });
+  }
+
+  const defaultDocStampInput = document.getElementById("default-doc-stamp-input") as HTMLInputElement | null;
+  if (defaultDocStampInput) {
+    defaultDocStampInput.value = settings.defaultStampText;
+    defaultDocStampInput.addEventListener("change", async () => {
+      const val = defaultDocStampInput.value.trim() || "[REDACTED]";
+      const current = await loadSettings();
+      await saveSettings({ ...current, defaultStampText: val });
+      if (docStampText) docStampText.value = val;
+    });
+  }
+
+  // --- Reset Settings & Clear Audit Controls ---
+  const resetSettingsBtn = document.getElementById("reset-settings-btn") as HTMLButtonElement | null;
+  const resetConfirmDialog = document.getElementById("reset-confirm-dialog") as HTMLDialogElement | null;
+  const resetCancel = document.getElementById("reset-cancel") as HTMLButtonElement | null;
+  const resetConfirm = document.getElementById("reset-confirm") as HTMLButtonElement | null;
+
+  resetSettingsBtn?.addEventListener("click", () => {
+    resetConfirmDialog?.showModal();
+  });
+  resetCancel?.addEventListener("click", () => {
+    resetConfirmDialog?.close();
+  });
+  resetConfirm?.addEventListener("click", async () => {
+    resetConfirmDialog?.close();
+    const defaults = await resetSettings();
+    applyUiLanguage(defaults.language);
+    applyAccessibilitySettings(defaults);
+    await renderCategories({ enabledCategories: defaults.enabledCategories, language: defaults.language });
+    updatePasteShieldBanner(defaults.pasteGuardEnabled);
+
+    if (langSelect) langSelect.value = defaults.language;
+    if (fontSizeSelect) fontSizeSelect.value = defaults.fontSize;
+    if (highContrastToggle) {
+      highContrastToggle.checked = defaults.highContrast;
+      highContrastToggle.setAttribute("aria-checked", "false");
+    }
+    if (dyslexiaToggle) {
+      dyslexiaToggle.checked = defaults.dyslexiaMode;
+      dyslexiaToggle.setAttribute("aria-checked", "false");
+    }
+    if (reducedMotionToggle) {
+      reducedMotionToggle.checked = defaults.reducedMotion;
+      reducedMotionToggle.setAttribute("aria-checked", "false");
+    }
+    if (speechToggle) {
+      speechToggle.checked = defaults.speechAnnouncements;
+      speechToggle.setAttribute("aria-checked", "false");
+    }
+    if (verboseAriaToggle) {
+      verboseAriaToggle.checked = defaults.ariaVerboseMode;
+      verboseAriaToggle.setAttribute("aria-checked", "false");
+    }
+    if (placeholderToggle) {
+      placeholderToggle.checked = defaults.maskPlaceholders;
+      placeholderToggle.setAttribute("aria-checked", "false");
+    }
+    if (pasteGuardToggle) {
+      pasteGuardToggle.checked = defaults.pasteGuardEnabled;
+      pasteGuardToggle.setAttribute("aria-checked", "true");
+    }
+    if (contextMenusToggle) {
+      contextMenusToggle.checked = defaults.contextMenusEnabled;
+      contextMenusToggle.setAttribute("aria-checked", "true");
+    }
+    if (maskPaddingSelect) maskPaddingSelect.value = String(defaults.maskPadding);
+    if (maskColorSelect) maskColorSelect.value = defaults.maskColor;
+    if (autoCopyToggle) {
+      autoCopyToggle.checked = defaults.autoCopySanitized;
+      autoCopyToggle.setAttribute("aria-checked", "false");
+    }
+    if (sessionTimeoutSelect) sessionTimeoutSelect.value = defaults.sessionTimeout;
+    if (defaultDocStyleSelect) defaultDocStyleSelect.value = defaults.defaultRedactionStyle;
+    if (defaultDocStampInput) defaultDocStampInput.value = defaults.defaultStampText;
+    if (ocrLangSelect) ocrLangSelect.value = defaults.ocrLanguage;
+    if (docOcrLangSelect) docOcrLangSelect.value = defaults.ocrLanguage;
+
+    speakAnnouncement(t(defaults.language, "speech_settings_reset"), defaults);
+  });
+
+  const clearAuditBtn = document.getElementById("clear-audit-btn") as HTMLButtonElement | null;
+  const clearAuditDialog = document.getElementById("clear-audit-dialog") as HTMLDialogElement | null;
+  const clearAuditCancel = document.getElementById("clear-audit-cancel") as HTMLButtonElement | null;
+  const clearAuditConfirm = document.getElementById("clear-audit-confirm") as HTMLButtonElement | null;
+
+  clearAuditBtn?.addEventListener("click", () => {
+    clearAuditDialog?.showModal();
+  });
+  clearAuditCancel?.addEventListener("click", () => {
+    clearAuditDialog?.close();
+  });
+  clearAuditConfirm?.addEventListener("click", async () => {
+    clearAuditDialog?.close();
+    await chrome.storage.local.remove(["audit_log", "audit_key"]);
+    const current = await loadSettings();
+    speakAnnouncement("Audit records cleared.", current);
+  });
 
   document.getElementById("export-audit-btn")?.addEventListener("click", () => {
     void sendMessage({ type: "POPUP_EXPORT_AUDIT", requestId: requestId() });
@@ -1586,8 +1966,19 @@ export async function initPopup(): Promise<void> {
     if (!validation.ok) return;
     const message = validation.message;
     if (message.type === "POPUP_STATE") {
+      const priorState = lastState;
       lastState = message.state;
       renderState(lastState);
+      if (priorState?.scanning && !lastState.scanning && lastState.scanned) {
+        void (async () => {
+          const current = await loadSettings();
+          if (lastState && lastState.findings.length > 0) {
+            speakAnnouncement(t(current.language, "speech_scan_complete", { count: lastState.findings.length }), current);
+          } else {
+            speakAnnouncement(t(current.language, "speech_scan_none"), current);
+          }
+        })();
+      }
       if (lastState.scanned && lastState.findings.length > 0) {
         void maybeShowVerifyNotice();
       }
@@ -1649,6 +2040,10 @@ export async function initPopup(): Promise<void> {
       return;
     }
     if (message.type === "POPUP_DOC_DONE") {
+      void (async () => {
+        const current = await loadSettings();
+        speakAnnouncement(t(current.language, "speech_doc_redacted"), current);
+      })();
       const reportDelivery = (delivered: boolean) => {
         void sendMessage({
           type: "POPUP_DOC_DELIVERY_REPORT",

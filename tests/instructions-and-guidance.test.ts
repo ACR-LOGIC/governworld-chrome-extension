@@ -41,6 +41,15 @@ describe("Instructions, Tab Navigation & Contextual Guidance", () => {
       "guide-cloud",
       "guide-privacy",
       "guide-contributions",
+      "guide-paste-guard",
+      "guide-context-menus",
+      "guide-ocr-languages",
+      "guide-redaction-styles",
+      "guide-accessibility",
+      "guide-languages",
+      "guide-settings",
+      "guide-shortcuts",
+      "guide-troubleshooting",
     ];
 
     for (const sectionId of expectedSections) {

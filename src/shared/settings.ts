@@ -1,7 +1,11 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import { isRecord } from "./types.js";
-import type { FindingCategory, ScanMode } from "./types.js";
-export type { FindingCategory, ScanMode };
+import type { FindingCategory, ScanMode, RedactionStyle } from "./types.js";
+import type { LanguageCode } from "./i18n.js";
+export type { FindingCategory, ScanMode, RedactionStyle, LanguageCode };
+
+export type FontSizeScale = "default" | "medium" | "large" | "xlarge";
+export type SessionTimeoutOption = "never" | "5m" | "15m" | "30m";
 
 export const ALL_CATEGORIES: FindingCategory[] = [
   "email",
@@ -154,6 +158,8 @@ export interface Settings {
   maxVisibleChars: number;
   /** Per-node character cap. */
   maxNodeChars: number;
+  /** When true, registers right-click context menu options in the browser. */
+  contextMenusEnabled: boolean;
   /** Allowlisted gateway origin, or null when cloud is fully disabled. */
   gatewayOrigin: string | null;
   /** True once the user has seen the local-first disclosure at least once. */
@@ -167,6 +173,32 @@ export interface Settings {
   consentVersion: string;
   /** Selectable OCR recognition language code ('eng', 'spa', 'fra', 'deu', 'jpn', 'por'). */
   ocrLanguage: string;
+
+  // New Global Settings:
+  /** Active UI display language. */
+  language: LanguageCode;
+  /** Visual text scaling size for low-vision & accessibility. */
+  fontSize: FontSizeScale;
+  /** High contrast display mode with strengthened borders and high visibility colors. */
+  highContrast: boolean;
+  /** Dyslexia-friendly text spacing (enhanced letter spacing and line height). */
+  dyslexiaMode: boolean;
+  /** Disables animations and sliding transitions for motion sensitivity. */
+  reducedMotion: boolean;
+  /** Web Speech API audio announcements for blind and screen-reader users. */
+  speechAnnouncements: boolean;
+  /** Extended verbose ARIA labels and accessibility descriptions. */
+  ariaVerboseMode: boolean;
+  /** Custom overlay color for visual masks. */
+  maskColor: string;
+  /** Automatically copy sanitized text after masks are applied. */
+  autoCopySanitized: boolean;
+  /** Inactivity session timeout for clearing sensitive in-memory state. */
+  sessionTimeout: SessionTimeoutOption;
+  /** Default redaction box style for Document Studio. */
+  defaultRedactionStyle: RedactionStyle;
+  /** Default text stamp label for Document Studio. */
+  defaultStampText: string;
 }
 
 function defaultThresholds(): Record<FindingCategory, number> {
@@ -177,10 +209,6 @@ function defaultThresholds(): Record<FindingCategory, number> {
 
 export const DEFAULT_SETTINGS: Settings = {
   mode: "local",
-  // All categories enabled by default: for a redaction tool, failing to
-  // redact (under-detection) leaks sensitive data, which is worse than an
-  // occasional conservative over-flag. Card-like numbers are Luhn-validated
-  // before detection.
   enabledCategories: [
     "email",
     "phone",
@@ -206,6 +234,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maskPadding: 4,
   maskPlaceholders: false,
   pasteGuardEnabled: true,
+  contextMenusEnabled: true,
   maxVisibleChars: 250_000,
   maxNodeChars: 10_000,
   gatewayOrigin: null,
@@ -214,11 +243,28 @@ export const DEFAULT_SETTINGS: Settings = {
   notificationsEnabled: false,
   consentVersion: CONSENT_VERSION,
   ocrLanguage: "eng",
+  language: "en",
+  fontSize: "default",
+  highContrast: false,
+  dyslexiaMode: false,
+  reducedMotion: false,
+  speechAnnouncements: false,
+  ariaVerboseMode: false,
+  maskColor: "#0f172a",
+  autoCopySanitized: false,
+  sessionTimeout: "never",
+  defaultRedactionStyle: "blackout",
+  defaultStampText: "[REDACTED]",
 };
 
 export function isCategory(value: unknown): value is FindingCategory {
   return typeof value === "string" && (ALL_CATEGORIES as string[]).includes(value);
 }
+
+const VALID_LANGUAGES = new Set<LanguageCode>(["en", "es", "fr", "de", "ja", "pt", "zh"]);
+const VALID_FONT_SIZES = new Set<FontSizeScale>(["default", "medium", "large", "xlarge"]);
+const VALID_TIMEOUTS = new Set<SessionTimeoutOption>(["never", "5m", "15m", "30m"]);
+const VALID_REDACTION_STYLES = new Set<RedactionStyle>(["blackout", "whiteout", "stamp"]);
 
 /** Coerce an unknown stored blob into a safe Settings value (fail closed). */
 export function normalizeSettings(raw: unknown): Settings {
@@ -243,6 +289,7 @@ export function normalizeSettings(raw: unknown): Settings {
   const maskPadding = typeof raw.maskPadding === "number" && Number.isFinite(raw.maskPadding) && raw.maskPadding >= 0 ? raw.maskPadding : base.maskPadding;
   const maskPlaceholders = raw.maskPlaceholders === true;
   const pasteGuardEnabled = typeof raw.pasteGuardEnabled === "boolean" ? raw.pasteGuardEnabled : base.pasteGuardEnabled;
+  const contextMenusEnabled = typeof raw.contextMenusEnabled === "boolean" ? raw.contextMenusEnabled : base.contextMenusEnabled;
   const maxVisibleChars =
     typeof raw.maxVisibleChars === "number" && Number.isFinite(raw.maxVisibleChars) && raw.maxVisibleChars >= 100
       ? raw.maxVisibleChars
@@ -267,6 +314,38 @@ export function normalizeSettings(raw: unknown): Settings {
       ? raw.ocrLanguage
       : base.ocrLanguage;
 
+  const language = typeof raw.language === "string" && VALID_LANGUAGES.has(raw.language as LanguageCode)
+    ? (raw.language as LanguageCode)
+    : base.language;
+
+  const fontSize = typeof raw.fontSize === "string" && VALID_FONT_SIZES.has(raw.fontSize as FontSizeScale)
+    ? (raw.fontSize as FontSizeScale)
+    : base.fontSize;
+
+  const highContrast = raw.highContrast === true;
+  const dyslexiaMode = raw.dyslexiaMode === true;
+  const reducedMotion = raw.reducedMotion === true;
+  const speechAnnouncements = raw.speechAnnouncements === true;
+  const ariaVerboseMode = raw.ariaVerboseMode === true;
+
+  const maskColor = typeof raw.maskColor === "string" && /^#[0-9a-fA-F]{6}$/.test(raw.maskColor)
+    ? raw.maskColor
+    : base.maskColor;
+
+  const autoCopySanitized = raw.autoCopySanitized === true;
+
+  const sessionTimeout = typeof raw.sessionTimeout === "string" && VALID_TIMEOUTS.has(raw.sessionTimeout as SessionTimeoutOption)
+    ? (raw.sessionTimeout as SessionTimeoutOption)
+    : base.sessionTimeout;
+
+  const defaultRedactionStyle = typeof raw.defaultRedactionStyle === "string" && VALID_REDACTION_STYLES.has(raw.defaultRedactionStyle as RedactionStyle)
+    ? (raw.defaultRedactionStyle as RedactionStyle)
+    : base.defaultRedactionStyle;
+
+  const defaultStampText = typeof raw.defaultStampText === "string" && raw.defaultStampText.trim().length > 0 && raw.defaultStampText.length <= 50
+    ? raw.defaultStampText.trim()
+    : base.defaultStampText;
+
   return {
     mode,
     enabledCategories,
@@ -274,6 +353,7 @@ export function normalizeSettings(raw: unknown): Settings {
     maskPadding,
     maskPlaceholders,
     pasteGuardEnabled,
+    contextMenusEnabled,
     maxVisibleChars,
     maxNodeChars,
     gatewayOrigin,
@@ -283,12 +363,27 @@ export function normalizeSettings(raw: unknown): Settings {
     notificationsEnabled,
     ...(accountLabel !== undefined ? { accountLabel } : {}),
     ocrLanguage,
+    language,
+    fontSize,
+    highContrast,
+    dyslexiaMode,
+    reducedMotion,
+    speechAnnouncements,
+    ariaVerboseMode,
+    maskColor,
+    autoCopySanitized,
+    sessionTimeout,
+    defaultRedactionStyle,
+    defaultStampText,
   };
 }
 
 export const SETTINGS_KEY = "settings";
 
 export async function loadSettings(): Promise<Settings> {
+  if (typeof chrome === "undefined" || !chrome?.storage?.local) {
+    return { ...DEFAULT_SETTINGS };
+  }
   const raw = await chrome.storage.local.get(SETTINGS_KEY);
   return normalizeSettings(raw[SETTINGS_KEY]);
 }
@@ -299,7 +394,15 @@ export async function saveSettings(settings: Settings): Promise<void> {
     // Never persist anything sensitive: only preferences and config.
     enabledCategories: settings.enabledCategories.filter(isCategory),
   };
-  await chrome.storage.local.set({ [SETTINGS_KEY]: sanitized });
+  if (typeof chrome !== "undefined" && chrome?.storage?.local) {
+    await chrome.storage.local.set({ [SETTINGS_KEY]: sanitized });
+  }
+}
+
+export async function resetSettings(): Promise<Settings> {
+  const defaults = { ...DEFAULT_SETTINGS };
+  await saveSettings(defaults);
+  return defaults;
 }
 
 /**
