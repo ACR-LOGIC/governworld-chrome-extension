@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import type { Finding, FindingCategory, Rect } from "../shared/types.js";
+import type { CustomPattern } from "../shared/customPatterns.js";
 import { maskContext, maskValue } from "../content/detect.js";
 import { detect } from "../content/detect.js";
 import type { OcrPageResult, OcrToken } from "./ocr.js";
@@ -11,7 +12,6 @@ import type { OcrPageResult, OcrToken } from "./ocr.js";
  * value, only masked previews and rectangles are surfaced.
  */
 
-const LINE_GAP_PX = 12;
 const TOKEN_GAP_PX = 10;
 const CONTEXT_WINDOW = 40;
 
@@ -104,12 +104,13 @@ function maskedContext(fullText: string, start: number, end: number): string {
  */
 export function findingsFromOcrPages(
   pages: OcrPageResult[],
-  enabledCategories: FindingCategory[]
+  enabledCategories: FindingCategory[],
+  customPatterns?: CustomPattern[]
 ): Finding[] {
   const findings: Finding[] = [];
   for (const page of pages) {
     const spans = tokenSpans(page.tokens);
-    const matches = detect(page.fullText, enabledCategories);
+    const matches = detect(page.fullText, enabledCategories, customPatterns);
     for (let i = 0; i < matches.length; i++) {
       const match = matches[i];
       const covered = spans.filter((s) => s.start < match.end && s.end > match.start);

@@ -5,6 +5,7 @@ import { MAX_DOC_PAGES } from "../document-pipeline/contract.js";
 import type { RedactionVerification } from "../document-pipeline/verify.js";
 import type { DocKind, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
 import { loadSettings, meetsThreshold } from "../shared/settings.js";
+import { loadCustomPatterns } from "../shared/customPatterns.js";
 
 /**
  * Document session management for the service worker. File bytes are held in
@@ -136,6 +137,7 @@ export async function previewDocument(
   if (bytes.byteLength > MAX_DOC_BYTES) throw new Error("Document is too large to process on this device.");
 
   const settings = await loadSettings();
+  const customPatterns = await loadCustomPatterns();
   const docId = crypto.randomUUID();
   let rawPages: DocumentPage[];
   try {
@@ -152,6 +154,7 @@ export async function previewDocument(
       previewPages: [],
       categories: [],
       ocrLanguage: settings.ocrLanguage,
+      customPatterns,
     });
   } catch (error) {
     await deleteFile(fileKey).catch(() => undefined);

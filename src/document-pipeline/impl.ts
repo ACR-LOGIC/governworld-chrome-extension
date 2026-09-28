@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import type { DocumentPage, RedactedDocumentResult } from "./adapter.js";
 import type { DocKind, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
+import type { CustomPattern } from "../shared/customPatterns.js";
 import { renderPdfPages, type RenderedPage } from "./pdf.js";
 import { ocrCanvas, ocrPages } from "./ocr.js";
 import { loadImagePage, type ImagePage } from "./image.js";
@@ -41,6 +42,7 @@ export interface PreviewInput extends PipelineInput {
   enabledCategories: FindingCategory[];
   maxPages: number;
   ocrLanguage?: string;
+  customPatterns?: CustomPattern[];
 }
 
 export interface RedactOutput {
@@ -70,7 +72,7 @@ async function loadPages(
 export async function runDocumentPreview(input: PreviewInput): Promise<DocumentPage[]> {
   const { pages } = await loadPages(input, input.maxPages);
   const ocrResults = await ocrPages(pages.map((p) => p.canvas), input.ocrLanguage ?? "eng");
-  const findings = findingsFromOcrPages(ocrResults, input.enabledCategories);
+  const findings = findingsFromOcrPages(ocrResults, input.enabledCategories, input.customPatterns);
   const grouped = new Map<number, DocumentPage>();
   for (const page of pages) {
     grouped.set(page.index, {

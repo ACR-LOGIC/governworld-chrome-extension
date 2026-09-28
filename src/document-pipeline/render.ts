@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
-import { PDFDocument, rgb } from "pdf-lib";
+import { PDFDocument } from "pdf-lib";
 import type { Rect, RedactionOptions } from "../shared/types.js";
 
 /**
@@ -9,7 +9,6 @@ import type { Rect, RedactionOptions } from "../shared/types.js";
  */
 
 const DEFAULT_PADDING = 4;
-const BOX_COLOR = rgb(0, 0, 0);
 
 export function applyBoxes(
   canvas: HTMLCanvasElement,

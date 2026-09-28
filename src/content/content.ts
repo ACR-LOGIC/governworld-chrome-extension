@@ -9,6 +9,11 @@ import type { OverlayController } from "./overlay.js";
 import { initPasteGuard } from "./pasteGuard.js";
 import { validateMessage } from "../shared/messages.js";
 import type { Finding, FindingCategory, Rect, WorkerMessage } from "../shared/types.js";
+import { buildCanonicalDocument } from "./normalization/canonical.js";
+import { observeMutations, getAffectedNodeIds, type MutationObserverHandle, type MutationBatch } from "./normalization/mutation.js";
+import { formatCoverageSummary, setDynamicContentMonitored } from "./normalization/coverage.js";
+import { traverseIframes } from "./normalization/iframe.js";
+import { extractTableStructures, annotateSegmentsWithTableStructure } from "./normalization/table.js";
 
 /**
  * Content script (isolated world). Runs only after a deliberate user action
@@ -22,11 +27,12 @@ if (g.__gwRedactionContentLoaded !== true) {
   g.__gwRedactionContentLoaded = true;
   initPasteGuard();
 
-  const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
+  const DEFAULT_SESSION_TIMEOUT_MS = 15 * 60 * 1000;
+  let activeSessionTimeoutMs = DEFAULT_SESSION_TIMEOUT_MS;
 
   let sessionId: string | null = null;
   let nodeIds = new Map<string, Node>();
-  let segments: Awaited<ReturnType<typeof extractVisibleText>>["segments"] = [];
+  let segments: import("./normalization/types.js").CanonicalSegment[] = [];
   let segmentStarts: number[] = [];
   let segmentIndexById = new Map<string, number>();
   let combined = "";
@@ -35,6 +41,8 @@ if (g.__gwRedactionContentLoaded !== true) {
   let overlay: OverlayController | null = null;
   let sessionTimer: ReturnType<typeof setTimeout> | null = null;
   let placeholdersEnabled = false;
+  let currentSettings: ScanSettings | null = null;
+  let currentCustomPatterns: any[] = [];
 
   function clearSession() {
     sessionId = null;
@@ -57,9 +65,10 @@ if (g.__gwRedactionContentLoaded !== true) {
 
   function touchSession() {
     if (sessionTimer) clearTimeout(sessionTimer);
+    if (activeSessionTimeoutMs <= 0) return;
     sessionTimer = setTimeout(() => {
       if (sessionId) clearSession();
-    }, SESSION_TIMEOUT_MS);
+    }, activeSessionTimeoutMs);
   }
 
   function contextFor(start: number, end: number): string | undefined {
@@ -156,20 +165,53 @@ if (g.__gwRedactionContentLoaded !== true) {
       );
       return;
     }
+    const sessionTimeoutMs = settings.sessionTimeoutMs;
+    activeSessionTimeoutMs = sessionTimeoutMs;
+    currentSettings = settings;
 
-    const extracted = extractVisibleText(
-      document,
-      settings.maxVisibleChars,
-      settings.maxNodeChars,
-      nodeIds
-    );
-    placeholdersEnabled = settings.maskPlaceholders;
-    segments = extracted.segments;
+    const canonical = buildCanonicalDocument({
+      root: document,
+      sourceKind: "web-dom",
+      maxVisibleChars: settings.maxVisibleChars,
+      maxNodeChars: settings.maxNodeChars,
+      nodeIds,
+    });
+
+    const tables = extractTableStructures(document);
+    if (tables.length > 0) {
+      canonical.segments = annotateSegmentsWithTableStructure(canonical.segments, tables);
+      canonical.metadata.tableCount = tables.length;
+    }
+
+    const iframeResult = traverseIframes(document, {
+      maxVisibleChars: settings.maxVisibleChars,
+      maxNodeChars: settings.maxNodeChars,
+      nodeIds,
+    });
+    if (iframeResult.frameDocuments.length > 0) {
+      for (const frameDoc of iframeResult.frameDocuments) {
+        canonical.segments.push(...frameDoc.segments);
+        canonical.combined += "\n" + frameDoc.combined;
+        canonical.segmentStarts.push(...frameDoc.segmentStarts.map((s) => s + canonical.combined.length - frameDoc.combined.length));
+      }
+      canonical.boundaries.push(...iframeResult.boundaries);
+      canonical.coverage = {
+        ...canonical.coverage,
+        sameOriginFrames: "complete",
+        totalBoundaries: canonical.boundaries.length,
+        inaccessibleBoundaries: canonical.coverage.inaccessibleBoundaries + iframeResult.boundaries.filter((b) => b.status === "inaccessible").length,
+      };
+    }
+
+    canonical.coverage = setDynamicContentMonitored(canonical.coverage);
+
+    segments = canonical.segments;
+    combined = canonical.combined;
+    segmentStarts = canonical.segmentStarts;
     segmentIndexById.clear();
     for (let i = 0; i < segments.length; i++) segmentIndexById.set(segments[i].nodeId, i);
-    const built = buildScanText(segments);
-    combined = built.combined;
-    segmentStarts = built.segmentStarts;
+
+    placeholdersEnabled = settings.maskPlaceholders;
 
     let customPatterns: any[] = [];
     try {
@@ -180,6 +222,7 @@ if (g.__gwRedactionContentLoaded !== true) {
     } catch {
       // Local storage read failed, fall back to empty
     }
+    currentCustomPatterns = customPatterns;
 
     const rawMatches = detect(combined, settings.enabledCategories, customPatterns);
     findings = buildFindings(rawMatches, settings.enabledCategories, customPatterns);
@@ -231,7 +274,7 @@ if (g.__gwRedactionContentLoaded !== true) {
         requestId,
         sessionId: sessionId as string,
         findings: result,
-        stats: { visibleChars: combined.length, attrChars, truncated: extracted.truncated },
+        stats: { visibleChars: combined.length, attrChars, truncated: canonical.truncated },
       },
       requestId
     );
@@ -432,6 +475,120 @@ if (g.__gwRedactionContentLoaded !== true) {
     replaceState.apply(this, args as Parameters<typeof replaceState>);
     invalidateOnNavigation();
   };
+
+  let mutationObserver: MutationObserverHandle | null = null;
+  let pendingMutationBatch: MutationBatch | null = null;
+  let mutationDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function rescanAffectedRegions(batch: MutationBatch): void {
+    if (!sessionId || !currentSettings) return;
+
+    const affectedNodeIds = getAffectedNodeIds(batch, nodeIds);
+    if (affectedNodeIds.size === 0 && batch.addedNodes.length === 0) return;
+
+    const findingsToRemove = new Set<string>();
+    for (const finding of findings) {
+      if (finding.nodeId && affectedNodeIds.has(finding.nodeId)) {
+        findingsToRemove.add(finding.id);
+      }
+    }
+    if (findingsToRemove.size > 0) {
+      findings = findings.filter((f) => !findingsToRemove.has(f.id));
+    }
+
+    for (const nodeId of affectedNodeIds) {
+      const idx = segmentIndexById.get(nodeId);
+      if (idx !== undefined) {
+        segments.splice(idx, 1);
+        nodeIds.delete(nodeId);
+        segmentIndexById.delete(nodeId);
+      }
+    }
+
+    for (const node of batch.addedNodes) {
+      if (node.nodeType === Node.ELEMENT_NODE || node.nodeType === Node.TEXT_NODE) {
+        const newNodeIds = new Map<string, Node>();
+        const extracted = extractVisibleText(
+          node as Element,
+          currentSettings.maxVisibleChars,
+          currentSettings.maxNodeChars,
+          newNodeIds
+        );
+        if (extracted.segments.length > 0) {
+          const newBuilt = buildScanText(extracted.segments);
+          const offset = combined.length > 0 ? combined.length + 1 : 0;
+          for (let i = 0; i < extracted.segments.length; i++) {
+            const seg = extracted.segments[i];
+            const newSeg: import("./normalization/types.js").CanonicalSegment = {
+              nodeId: `rescan_${seg.nodeId}`,
+              startOffset: seg.startOffset,
+              endOffset: seg.endOffset,
+              text: seg.text,
+              combinedStartOffset: offset + newBuilt.segmentStarts[i],
+              combinedEndOffset: offset + newBuilt.segmentStarts[i] + seg.text.length,
+            };
+            segments.push(newSeg);
+            nodeIds.set(newSeg.nodeId, node as Node);
+            segmentIndexById.set(newSeg.nodeId, segments.length - 1);
+          }
+          combined += (combined.length > 0 ? "\n" : "") + newBuilt.combined;
+          segmentStarts.push(...newBuilt.segmentStarts.map((s) => s + offset));
+        }
+      }
+    }
+
+    if (segments.length > 0) {
+      const rawMatches = detect(combined, currentSettings.enabledCategories, currentCustomPatterns);
+      const newFindings = buildFindings(rawMatches, currentSettings.enabledCategories, currentCustomPatterns);
+      const existingIds = new Set(findings.map((f) => f.id));
+      for (const nf of newFindings) {
+        if (!existingIds.has(nf.id)) {
+          findings.push(nf);
+        }
+      }
+    }
+
+    if (findings.some((f) => f.selected)) {
+      recomputeOverlay(4);
+    }
+  }
+
+  function startMutationObserver(): void {
+    if (mutationObserver) return;
+    mutationObserver = observeMutations(document, (batch) => {
+      if (!sessionId) return;
+
+      const affectedCount = batch.addedNodes.length + batch.removedNodes.length + batch.mutatedTextNodes.length;
+      if (affectedCount === 0) return;
+
+      if (affectedCount > 50) {
+        clearSession();
+        return;
+      }
+
+      pendingMutationBatch = batch;
+
+      if (mutationDebounceTimer !== null) clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = setTimeout(() => {
+        mutationDebounceTimer = null;
+        if (pendingMutationBatch && sessionId) {
+          rescanAffectedRegions(pendingMutationBatch);
+          pendingMutationBatch = null;
+        }
+      }, 500);
+    });
+  }
+
+  function stopMutationObserver(): void {
+    mutationObserver?.disconnect();
+    mutationObserver = null;
+    if (mutationDebounceTimer !== null) {
+      clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = null;
+    }
+  }
+
+  startMutationObserver();
 }
 
 interface ScanSettings {
@@ -439,4 +596,5 @@ interface ScanSettings {
   maxVisibleChars: number;
   maxNodeChars: number;
   maskPlaceholders: boolean;
+  sessionTimeoutMs: number;
 }

@@ -26,7 +26,7 @@ describe("validateMessage", () => {
       requestId: "req-1",
       mode: "local",
       sessionId: "sess-1",
-      settings: { enabledCategories: ["email"], maxVisibleChars: 100, maxNodeChars: 50, maskPlaceholders: true },
+      settings: { enabledCategories: ["email"], maxVisibleChars: 100, maxNodeChars: 50, maskPlaceholders: true, sessionTimeoutMs: 900000 },
     });
     expect(result.ok).toBe(true);
   });

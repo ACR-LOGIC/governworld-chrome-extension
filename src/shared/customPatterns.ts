@@ -430,9 +430,13 @@ export interface CommunityRule {
 
 export async function fetchCommunityRules(): Promise<CommunityRule[]> {
   try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
     const res = await fetch("https://community.governworld.acrlogic.com/v1/community/rules", {
       headers: { Accept: "application/json" },
+      signal: controller.signal,
     });
+    clearTimeout(timer);
     if (!res.ok) return [];
     const json = await res.json();
     return Array.isArray(json.rules) ? json.rules : [];

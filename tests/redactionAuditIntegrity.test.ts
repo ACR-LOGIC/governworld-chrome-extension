@@ -102,7 +102,8 @@ const chromeMock = {
     query: async () => [],
     get: async () => ({ id: 42, url: 'https://example.com' }),
     sendMessage: async () => undefined,
-    onRemoved: { addListener: () => undefined }
+    onRemoved: { addListener: () => undefined },
+    onUpdated: { addListener: () => undefined }
   },
   scripting: { executeScript: async () => undefined },
   commands: { onCommand: { addListener: () => undefined } },

@@ -52,6 +52,7 @@ port.onMessage.addListener((raw: unknown) => {
           enabledCategories: raw.enabledCategories,
           maxPages: raw.maxPages,
           ocrLanguage: raw.ocrLanguage,
+          customPatterns: raw.customPatterns,
         });
         port.postMessage({ channel: OFFSCREEN_CHANNEL, op: "preview", jobId, ok: true, pages });
         return;

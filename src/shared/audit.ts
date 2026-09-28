@@ -20,6 +20,7 @@ export type AuditAction =
   | "masks_removed"
   | "doc_previewed"
   | "doc_redacted"
+  | "doc_cleared"
   | "session_cleared"
   | "preset_applied"
   | "preset_overridden"
@@ -60,6 +61,7 @@ export function isAuditEvent(value: unknown): value is AuditEvent {
     "masks_removed",
     "doc_previewed",
     "doc_redacted",
+    "doc_cleared",
     "session_cleared",
     "preset_applied",
     "preset_overridden",
@@ -93,7 +95,7 @@ export function isAuditEvent(value: unknown): value is AuditEvent {
 /** Canonical serialization: stable key order so signatures are reproducible. */
 export function canonicalEventLine(event: AuditEvent): string {
   const ordered: Record<string, unknown> = {};
-  for (const key of ["ts", "action", "host", "counts", "docHash", "pages", "presetId", "enabledCategories", "outcome"] as const) {
+  for (const key of ["ts", "action", "host", "counts", "docHash", "pages", "presetId", "gatewayOrigin", "enabledCategories", "outcome"] as const) {
     if (event[key] !== undefined) ordered[key] = event[key];
   }
   return JSON.stringify(ordered);
@@ -119,9 +121,14 @@ export async function loadAuditLog(): Promise<AuditEvent[]> {
 }
 
 export async function recordAudit(event: AuditEvent): Promise<void> {
-  const events = await loadAuditLog();
-  events.push(event);
-  await chrome.storage.local.set({ [AUDIT_KEY]: trimEvents(events) });
+  try {
+    const events = await loadAuditLog();
+    events.push(event);
+    await chrome.storage.local.set({ [AUDIT_KEY]: trimEvents(events) });
+  } catch {
+    // Audit storage failure must never break the operation being audited.
+    // The fail-closed invariant is best-effort when storage is unavailable.
+  }
 }
 
 export async function clearAuditLog(): Promise<void> {

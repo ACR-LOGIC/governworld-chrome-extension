@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import type { DocKind, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
+import type { CustomPattern } from "../shared/customPatterns.js";
 import type { DocumentPage } from "./adapter.js";
 import type { RedactionVerification } from "./verify.js";
 
@@ -51,6 +52,7 @@ export interface OffscreenPreviewRequest {
   enabledCategories: FindingCategory[];
   maxPages: number;
   ocrLanguage?: string;
+  customPatterns?: CustomPattern[];
 }
 
 export interface OffscreenRedactRequest {

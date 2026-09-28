@@ -4,7 +4,7 @@
 
 ```bash
 npm run typecheck   # tsc --noEmit
-npm test            # vitest run — 36 files / 601 tests
+npm test            # vitest run — 42 files / 695 tests
 npm run build       # esbuild → dist/
 npx vitest run tests/dist-manifest.test.ts tests/offline-assets.test.ts
 ```
@@ -37,7 +37,11 @@ npx vitest run tests/dist-manifest.test.ts tests/offline-assets.test.ts
 
 - **Local-first / zero egress:** no raw page text, document bytes, or unmasked values may be transmitted. Never add `host_permissions` (`*://*` or domain wildcards).
 - **Fail-closed audit:** any redaction/policy/document operation must write an ECDSA-signed audit record (`src/shared/audit.ts`).
-- **UI tab contract:** popup (`src/popup/index.html`) and sidepanel (`src/sidepanel/sidepanel.html`) must keep the five tabs `scanner`, `documents`, `wizard`, `settings`, `instructions` with matching `data-tab` / `id="tab-..."` attributes and all required guide sections. Enforced by `tests/instructions-and-guidance.test.ts`.
+- **UI tab contract:** popup (`src/popup/index.html`) and sidepanel (`src/sidepanel/sidepanel.html`) must keep the four tabs `protection`, `logic`, `review`, `settings` with matching `data-tab` / `id="tab-..."` attributes. Settings is a sub-navigation of eight pages (`profile`, `protection`, `detection`, `appearance`, `notifications`, `privacy`, `advanced`, `about`) using `data-settings-page`; the guide cards live on the `about` page, so any `[data-guide]` help link must call `switchSettingsPage("about")` before scrolling. Enforced by `tests/instructions-and-guidance.test.ts`.
+- **Popup/sidepanel ID parity:** every `id` in the popup must exist in the sidepanel (except `gwshield-*` and `open-side-panel-btn`). `src/sidepanel/sidepanel.html` is generated from `src/popup/index.html` by replacing `popup.css` → `sidepanel.css` and `popup.js` → `sidepanel.js`; `src/sidepanel/sidepanel.css` is a byte-for-byte copy of `src/popup/popup.css`. Re-run both after any popup change. Enforced by `tests/frontend-accessibility-and-controls.test.ts` and `tests/popup-dom-contract.test.ts`.
+- **No orphaned DOM references:** every ID `popup.ts` queries must exist in both markups (`#sr-announcements` is the sole exception — it is created on demand), IDs must be unique per page, and every class in the markup (plus the ones `popup.ts` creates at runtime: `finding`, `finding__check`, `finding__severity`, `doc-thumb-wrapper`, `doc-thumb-overlay`, `doc-thumb-canvas`) must have a CSS rule. A handler wired to a deleted element passes the build and the unit tests while the feature is unreachable. Enforced by `tests/popup-dom-contract.test.ts`.
+- **`[hidden]` must stay authoritative:** the UA rule `[hidden] { display: none }` is overridden by any class-level `display`, so `popup.css` carries an explicit `[hidden] { display: none !important; }`. Do not remove it — collapsed panels (results, document studio, progress, status, settings sub-pages) would otherwise render permanently visible.
+- **i18n dictionary routing:** `t()` reads only `UI_TRANSLATIONS`; `getCategoryLabel()` reads only `CATEGORY_TRANSLATIONS`; `getPresetLabel()` reads only `PRESET_TRANSLATIONS`. Any key used in a `data-i18n` attribute must be added to `UI_TRANSLATIONS` in all 7 languages. Enforced by `tests/i18n-and-accessibility.test.ts`.
 - **Synthetic test data only:** RFC 2606 `.test` domains, never-issued SSN (219-09-9999), documented test card 4111111111111111. Never use real PII in fixtures or tests.
 - **CSP:** `script-src 'self' 'wasm-unsafe-eval'` — no inline scripts, no remote code, no `eval` outside WASM.
 

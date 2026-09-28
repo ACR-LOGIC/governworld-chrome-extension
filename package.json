@@ -32,6 +32,7 @@
     "@types/chrome": "^0.0.280",
     "@types/node": "^26.2.0",
     "esbuild": "^0.25.0",
+    "happy-dom": "^20.14.5",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }

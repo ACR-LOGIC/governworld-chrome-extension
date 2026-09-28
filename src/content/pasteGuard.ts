@@ -664,20 +664,25 @@ export function initPasteGuard(doc: Document = document): () => void {
     }
 
     isHandlingEvent = true;
-    showPasteGuardDialog(doc, target, matches, {
-      onSanitize: () => {
-        isHandlingEvent = false;
-        const sanitized = sanitizePastedText(text, matches);
-        insertTextIntoElement(target, sanitized);
-      },
-      onRaw: () => {
-        isHandlingEvent = false;
-        insertTextIntoElement(target, text);
-      },
-      onCancel: () => {
-        isHandlingEvent = false;
-      },
-    });
+    try {
+      showPasteGuardDialog(doc, target, matches, {
+        onSanitize: () => {
+          isHandlingEvent = false;
+          const sanitized = sanitizePastedText(text, matches);
+          insertTextIntoElement(target, sanitized);
+        },
+        onRaw: () => {
+          isHandlingEvent = false;
+          insertTextIntoElement(target, text);
+        },
+        onCancel: () => {
+          isHandlingEvent = false;
+        },
+      });
+    } catch {
+      isHandlingEvent = false;
+      insertTextIntoElement(target, text);
+    }
   };
 
   const onPaste = (e: ClipboardEvent) => {

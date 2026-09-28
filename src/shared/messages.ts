@@ -4,7 +4,8 @@ import {
   MAX_MESSAGE_BYTES,
   MESSAGE_TYPES,
 } from "./types.js";
-import type { DocKind, ExtensionMessage, Finding, ScanMode, DocPageMeta, RedactionOptions, RedactionStyle } from "./types.js";
+import type { DocKind, ExtensionMessage, Finding, ScanMode, DocPageMeta, RedactionOptions, RedactionStyle, DocRedactionStage } from "./types.js";
+import type { RedactionVerifyMethod } from "../document-pipeline/verify.js";
 import { isAllowedGatewayOrigin, isCategory } from "./settings.js";
 import { parseCustomPattern } from "./customPatterns.js";
 import type { CustomPattern } from "./customPatterns.js";
@@ -233,14 +234,16 @@ function withinSizeLimit(raw: Record<string, unknown>): boolean {
   }
 }
 
-function isScanSettings(value: unknown): value is { enabledCategories: FindingCategory[]; maxVisibleChars: number; maxNodeChars: number; maskPlaceholders: boolean } {
+function isScanSettings(value: unknown): value is { enabledCategories: FindingCategory[]; maxVisibleChars: number; maxNodeChars: number; maskPlaceholders: boolean; sessionTimeoutMs: number } {
   if (!isRecord(value)) return false;
   return (
     Array.isArray(value.enabledCategories) &&
     value.enabledCategories.every(isCategory) &&
     typeof value.maxVisibleChars === "number" &&
     typeof value.maxNodeChars === "number" &&
-    typeof value.maskPlaceholders === "boolean"
+    typeof value.maskPlaceholders === "boolean" &&
+    typeof value.sessionTimeoutMs === "number" &&
+    value.sessionTimeoutMs >= 0
   );
 }
 
@@ -384,6 +387,10 @@ export function validateMessage(raw: unknown): ValidationResult {
     case "POPUP_DOC_DELIVERY_REPORT": {
       if (typeof raw.delivered !== "boolean") return { ok: false, error: "Invalid delivered" };
       return { ok: true, message: { type, requestId, delivered: raw.delivered } };
+    }
+    case "POPUP_DOC_CANCEL": {
+      if (typeof raw.docId !== "string" || !raw.docId) return { ok: false, error: "Invalid docId" };
+      return { ok: true, message: { type, requestId, docId: raw.docId } };
     }
     case "SCAN_PAGE": {
       if (!isMode(raw.mode)) return { ok: false, error: "Invalid mode" };
@@ -631,6 +638,30 @@ export function validateMessage(raw: unknown): ValidationResult {
       if (typeof raw.patternId !== "string" || !raw.patternId) return { ok: false, error: "Invalid patternId" };
       return { ok: true, message: { type, requestId, patternId: raw.patternId } };
     }
+    case "POPUP_OAUTH_CONNECT": {
+      return { ok: true, message: { type, requestId } };
+    }
+    case "POPUP_OAUTH_CALLBACK": {
+      if (typeof raw.code !== "string" || !raw.code) return { ok: false, error: "Invalid code" };
+      if (typeof raw.state !== "string" || !raw.state) return { ok: false, error: "Invalid state" };
+      return { ok: true, message: { type, requestId, code: raw.code, state: raw.state } };
+    }
+    case "POPUP_OAUTH_STATUS": {
+      if (typeof raw.connected !== "boolean") return { ok: false, error: "Invalid connected" };
+      return {
+        ok: true,
+        message: {
+          type,
+          requestId,
+          connected: raw.connected,
+          message: typeof raw.message === "string" ? raw.message : undefined,
+          tenantId: typeof raw.tenantId === "string" ? raw.tenantId : undefined,
+          tenantName: typeof raw.tenantName === "string" ? raw.tenantName : undefined,
+          apiUrl: typeof raw.apiUrl === "string" ? raw.apiUrl : undefined,
+          capabilities: Array.isArray(raw.capabilities) ? raw.capabilities : undefined,
+        },
+      };
+    }
     case "POPUP_API_STATUS_STATE": {
       if (typeof raw.connectionState !== "string") return { ok: false, error: "Invalid connectionState" };
       if (typeof raw.apiUrl !== "string") return { ok: false, error: "Invalid apiUrl" };
@@ -676,6 +707,25 @@ export function validateMessage(raw: unknown): ValidationResult {
           success: raw.success,
           submissionId: typeof raw.submissionId === "string" ? raw.submissionId : undefined,
           error: typeof raw.error === "string" ? raw.error : undefined,
+        },
+      };
+    }
+    case "POPUP_DOC_STATUS": {
+      const stage = raw.stage as DocRedactionStage;
+      if (stage !== "detected" && stage !== "redacted" && stage !== "verified") return { ok: false, error: "Invalid stage" };
+      const method = raw.method as RedactionVerifyMethod | undefined;
+      if (method !== undefined && method !== "pixel" && method !== "page-pixels") return { ok: false, error: "Invalid method" };
+      return {
+        ok: true,
+        message: {
+          type,
+          requestId,
+          stage,
+          paintedRegions: typeof raw.paintedRegions === "number" ? raw.paintedRegions : undefined,
+          verifiedRegions: typeof raw.verifiedRegions === "number" ? raw.verifiedRegions : undefined,
+          checkedRegions: typeof raw.checkedRegions === "number" ? raw.checkedRegions : undefined,
+          method,
+          problem: typeof raw.problem === "string" ? raw.problem : undefined,
         },
       };
     }
