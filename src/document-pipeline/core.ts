@@ -129,7 +129,11 @@ export function findingsFromOcrPages(
         endOffset: match.end,
         rects,
         contextPreview: maskedContext(page.fullText, match.start, match.end),
-        selected: false,
+        // Detected document values are selected by default so the studio opens
+        // with its redaction boxes already drawn and "Redact selected" enabled,
+        // matching the page-scan path. Attribute findings are the opposite case
+        // and stay unselected, since they are never maskable.
+        selected: true,
       });
     }
   }

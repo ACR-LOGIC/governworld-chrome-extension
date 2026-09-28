@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import { validateMessage } from "../shared/messages.js";
+import { previewObjectUrl } from "../shared/docStore.js";
 import {
   ALL_CATEGORIES,
   loadSettings,
@@ -766,11 +767,59 @@ function renderDocFindings(): void {
   updateDocRedactBtn();
 }
 
+/**
+ * Open a document session as soon as a preview is requested.
+ *
+ * The POPUP_DOC_STATE handler drops the first reply unless `lastDoc` already
+ * describes the same document, and `lastDoc` was otherwise only ever assigned
+ * inside `renderDoc` — which that same handler is the only caller of. Without
+ * this, the guard could never be satisfied, so selecting a document left the
+ * popup waiting on "Scanning document on this device…" with the Document Studio
+ * never appearing. The worker assigns the real `docId` in its reply, which the
+ * handler then copies in; the placeholder is matched on `fileKey`.
+ */
+function beginDocSession(seed: {
+  fileKey: string;
+  name: string;
+  mimeType: string;
+  kind: DocKind;
+}): void {
+  lastDoc = {
+    docId: "",
+    fileKey: seed.fileKey,
+    name: seed.name,
+    mimeType: seed.mimeType,
+    kind: seed.kind,
+    pages: [],
+  };
+  selectedDocFindingIds.clear();
+  overlayRedrawers.length = 0;
+}
+
+/**
+ * Point a page thumbnail at its persisted preview bitmap.
+ *
+ * The rendered page image is stored in the shared document store and referenced
+ * by key, because a base64 page preview is far larger than a runtime message may
+ * be. A missing preview degrades to alt text rather than breaking the studio.
+ */
+async function loadPreviewInto(img: HTMLImageElement, page: DocPageMeta): Promise<void> {
+  try {
+    const url = await previewObjectUrl(page.previewKey);
+    if (url) {
+      img.src = url;
+      return;
+    }
+  } catch {
+    // Fall through to the degraded state below.
+  }
+  img.alt = `Page ${page.index + 1} (preview unavailable)`;
+}
+
 function renderDoc(state: DocUiState): void {
   lastDoc = state;
   selectedDocFindingIds.clear();
   overlayRedrawers.length = 0;
-
   for (const page of state.pages) {
     for (const finding of page.findings) {
       if (finding.selected !== false) {
@@ -797,9 +846,11 @@ function renderDoc(state: DocUiState): void {
       wrapper.setAttribute("title", "Click a finding to toggle, or drag to draw a custom redaction box");
 
       const img = document.createElement("img");
-      img.src = page.previewDataUrl;
       img.alt = `Page ${page.index + 1}`;
       img.loading = "lazy";
+      // The preview image is not carried in the message; it is persisted in the
+      // shared document store and referenced by key, so it resolves asynchronously.
+      void loadPreviewInto(img, page);
 
       const canvas = document.createElement("canvas");
       canvas.className = "doc-thumb-canvas";
@@ -1228,6 +1279,7 @@ export async function initPopup(): Promise<void> {
       docFile.value = "";
       resetDocStages();
       setDocStatus("Scanning document on this device…", false);
+      beginDocSession({ fileKey, name: file.name, mimeType, kind });
       void sendMessage({ type: "POPUP_DOC_PREVIEW", requestId: requestId(), fileKey, name: file.name, mimeType, kind });
     } catch (error) {
       await deleteFile(fileKey).catch(() => undefined);
@@ -1401,6 +1453,7 @@ export async function initPopup(): Promise<void> {
         await storeFile(fileKey, bytes);
         setDocStatus("Scanning document on this device…", false);
         showDocProgress();
+        beginDocSession({ fileKey, name: file.name, mimeType, kind });
         void sendMessage({ type: "POPUP_DOC_PREVIEW", requestId: requestId(), fileKey, name: file.name, mimeType, kind });
       } catch (error) {
         await deleteFile(fileKey).catch(() => undefined);
@@ -2180,7 +2233,11 @@ export async function initPopup(): Promise<void> {
     }
     if (message.type === "POPUP_DOC_STATE") {
       hideDocProgress();
-      if (!lastDoc || message.docId !== lastDoc.docId) return;
+      // Match on fileKey so the first reply can land on the placeholder session
+      // created by beginDocSession(), which has no docId yet. Fall back to docId
+      // for a session the worker has already identified.
+      if (!lastDoc) return;
+      if (lastDoc.docId ? message.docId !== lastDoc.docId : message.fileKey !== lastDoc.fileKey) return;
       const doc = lastDoc;
       doc.docId = message.docId;
       doc.name = message.name;

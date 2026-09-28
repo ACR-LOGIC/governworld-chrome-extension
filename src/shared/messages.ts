@@ -7,6 +7,7 @@ import {
 import type { DocKind, ExtensionMessage, Finding, ScanMode, DocPageMeta, RedactionOptions, RedactionStyle, DocRedactionStage } from "./types.js";
 import type { RedactionVerifyMethod } from "../document-pipeline/verify.js";
 import { isAllowedGatewayOrigin, isCategory } from "./settings.js";
+import { isPreviewKey } from "./docStore.js";
 import { parseCustomPattern } from "./customPatterns.js";
 import type { CustomPattern } from "./customPatterns.js";
 import type { FindingCategory, PopupState } from "./types.js";
@@ -115,8 +116,7 @@ function isDocPageMeta(value: unknown): value is DocPageMeta {
     typeof value.index === "number" &&
     typeof value.widthPx === "number" &&
     typeof value.heightPx === "number" &&
-    typeof value.previewDataUrl === "string" &&
-    value.previewDataUrl.startsWith("data:image/") &&
+    isPreviewKey(value.previewKey) &&
     Array.isArray(value.findings) &&
     value.findings.every(isFinding)
   );

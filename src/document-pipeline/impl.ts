@@ -9,6 +9,7 @@ import { loadDocxPages } from "./docx.js";
 import { findingsFromOcrPages } from "./core.js";
 import { applyBoxes, canvasToPngBytes, pagesToPdf } from "./render.js";
 import { pagePixelVerification, verifyCanvasRegions, verifyEncodedPng, type RedactionVerification, type RegionCoverage } from "./verify.js";
+import { previewKey as previewStoreKey, putDocBytes } from "../shared/docStore.js";
 
 /**
  * Document pipeline implementation. Runs inside the offscreen document where
@@ -27,7 +28,7 @@ const THUMB_MAX_WIDTH = 320;
 const THUMB_MAX_HEIGHT = 480;
 const DEFAULT_PADDING = 4;
 
-async function canvasToThumbnail(canvas: HTMLCanvasElement): Promise<string> {
+async function canvasToThumbnailBytes(canvas: HTMLCanvasElement): Promise<ArrayBuffer> {
   const scale = Math.min(1, THUMB_MAX_WIDTH / canvas.width, THUMB_MAX_HEIGHT / canvas.height);
   const thumb = document.createElement("canvas");
   thumb.width = Math.max(1, Math.floor(canvas.width * scale));
@@ -35,7 +36,9 @@ async function canvasToThumbnail(canvas: HTMLCanvasElement): Promise<string> {
   const ctx = thumb.getContext("2d");
   if (!ctx) throw new Error("Canvas rendering is unavailable.");
   ctx.drawImage(canvas, 0, 0, thumb.width, thumb.height);
-  return thumb.toDataURL("image/png");
+  const blob = await new Promise<Blob | null>((resolve) => thumb.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("Could not encode the page preview.");
+  return blob.arrayBuffer();
 }
 
 export interface PreviewInput extends PipelineInput {
@@ -43,6 +46,12 @@ export interface PreviewInput extends PipelineInput {
   maxPages: number;
   ocrLanguage?: string;
   customPatterns?: CustomPattern[];
+  /**
+   * Identifier the caller uses to derive preview store keys. The preview bitmap
+   * is written to the shared document store rather than returned inline, because
+   * a base64 page image is far larger than a runtime message may be.
+   */
+  previewKeyPrefix: string;
 }
 
 export interface RedactOutput {
@@ -75,11 +84,15 @@ export async function runDocumentPreview(input: PreviewInput): Promise<DocumentP
   const findings = findingsFromOcrPages(ocrResults, input.enabledCategories, input.customPatterns);
   const grouped = new Map<number, DocumentPage>();
   for (const page of pages) {
+    // Persist the rendered bitmap and hand back only its key. The image cannot
+    // ride along in the reply, which crosses a runtime-message boundary.
+    const previewKey = previewStoreKey(input.previewKeyPrefix, page.index);
+    await putDocBytes(previewKey, await canvasToThumbnailBytes(page.canvas));
     grouped.set(page.index, {
       index: page.index,
       widthPx: page.widthPx,
       heightPx: page.heightPx,
-      previewDataUrl: await canvasToThumbnail(page.canvas),
+      previewKey,
       findings: [],
     });
   }

@@ -53,6 +53,13 @@ export interface OffscreenPreviewRequest {
   maxPages: number;
   ocrLanguage?: string;
   customPatterns?: CustomPattern[];
+  /**
+   * Identifier used to derive the page-preview store keys returned in
+   * `pages[].previewKey`. Previews are written to the shared document store
+   * rather than inlined, because a base64 page image exceeds the runtime message
+   * size limit.
+   */
+  previewKeyPrefix: string;
 }
 
 export interface OffscreenRedactRequest {

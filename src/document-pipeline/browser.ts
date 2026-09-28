@@ -134,9 +134,10 @@ export class BrowserDocumentPipeline implements DocumentPipeline {
       name: input.name,
       mimeType: input.mimeType,
       enabledCategories: input.enabledCategories,
-      maxPages: input.maxPages,
-      ocrLanguage: input.ocrLanguage,
-      customPatterns: input.customPatterns,
+    maxPages: input.maxPages,
+    ocrLanguage: input.ocrLanguage,
+    customPatterns: input.customPatterns,
+    previewKeyPrefix: input.previewKeyPrefix,
     });
     assertOk(response, "preview");
     if (response.op !== "preview") throw new Error("Unexpected offscreen response.");
