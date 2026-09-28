@@ -26,6 +26,13 @@ export interface DocumentInput {
   enabledCategories: FindingCategory[];
   /** Hard cap on pages processed per document. */
   maxPages: number;
+  /**
+   * Identifier used to derive the page-preview store keys. The offscreen
+   * document persists the rendered page bitmaps under these keys instead of
+   * returning them inline, because a base64 page image exceeds the runtime
+   * message size limit.
+   */
+  previewKeyPrefix: string;
   /** Padding (px) added around applied redaction boxes. */
   padding: number;
   /** Preview pages already produced for this document (used for the redact summary). */
@@ -45,8 +52,12 @@ export interface DocumentPage {
   widthPx: number;
   heightPx: number;
   findings: Finding[];
-  /** Rendered page bitmap for the review UI. */
-  previewDataUrl: string;
+  /**
+   * Key of the rendered page bitmap in the shared document store, not the image
+   * itself. Page previews are hundreds of kilobytes of base64 and cannot travel
+   * inside a runtime message, which is bounded by MAX_MESSAGE_BYTES.
+   */
+  previewKey: string;
 }
 
 export interface RedactedDocumentResult {

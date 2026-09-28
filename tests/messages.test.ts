@@ -245,7 +245,7 @@ describe("validateMessage", () => {
           index: 0,
           widthPx: 800,
           heightPx: 1000,
-          previewDataUrl: "data:image/png;base64,AAAA",
+          previewKey: "e2e-photo::preview::0",
           findings: [sampleFinding()],
         },
       ],
@@ -262,7 +262,7 @@ describe("validateMessage", () => {
       fileKey: "fkey-1",
       mimeType: "application/pdf",
       kind: "pdf",
-      pages: [{ index: 0, widthPx: 800, heightPx: 1000, previewDataUrl: "http://evil.example/pg.png", findings: [] }],
+      pages: [{ index: 0, widthPx: 800, heightPx: 1000, previewKey: "../../etc/passwd", findings: [] }],
     });
     expect(result.ok).toBe(false);
   });
