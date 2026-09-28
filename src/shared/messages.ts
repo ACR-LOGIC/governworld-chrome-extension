@@ -609,6 +609,76 @@ export function validateMessage(raw: unknown): ValidationResult {
         },
       };
     }
+    case "POPUP_API_CONNECT": {
+      if (raw.apiUrl !== undefined && typeof raw.apiUrl !== "string") return { ok: false, error: "Invalid apiUrl" };
+      if (raw.token !== undefined && typeof raw.token !== "string") return { ok: false, error: "Invalid token" };
+      return {
+        ok: true,
+        message: {
+          type,
+          requestId,
+          apiUrl: raw.apiUrl as string | undefined,
+          token: raw.token as string | undefined,
+        },
+      };
+    }
+    case "POPUP_API_DISCONNECT":
+    case "POPUP_API_GET_STATUS":
+    case "POPUP_API_SYNC_POLICY": {
+      return { ok: true, message: { type, requestId } };
+    }
+    case "POPUP_API_SUBMIT_LOGIC": {
+      if (typeof raw.patternId !== "string" || !raw.patternId) return { ok: false, error: "Invalid patternId" };
+      return { ok: true, message: { type, requestId, patternId: raw.patternId } };
+    }
+    case "POPUP_API_STATUS_STATE": {
+      if (typeof raw.connectionState !== "string") return { ok: false, error: "Invalid connectionState" };
+      if (typeof raw.apiUrl !== "string") return { ok: false, error: "Invalid apiUrl" };
+      if (!Array.isArray(raw.capabilities) || !raw.capabilities.every((c) => typeof c === "string")) {
+        return { ok: false, error: "Invalid capabilities" };
+      }
+      return {
+        ok: true,
+        message: {
+          type,
+          requestId,
+          connectionState: raw.connectionState,
+          tenantId: typeof raw.tenantId === "string" ? raw.tenantId : undefined,
+          tenantName: typeof raw.tenantName === "string" ? raw.tenantName : undefined,
+          apiUrl: raw.apiUrl,
+          capabilities: raw.capabilities as string[],
+          error: typeof raw.error === "string" ? raw.error : undefined,
+        },
+      };
+    }
+    case "POPUP_API_POLICY_STATE": {
+      if (typeof raw.success !== "boolean") return { ok: false, error: "Invalid success" };
+      return {
+        ok: true,
+        message: {
+          type,
+          requestId,
+          success: raw.success,
+          policyId: typeof raw.policyId === "string" ? raw.policyId : undefined,
+          policyVersion: typeof raw.policyVersion === "string" ? raw.policyVersion : undefined,
+          rulesCount: typeof raw.rulesCount === "number" ? raw.rulesCount : undefined,
+          error: typeof raw.error === "string" ? raw.error : undefined,
+        },
+      };
+    }
+    case "POPUP_API_SUBMIT_RESULT": {
+      if (typeof raw.success !== "boolean") return { ok: false, error: "Invalid success" };
+      return {
+        ok: true,
+        message: {
+          type,
+          requestId,
+          success: raw.success,
+          submissionId: typeof raw.submissionId === "string" ? raw.submissionId : undefined,
+          error: typeof raw.error === "string" ? raw.error : undefined,
+        },
+      };
+    }
     default:
       return { ok: false, error: "Unhandled message type" };
   }

@@ -135,7 +135,12 @@ export type PopupMessage =
   | { type: "POPUP_COMMUNITY_ACCOUNT_LINK_FREE"; requestId: string }
   | { type: "POPUP_COMMUNITY_ACCOUNT_UNLINK"; requestId: string }
   | { type: "POPUP_COMMUNITY_CONTRIBUTE"; requestId: string; patternId: string }
-  | { type: "POPUP_COMMUNITY_FETCH_COMMUNITY_RULES"; requestId: string };
+  | { type: "POPUP_COMMUNITY_FETCH_COMMUNITY_RULES"; requestId: string }
+  | { type: "POPUP_API_CONNECT"; requestId: string; apiUrl?: string; token?: string }
+  | { type: "POPUP_API_DISCONNECT"; requestId: string }
+  | { type: "POPUP_API_GET_STATUS"; requestId: string }
+  | { type: "POPUP_API_SYNC_POLICY"; requestId: string }
+  | { type: "POPUP_API_SUBMIT_LOGIC"; requestId: string; patternId: string };
 
 export interface ScanSettingsMessage {
   enabledCategories: FindingCategory[];
@@ -258,7 +263,33 @@ export type PopupFromWorker =
   | { type: "POPUP_CUSTOM_PATTERNS_STATE"; requestId: string; patterns: CustomPattern[] }
   | { type: "POPUP_COMMUNITY_ACCOUNT_DETAILS_STATE"; requestId: string; account: CommunityAccount | null }
   | { type: "POPUP_COMMUNITY_CONTRIBUTE_RESULT"; requestId: string; success: boolean; ruleId?: string; error?: string }
-  | { type: "POPUP_COMMUNITY_COMMUNITY_RULES_STATE"; requestId: string; rules: CommunityRule[]; error?: string };
+  | { type: "POPUP_COMMUNITY_COMMUNITY_RULES_STATE"; requestId: string; rules: CommunityRule[]; error?: string }
+  | {
+      type: "POPUP_API_STATUS_STATE";
+      requestId: string;
+      connectionState: string;
+      tenantId?: string;
+      tenantName?: string;
+      apiUrl: string;
+      capabilities: string[];
+      error?: string;
+    }
+  | {
+      type: "POPUP_API_POLICY_STATE";
+      requestId: string;
+      success: boolean;
+      policyId?: string;
+      policyVersion?: string;
+      rulesCount?: number;
+      error?: string;
+    }
+  | {
+      type: "POPUP_API_SUBMIT_RESULT";
+      requestId: string;
+      success: boolean;
+      submissionId?: string;
+      error?: string;
+    };
 
 export const MESSAGE_TYPES = new Set<string>([
   "POPUP_SCAN",
@@ -317,6 +348,14 @@ export const MESSAGE_TYPES = new Set<string>([
   "POPUP_COMMUNITY_ACCOUNT_DETAILS_STATE",
   "POPUP_COMMUNITY_CONTRIBUTE_RESULT",
   "POPUP_COMMUNITY_COMMUNITY_RULES_STATE",
+  "POPUP_API_CONNECT",
+  "POPUP_API_DISCONNECT",
+  "POPUP_API_GET_STATUS",
+  "POPUP_API_SYNC_POLICY",
+  "POPUP_API_SUBMIT_LOGIC",
+  "POPUP_API_STATUS_STATE",
+  "POPUP_API_POLICY_STATE",
+  "POPUP_API_SUBMIT_RESULT",
 ]);
 
 export const MAX_MESSAGE_BYTES = 64 * 1024;

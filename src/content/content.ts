@@ -25,7 +25,7 @@ if (g.__gwRedactionContentLoaded !== true) {
   const SESSION_TIMEOUT_MS = 15 * 60 * 1000;
 
   let sessionId: string | null = null;
-  let nodeIds = new Map<string, Text>();
+  let nodeIds = new Map<string, Node>();
   let segments: Awaited<ReturnType<typeof extractVisibleText>>["segments"] = [];
   let segmentStarts: number[] = [];
   let segmentIndexById = new Map<string, number>();
@@ -77,11 +77,18 @@ if (g.__gwRedactionContentLoaded !== true) {
       const node = nodeIds.get(range.nodeId);
       if (!node || !node.isConnected) continue;
       try {
-        const domRange = document.createRange();
-        domRange.setStart(node, range.startOffset);
-        domRange.setEnd(node, range.endOffset);
-        for (const r of domRange.getClientRects()) {
-          rects.push({ x: r.x, y: r.y, width: r.width, height: r.height });
+        if (node.nodeType === Node.TEXT_NODE) {
+          const domRange = document.createRange();
+          domRange.setStart(node, range.startOffset);
+          domRange.setEnd(node, range.endOffset);
+          for (const r of domRange.getClientRects()) {
+            rects.push({ x: r.x, y: r.y, width: r.width, height: r.height });
+          }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          const r = (node as HTMLElement).getBoundingClientRect();
+          if (r.width > 0 && r.height > 0) {
+            rects.push({ x: r.x, y: r.y, width: r.width, height: r.height });
+          }
         }
       } catch {
         // Node partially detached between scan and render; skip safely.
@@ -237,6 +244,11 @@ if (g.__gwRedactionContentLoaded !== true) {
   }
 
   chrome.runtime.onMessage.addListener((raw: unknown, _sender, sendResponse) => {
+    if (typeof raw === "object" && raw !== null && (raw as { type?: unknown }).type === "PING") {
+      sendResponse({ ok: true, status: "ready" });
+      return true;
+    }
+
     const validation = validateMessage(raw);
     if (!validation.ok) {
       sendResponse({ ok: false, error: validation.error });

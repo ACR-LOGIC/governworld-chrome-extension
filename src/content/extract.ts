@@ -29,11 +29,6 @@ export const OVERLAY_ATTR = "data-gw-scan-overlay";
 export const IGNORE_ATTR = "data-sensitive-scan-ignore";
 
 const EXCLUDED_TAGS = new Set([
-  "INPUT",
-  "TEXTAREA",
-  "SELECT",
-  "OPTION",
-  "BUTTON",
   "SCRIPT",
   "STYLE",
   "NOSCRIPT",
@@ -60,38 +55,38 @@ const EXCLUDED_AUTOCOMPLETE = new Set([
 
 /** True when the element (or an ancestor) should be excluded from scanning. */
 export function isExcludedElement(el: Element): boolean {
-  if (el.closest(`[${OVERLAY_ATTR}]`)) return true;
-  if (el.closest(`[${IGNORE_ATTR}]`)) return true;
+  if (el.closest?.(`[${OVERLAY_ATTR}]`)) return true;
+  if (el.closest?.(`[${IGNORE_ATTR}]`)) return true;
 
-  const blocked = el.closest(Array.from(EXCLUDED_TAGS).map((t) => t.toLowerCase()).join(","));
+  const blocked = el.closest?.(Array.from(EXCLUDED_TAGS).map((t) => t.toLowerCase()).join(","));
   if (blocked) return true;
 
-  const editable = el.closest("[contenteditable]");
-  if (editable && (editable.getAttribute("contenteditable") || "").toLowerCase() !== "false") {
-    return true;
-  }
-
-  const ariaHidden = el.closest("[aria-hidden='true']");
+  const ariaHidden = el.closest?.("[aria-hidden='true']");
   if (ariaHidden) return true;
 
-  const hidden = el.closest("[hidden], [inert]");
+  const hidden = el.closest?.("[hidden], [inert]");
   if (hidden) return true;
 
-  const password = el.closest("[type='password']");
+  const password = el.closest?.("[type='password']");
   if (password) return true;
 
-  const auto = el.closest("[autocomplete]");
+  const auto = el.closest?.("[autocomplete]");
   if (auto) {
     const ac = (auto.getAttribute("autocomplete") || "").split(/\s+/)[0].toLowerCase();
     if (EXCLUDED_AUTOCOMPLETE.has(ac)) return true;
   }
 
-  if (typeof el.checkVisibility === "function") {
-    try {
+  try {
+    if (typeof el.checkVisibility === "function") {
       if (!el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) return true;
-    } catch {
-      // checkVisibility can throw on detached nodes; default to including text.
+    } else if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+      const style = window.getComputedStyle(el);
+      if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") {
+        return true;
+      }
     }
+  } catch {
+    // Default to including text on detached nodes or non-browser envs
   }
   return false;
 }
@@ -99,59 +94,115 @@ export function isExcludedElement(el: Element): boolean {
 const TRIM_RE = /^[\s\u00a0\u200b]+|[\s\u00a0\u200b]+$/g;
 
 /**
- * Walk visible text nodes in the top-level document and produce segments.
+ * Walk visible text nodes, shadow roots, and inputs in the document and produce segments.
  * Truncates oversized nodes and stops at maxVisibleChars (graceful, reported).
  */
 export function extractVisibleText(
-  root: Document | Element,
+  root: Document | Element | ShadowRoot,
   maxVisibleChars: number,
   maxNodeChars: number,
-  nodeIds: Map<string, Text>
+  nodeIds: Map<string, Node>
 ): { segments: TextSegment[]; truncated: boolean } {
   const segments: TextSegment[] = [];
   let remaining = maxVisibleChars;
   let truncated = false;
   let counter = 0;
 
-  const walker = (root as Document).createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node: Text) {
-      if (isExcludedElement(node.parentElement ?? (node as unknown as Element))) {
-        return NodeFilter.FILTER_REJECT;
-      }
-      if (!node.textContent || node.textContent.trim().length === 0) {
-        return NodeFilter.FILTER_REJECT;
-      }
-      return NodeFilter.FILTER_ACCEPT;
-    },
-  });
-
-  let current: Text | null;
-  while ((current = walker.nextNode() as Text | null) !== null) {
-    const raw = current.textContent ?? "";
+  function processTextNode(node: Text) {
+    if (remaining <= 0) {
+      truncated = true;
+      return;
+    }
+    const raw = node.textContent ?? "";
     const trimmed = raw.replace(TRIM_RE, "");
-    if (trimmed.length === 0) continue;
+    if (trimmed.length === 0) return;
 
-    // Truncate oversized nodes; record boundary so mapping stays correct.
     if (trimmed.length > maxNodeChars) {
       truncated = true;
     }
     const slice = trimmed.slice(0, maxNodeChars);
 
-    // Find the original slice boundaries after trimming.
-    const lead = raw.length - raw.replace(TRIM_RE, "$&").length; // leading whitespace length
+    const lead = raw.length - raw.replace(TRIM_RE, "$&").length;
     const startOffset = lead;
     const endOffset = Math.min(raw.length, lead + slice.length);
 
     const nodeId = `seg_${counter++}`;
-    nodeIds.set(nodeId, current);
+    nodeIds.set(nodeId, node);
 
     segments.push({ nodeId, startOffset, endOffset, text: slice });
-
     remaining -= slice.length;
     if (remaining <= 0) {
       truncated = true;
-      break;
     }
+  }
+
+  function processInputElement(el: HTMLInputElement | HTMLTextAreaElement) {
+    if (remaining <= 0) {
+      truncated = true;
+      return;
+    }
+    const raw = el.value ?? "";
+    const trimmed = raw.replace(TRIM_RE, "");
+    if (trimmed.length === 0) return;
+
+    if (trimmed.length > maxNodeChars) {
+      truncated = true;
+    }
+    const slice = trimmed.slice(0, maxNodeChars);
+    const startOffset = 0;
+    const endOffset = slice.length;
+
+    const nodeId = `seg_${counter++}`;
+    nodeIds.set(nodeId, el);
+
+    segments.push({ nodeId, startOffset, endOffset, text: slice });
+    remaining -= slice.length;
+    if (remaining <= 0) {
+      truncated = true;
+    }
+  }
+
+  function traverse(current: Node) {
+    if (remaining <= 0) {
+      truncated = true;
+      return;
+    }
+
+    if (current.nodeType === Node.ELEMENT_NODE) {
+      const el = current as HTMLElement;
+      if (isExcludedElement(el)) {
+        return;
+      }
+
+      const tag = el.tagName.toLowerCase();
+      if (
+        tag === "textarea" ||
+        (tag === "input" && ["text", "search", "email", "tel", "url"].includes((el as HTMLInputElement).type))
+      ) {
+        processInputElement(el as HTMLInputElement | HTMLTextAreaElement);
+      }
+
+      if (el.shadowRoot) {
+        traverse(el.shadowRoot);
+      }
+    } else if (current.nodeType === Node.TEXT_NODE) {
+      const parent = current.parentElement;
+      if (!parent || !isExcludedElement(parent)) {
+        processTextNode(current as Text);
+      }
+      return;
+    }
+
+    let child = current.firstChild;
+    while (child && remaining > 0) {
+      traverse(child);
+      child = child.nextSibling;
+    }
+  }
+
+  const startNode = root instanceof Document ? (root.body || root.documentElement) : root;
+  if (startNode) {
+    traverse(startNode);
   }
 
   return { segments, truncated };

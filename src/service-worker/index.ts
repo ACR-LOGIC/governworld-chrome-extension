@@ -7,6 +7,20 @@ import type { DocKind, PopupState, ScanMode, WorkerMessage, ExtensionMessage, Fi
 import { previewDocument, redactDocument, getLastSession, clearSession as clearDocSession, clearAllFiles } from "./documents.js";
 import { analyzeExamples, testPattern } from "../shared/wizardAnalyzer.js";
 import {
+  GovernWorldApiClient,
+  getApiUrl,
+  setApiUrl,
+  getStoredTokens,
+  saveAuthSession,
+  clearAuthSession,
+  getAuthMetadata,
+  checkHealth,
+  performBootstrap,
+  syncPolicy,
+  submitLogic,
+  getCachedCapabilities,
+} from "../api/index.js";
+import {
   loadCustomPatterns,
   saveCustomPattern,
   deleteCustomPattern,
@@ -62,9 +76,39 @@ async function clearSession(tabId: number): Promise<void> {
   await chrome.storage.session.remove(sessionKey(tabId));
 }
 
-async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  return tab;
+export function isInternalExtensionUrl(url?: string): boolean {
+  if (!url) return false;
+  return (
+    url.startsWith("chrome-extension://") ||
+    url.startsWith("chrome://") ||
+    url.startsWith("edge://") ||
+    url.startsWith("about:") ||
+    url.startsWith("view-source:")
+  );
+}
+
+export async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
+  // Strategy 1: Active tab in last focused window
+  const [focusedTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (focusedTab?.id && focusedTab.url && !isInternalExtensionUrl(focusedTab.url)) {
+    return focusedTab;
+  }
+
+  // Strategy 2: Active tab in current window
+  const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (currentTab?.id && currentTab.url && !isInternalExtensionUrl(currentTab.url)) {
+    return currentTab;
+  }
+
+  // Strategy 3: Find any active HTTP/HTTPS tab
+  const allTabs = await chrome.tabs.query({});
+  return (
+    allTabs.find(
+      (t) => t.active && t.url && (t.url.startsWith("http://") || t.url.startsWith("https://"))
+    ) ||
+    focusedTab ||
+    currentTab
+  );
 }
 
 function notifyPopup(message: PopupFromWorker): void {
@@ -89,21 +133,29 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-async function ensureContentScript(tabId: number): Promise<void> {
+export async function ensureContentScriptReady(tabId: number): Promise<boolean> {
   try {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
-  } catch (error) {
-    // `activeTab` may not cover the tab if invoked without a user gesture.
-    throw new Error(`Unable to inject content script on tab ${tabId}: ${String(error)}`);
+    const response = (await chrome.tabs.sendMessage(tabId, { type: "PING" })) as { ok?: boolean } | undefined;
+    if (response?.ok) return true;
+  } catch {
+    try {
+      await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      return true;
+    } catch (error) {
+      console.warn(`[governworld] Unable to dynamically inject content script on tab ${tabId}:`, error);
+      return false;
+    }
   }
+  return false;
 }
 
 async function sendToTab(tabId: number, message: unknown): Promise<unknown> {
   try {
     return await chrome.tabs.sendMessage(tabId, message);
   } catch {
-    // Content script may have been destroyed by navigation; inject once and retry.
-    await ensureContentScript(tabId);
+    // Content script may have been uninitialized or destroyed by navigation; inject dynamically and retry.
+    await ensureContentScriptReady(tabId);
     return await chrome.tabs.sendMessage(tabId, message);
   }
 }
@@ -969,6 +1021,273 @@ if (chrome.contextMenus?.onClicked) {
   });
 }
 
+async function handleApiGetStatus(requestId: string): Promise<void> {
+  const meta = await getAuthMetadata();
+  const apiUrl = await getApiUrl();
+  if (!meta || !meta.connected) {
+    notifyPopup({
+      type: "POPUP_API_STATUS_STATE",
+      requestId,
+      connectionState: "LOCAL_ONLY",
+      apiUrl,
+      capabilities: [],
+    });
+    return;
+  }
+
+  const client = new GovernWorldApiClient(apiUrl);
+  const health = await checkHealth(client);
+  if (!health.reachable) {
+    notifyPopup({
+      type: "POPUP_API_STATUS_STATE",
+      requestId,
+      connectionState: "OFFLINE",
+      tenantId: meta.tenant_id,
+      tenantName: meta.tenant_name,
+      apiUrl,
+      capabilities: await getCachedCapabilities(),
+      error: "GovernWorld API unreachable. Local protection continues active.",
+    });
+    return;
+  }
+
+  if (!health.compatible) {
+    notifyPopup({
+      type: "POPUP_API_STATUS_STATE",
+      requestId,
+      connectionState: "INCOMPATIBLE_VERSION",
+      tenantId: meta.tenant_id,
+      tenantName: meta.tenant_name,
+      apiUrl,
+      capabilities: [],
+      error: "Extension update required for cloud connectivity. Local protection remains active.",
+    });
+    return;
+  }
+
+  if (health.killSwitch === "DISABLED") {
+    notifyPopup({
+      type: "POPUP_API_STATUS_STATE",
+      requestId,
+      connectionState: "DISABLED",
+      apiUrl,
+      capabilities: [],
+      error: "Cloud connectivity is disabled by server policy. Local protection remains active.",
+    });
+    return;
+  }
+
+  const tokens = await getStoredTokens();
+  if (!tokens?.access_token) {
+    notifyPopup({
+      type: "POPUP_API_STATUS_STATE",
+      requestId,
+      connectionState: "AUTHENTICATION_REQUIRED",
+      tenantId: meta.tenant_id,
+      tenantName: meta.tenant_name,
+      apiUrl,
+      capabilities: await getCachedCapabilities(),
+    });
+    return;
+  }
+
+  notifyPopup({
+    type: "POPUP_API_STATUS_STATE",
+    requestId,
+    connectionState: "CONNECTED",
+    tenantId: meta.tenant_id,
+    tenantName: meta.tenant_name,
+    apiUrl,
+    capabilities: await getCachedCapabilities(),
+  });
+}
+
+async function handleApiConnect(apiUrl: string | undefined, token: string | undefined, requestId: string): Promise<void> {
+  if (apiUrl) {
+    const check = await setApiUrl(apiUrl);
+    if (!check.success) {
+      notifyPopup({
+        type: "POPUP_API_STATUS_STATE",
+        requestId,
+        connectionState: "LOCAL_ONLY",
+        apiUrl: await getApiUrl(),
+        capabilities: [],
+        error: check.error,
+      });
+      return;
+    }
+  }
+
+  const currentApiUrl = await getApiUrl();
+  const client = new GovernWorldApiClient(currentApiUrl);
+
+  const health = await checkHealth(client);
+  if (!health.reachable) {
+    notifyPopup({
+      type: "POPUP_API_STATUS_STATE",
+      requestId,
+      connectionState: "OFFLINE",
+      apiUrl: currentApiUrl,
+      capabilities: [],
+      error: "Cannot reach GovernWorld API. Local protection continues active.",
+    });
+    return;
+  }
+
+  if (!health.compatible) {
+    notifyPopup({
+      type: "POPUP_API_STATUS_STATE",
+      requestId,
+      connectionState: "INCOMPATIBLE_VERSION",
+      apiUrl: currentApiUrl,
+      capabilities: [],
+      error: "Extension version incompatible with API. Local protection continues active.",
+    });
+    return;
+  }
+
+  if (health.killSwitch === "DISABLED") {
+    notifyPopup({
+      type: "POPUP_API_STATUS_STATE",
+      requestId,
+      connectionState: "DISABLED",
+      apiUrl: currentApiUrl,
+      capabilities: [],
+      error: "Cloud connectivity disabled by server policy.",
+    });
+    return;
+  }
+
+  if (!token) {
+    notifyPopup({
+      type: "POPUP_API_STATUS_STATE",
+      requestId,
+      connectionState: "AUTHENTICATION_REQUIRED",
+      apiUrl: currentApiUrl,
+      capabilities: [],
+    });
+    return;
+  }
+
+  const bootstrap = await performBootstrap(client, token);
+  if (!bootstrap.success || !bootstrap.tenant) {
+    notifyPopup({
+      type: "POPUP_API_STATUS_STATE",
+      requestId,
+      connectionState: bootstrap.connectionState,
+      apiUrl: currentApiUrl,
+      capabilities: [],
+      error: bootstrap.error,
+    });
+    return;
+  }
+
+  const tokens = {
+    access_token: token,
+    token_type: "Bearer",
+    expires_in: 3600,
+    expires_at: Date.now() + 3600 * 1000,
+  };
+
+  await saveAuthSession(tokens, {
+    connected: true,
+    tenant_id: bootstrap.tenant.tenant_id,
+    tenant_name: bootstrap.tenant.tenant_name,
+    connected_at: new Date().toISOString(),
+  });
+
+  notifyPopup({
+    type: "POPUP_API_STATUS_STATE",
+    requestId,
+    connectionState: "CONNECTED",
+    tenantId: bootstrap.tenant.tenant_id,
+    tenantName: bootstrap.tenant.tenant_name,
+    apiUrl: currentApiUrl,
+    capabilities: bootstrap.capabilities ?? [],
+  });
+}
+
+async function handleApiDisconnect(requestId: string): Promise<void> {
+  await clearAuthSession();
+  const apiUrl = await getApiUrl();
+  notifyPopup({
+    type: "POPUP_API_STATUS_STATE",
+    requestId,
+    connectionState: "LOCAL_ONLY",
+    apiUrl,
+    capabilities: [],
+  });
+}
+
+async function handleApiSyncPolicy(requestId: string): Promise<void> {
+  const tokens = await getStoredTokens();
+  const client = new GovernWorldApiClient(await getApiUrl());
+  const syncResult = await syncPolicy(client, tokens?.access_token);
+  if (!syncResult.ok) {
+    notifyPopup({
+      type: "POPUP_API_POLICY_STATE",
+      requestId,
+      success: false,
+      error: syncResult.error,
+    });
+    return;
+  }
+
+  notifyPopup({
+    type: "POPUP_API_POLICY_STATE",
+    requestId,
+    success: true,
+    policyId: syncResult.policy.policy_id,
+    policyVersion: syncResult.policy.policy_version,
+    rulesCount: syncResult.policy.rules.length,
+  });
+}
+
+async function handleApiSubmitLogic(patternId: string, requestId: string): Promise<void> {
+  const patterns = await loadCustomPatterns();
+  const target = patterns.find((p) => p.id === patternId);
+  if (!target) {
+    notifyPopup({
+      type: "POPUP_API_SUBMIT_RESULT",
+      requestId,
+      success: false,
+      error: "Pattern not found.",
+    });
+    return;
+  }
+
+  const tokens = await getStoredTokens();
+  const client = new GovernWorldApiClient(await getApiUrl());
+  const res = await submitLogic(
+    client,
+    {
+      rule_name: target.name,
+      category: target.category,
+      pattern: target.pattern,
+      cues: target.contextCues ?? [],
+      description: target.name,
+    },
+    tokens?.access_token
+  );
+
+  if (!res.ok) {
+    notifyPopup({
+      type: "POPUP_API_SUBMIT_RESULT",
+      requestId,
+      success: false,
+      error: res.error,
+    });
+    return;
+  }
+
+  notifyPopup({
+    type: "POPUP_API_SUBMIT_RESULT",
+    requestId,
+    success: true,
+    submissionId: res.response.submission_id,
+  });
+}
+
 const CONTENT_MESSAGE_TYPES = new Set<ExtensionMessage["type"]>([
   "SCAN_RESULT",
   "COPY_REDACTED_TEXT_RESULT",
@@ -1052,6 +1371,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
           notifyPopup({ type: "POPUP_DOC_STATE", requestId: msg.requestId, docId: docSession.docId, name: docSession.name, fileKey: docSession.fileKey, mimeType: docSession.mimeType, kind: docSession.kind, pages: docSession.pages });
         }
         void notifyAccountState(msg.requestId);
+        void handleApiGetStatus(msg.requestId);
         notifyPopup({ type: "POPUP_NOTIFICATIONS_STATE", requestId: msg.requestId, granted: await notificationsGranted() });
         notifyPopup({ type: "POPUP_CUSTOM_PATTERNS_STATE", requestId: msg.requestId, patterns: await loadCustomPatterns() });
         notifyPopup({ type: "POPUP_COMMUNITY_ACCOUNT_DETAILS_STATE", requestId: msg.requestId, account: await loadCommunityAccount() });
@@ -1163,6 +1483,21 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
         notifyPopup({ type: "POPUP_COMMUNITY_COMMUNITY_RULES_STATE", requestId: msg.requestId, rules: [], error: "Community rule retrieval is unavailable until the server integration is configured." });
         break;
       }
+      case "POPUP_API_CONNECT":
+        await handleApiConnect(msg.apiUrl, msg.token, msg.requestId);
+        break;
+      case "POPUP_API_DISCONNECT":
+        await handleApiDisconnect(msg.requestId);
+        break;
+      case "POPUP_API_GET_STATUS":
+        await handleApiGetStatus(msg.requestId);
+        break;
+      case "POPUP_API_SYNC_POLICY":
+        await handleApiSyncPolicy(msg.requestId);
+        break;
+      case "POPUP_API_SUBMIT_LOGIC":
+        await handleApiSubmitLogic(msg.patternId, msg.requestId);
+        break;
       default:
         break;
     }

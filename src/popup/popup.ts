@@ -30,6 +30,54 @@ import type {
 import type { CustomPattern, CommunityAccount, CommunityRule } from "../shared/customPatterns.js";
 import type { WizardAnalysis } from "../shared/wizardAnalyzer.js";
 
+export function isInternalExtensionUrl(url?: string): boolean {
+  if (!url) return false;
+  return (
+    url.startsWith("chrome-extension://") ||
+    url.startsWith("chrome://") ||
+    url.startsWith("edge://") ||
+    url.startsWith("about:") ||
+    url.startsWith("view-source:")
+  );
+}
+
+export async function getActiveWebTab(): Promise<chrome.tabs.Tab | undefined> {
+  const [focusedTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  if (focusedTab?.id && focusedTab.url && !isInternalExtensionUrl(focusedTab.url)) {
+    return focusedTab;
+  }
+  const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (currentTab?.id && currentTab.url && !isInternalExtensionUrl(currentTab.url)) {
+    return currentTab;
+  }
+  const allTabs = await chrome.tabs.query({});
+  return (
+    allTabs.find(
+      (t) => t.active && t.url && (t.url.startsWith("http://") || t.url.startsWith("https://"))
+    ) ||
+    focusedTab ||
+    currentTab
+  );
+}
+
+export async function ensureContentScriptReady(tabId: number): Promise<boolean> {
+  try {
+    const response = (await chrome.tabs.sendMessage(tabId, { type: "PING" })) as { ok?: boolean } | undefined;
+    if (response?.ok) return true;
+  } catch {
+    try {
+      await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      return true;
+    } catch (error) {
+      console.warn(`[governworld] Unable to dynamically inject content script on tab ${tabId}:`, error);
+      return false;
+    }
+  }
+  return false;
+}
+
+
 export let currentLang: LanguageCode = "en";
 
 export const CATEGORY_LABELS: Record<string, string> = {
