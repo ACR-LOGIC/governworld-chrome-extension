@@ -62,6 +62,7 @@ const chromeMock = {
     get: async () => ({ id: 42, url: "https://example.com" }),
     sendMessage: async () => undefined,
     onRemoved: { addListener: () => undefined },
+    onUpdated: { addListener: () => undefined },
   },
   scripting: { executeScript: async () => undefined },
   commands: { onCommand: { addListener: () => undefined } },
@@ -117,21 +118,30 @@ describe("service-worker message routing (content-originated types require sende
   });
 
   it("processes a tab-bearing SCAN_RESULT (control, proves the guard is what denies)", async () => {
+    (chromeMock.tabs.query as unknown) = async () => [{ id: 42, url: "https://example.com" }];
+    await invoke(
+      { type: "POPUP_SCAN", requestId: "req-pending", mode: "local" },
+      { id: "test", url: "chrome-extension://test/popup.html" }
+    );
+    const sessionStoreKeys = [...sessionStore.keys()];
+    const scanSession = sessionStore.get(sessionStoreKeys.find((k) => k.startsWith("scan:")) as string) as {
+      sessionId: string;
+    };
     const msg = {
       type: "SCAN_RESULT",
-      requestId: "req-ok",
-      sessionId: "sess-ok",
+      requestId: "req-pending",
+      sessionId: scanSession.sessionId,
       findings: [],
       stats: { visibleChars: 0, truncated: false },
     };
      const response = await invoke(msg, {
-       id: "test",
-       url: "https://example.com/page",
-       tab: { id: 42, url: "https://example.com" },
-     });
+        id: "test",
+        url: "https://example.com/page",
+        tab: { id: 42, url: "https://example.com" },
+      });
     expect(response).toEqual({ ok: true });
     const stored = sessionStore.get("scan:42") as { sessionId: string } | undefined;
-    expect(stored?.sessionId).toBe("sess-ok");
+    expect(stored?.sessionId).toBe(scanSession.sessionId);
     expect(runtimeSent).toHaveLength(1);
     expect(runtimeSent[0]).toMatchObject({ type: "POPUP_STATE" });
   });

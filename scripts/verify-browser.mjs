@@ -154,7 +154,9 @@ try {
       hasThresholdList: Boolean(document.getElementById("threshold-list")),
       hasImportPack: Boolean(document.getElementById("import-pack-btn")),
       hasExportPack: Boolean(document.getElementById("export-pack-btn")),
-      hasDisclosure: /thresholds are applied automatically/i.test(document.body.innerText),
+      // textContent, not innerText: the Detection sub-page is correctly hidden until
+      // the user navigates to it, and innerText omits non-rendered subtrees.
+      hasDisclosure: /thresholds are applied automatically/i.test(document.body.textContent),
       rangeInputs: document.querySelectorAll('input[type="range"]').length,
     }));
 

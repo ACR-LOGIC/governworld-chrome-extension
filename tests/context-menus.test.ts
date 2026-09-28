@@ -25,6 +25,7 @@ describe("Context Menus - Message Validation", () => {
         maxVisibleChars: 500000,
         maxNodeChars: 20000,
         maskPlaceholders: true,
+        sessionTimeoutMs: 900000,
       },
     });
     expect(res.ok).toBe(true);
@@ -67,6 +68,7 @@ describe("Context Menus - Message Validation", () => {
         maxVisibleChars: 100000,
         maxNodeChars: 10000,
         maskPlaceholders: false,
+        sessionTimeoutMs: 900000,
       },
     });
     expect(res.ok).toBe(true);

@@ -122,7 +122,7 @@ export function extractVisibleText(
     }
     const slice = trimmed.slice(0, maxNodeChars);
 
-    const lead = raw.length - raw.replace(TRIM_RE, "$&").length;
+    const lead = raw.length - raw.replace(/^[\s\u00a0\u200b]+/, "").length;
     const startOffset = lead;
     const endOffset = Math.min(raw.length, lead + slice.length);
 

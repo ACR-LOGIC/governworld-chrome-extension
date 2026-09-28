@@ -662,24 +662,21 @@ function setDocStatus(message: string, isError: boolean): void {
 }
 
 function renderDocStage(message: Extract<PopupFromWorker, { type: "POPUP_DOC_STATUS" }>): void {
-  const list = document.getElementById("doc-stages") as HTMLElement | null;
-  if (!list) return;
-  list.hidden = false;
-  const item = list.querySelector<HTMLElement>(`.stages__item[data-stage="${message.stage}"]`);
-  if (!item) return;
-  const detail = item.querySelector<HTMLElement>(".stages__detail");
+  const progress = document.getElementById("doc-progress") as HTMLDivElement | null;
+  const progressText = document.getElementById("doc-progress-text") as HTMLSpanElement | null;
+  if (!progress) return;
 
   if (message.problem) {
-    item.dataset.state = "failed";
-    if (detail) detail.textContent = message.problem;
+    setDocStatus(message.problem, true);
     return;
   }
-  item.dataset.state = "done";
-  if (!detail) return;
+
+  progress.hidden = false;
+  if (!progressText) return;
   if (message.stage === "detected") {
-    detail.textContent = "";
+    progressText.textContent = t(currentLang, "doc_processing");
   } else if (message.stage === "redacted") {
-    detail.textContent =
+    progressText.textContent =
       typeof message.paintedRegions === "number"
         ? `${message.paintedRegions} region${message.paintedRegions === 1 ? "" : "s"} blacked out`
         : "";
@@ -687,19 +684,15 @@ function renderDocStage(message: Extract<PopupFromWorker, { type: "POPUP_DOC_STA
     const verified = message.verifiedRegions ?? 0;
     const checked = message.checkedRegions ?? 0;
     const how = message.method === "page-pixels" ? "page bitmaps" : "the saved file";
-    detail.textContent = checked > 0 ? `${verified} of ${checked} regions confirmed in ${how}` : "";
+    progressText.textContent = checked > 0 ? `${verified} of ${checked} regions confirmed in ${how}` : "";
   }
 }
 
 function resetDocStages(): void {
-  const list = document.getElementById("doc-stages") as HTMLElement | null;
-  if (!list) return;
-  list.hidden = true;
-  for (const item of Array.from(list.querySelectorAll<HTMLElement>(".stages__item"))) {
-    delete item.dataset.state;
-    const detail = item.querySelector<HTMLElement>(".stages__detail");
-    if (detail) detail.textContent = "";
-  }
+  const progress = document.getElementById("doc-progress") as HTMLDivElement | null;
+  const progressText = document.getElementById("doc-progress-text") as HTMLSpanElement | null;
+  if (progress) progress.hidden = true;
+  if (progressText) progressText.textContent = t(currentLang, "doc_processing");
 }
 
 const overlayRedrawers: (() => void)[] = [];
@@ -1005,22 +998,72 @@ function initTabs(): void {
     });
   });
 
-  // Wire contextual help links
+  const settingsGear = document.getElementById("settings-gear-btn");
+  settingsGear?.addEventListener("click", () => switchTab("settings"));
+
   const helpLinks = document.querySelectorAll<HTMLElement>("[data-guide]");
   helpLinks.forEach((link) => {
     link.addEventListener("click", (e) => {
       e.preventDefault();
       const guideId = link.getAttribute("data-guide");
       if (!guideId) return;
-      switchTab("instructions");
+      switchTab("settings");
+      // Guide cards live in the About sub-page, which is hidden by default.
+      switchSettingsPage("about");
       const targetEl = document.getElementById(guideId);
       if (targetEl) {
         targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
         targetEl.classList.remove("guide-card--highlight");
-        void targetEl.offsetWidth; // Force reflow
+        void targetEl.offsetWidth;
         targetEl.classList.add("guide-card--highlight");
       }
     });
+  });
+
+  const settingsNavBtns = document.querySelectorAll<HTMLButtonElement>(".settings-nav-btn");
+  const settingsPages = document.querySelectorAll<HTMLElement>(".settings-page");
+
+  function switchSettingsPage(pageId: string): void {
+    settingsNavBtns.forEach((btn) => {
+      const isActive = btn.dataset.settingsPage === pageId;
+      btn.classList.toggle("settings-nav-btn--active", isActive);
+      if (isActive) btn.setAttribute("aria-current", "page");
+      else btn.removeAttribute("aria-current");
+    });
+    settingsPages.forEach((page) => {
+      const isActive = page.dataset.settingsPage === pageId;
+      page.hidden = !isActive;
+      page.classList.toggle("settings-page--active", isActive);
+    });
+  }
+
+  switchSettingsPage("profile");
+
+  settingsNavBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const pageId = btn.dataset.settingsPage;
+      if (pageId) switchSettingsPage(pageId);
+    });
+  });
+
+  const openDocBtn = document.getElementById("open-doc-btn");
+  openDocBtn?.addEventListener("click", () => {
+    const dropzone = document.getElementById("doc-dropzone");
+    if (dropzone) {
+      const fileInput = document.getElementById("doc-file-input") as HTMLInputElement | null;
+      fileInput?.click();
+    }
+  });
+
+  const openWizardBtn2 = document.getElementById("open-wizard-btn-2");
+  openWizardBtn2?.addEventListener("click", () => {
+    const wizardBtn = document.getElementById("open-wizard-btn") as HTMLButtonElement | null;
+    wizardBtn?.click();
+  });
+
+  const coverageDetailsBtn = document.getElementById("coverage-details-btn");
+  coverageDetailsBtn?.addEventListener("click", () => {
+    switchSettingsPage("privacy");
   });
 }
 
@@ -1322,6 +1365,25 @@ export async function initPopup(): Promise<void> {
     setDocStatus("", false);
   });
 
+  const docProgress = document.getElementById("doc-progress") as HTMLDivElement | null;
+  const docCancelBtn = document.getElementById("doc-cancel-btn") as HTMLButtonElement | null;
+
+  docCancelBtn?.addEventListener("click", () => {
+    if (!lastDoc) return;
+    void sendMessage({ type: "POPUP_DOC_CANCEL", requestId: requestId(), docId: lastDoc.docId });
+    if (docProgress) docProgress.hidden = true;
+    clearDocUi();
+    setDocStatus("Document processing cancelled.", false);
+  });
+
+  const showDocProgress = () => {
+    if (docProgress) docProgress.hidden = false;
+  };
+
+  const hideDocProgress = () => {
+    if (docProgress) docProgress.hidden = true;
+  };
+
   const dropzone = document.getElementById("doc-dropzone") as HTMLDivElement | null;
   if (dropzone && docFile) {
     const handleDroppedFile = async (file: File): Promise<void> => {
@@ -1338,6 +1400,7 @@ export async function initPopup(): Promise<void> {
           (kind === "pdf" ? "application/pdf" : kind === "docx" ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "image/png");
         await storeFile(fileKey, bytes);
         setDocStatus("Scanning document on this device…", false);
+        showDocProgress();
         void sendMessage({ type: "POPUP_DOC_PREVIEW", requestId: requestId(), fileKey, name: file.name, mimeType, kind });
       } catch (error) {
         await deleteFile(fileKey).catch(() => undefined);
@@ -1509,7 +1572,7 @@ export async function initPopup(): Promise<void> {
   if (maskPaddingSelect) {
     maskPaddingSelect.value = String(settings.maskPadding);
     maskPaddingSelect.addEventListener("change", async () => {
-      const pad = parseInt(maskPaddingSelect.value, 10) || 4;
+      const pad = parseInt(maskPaddingSelect.value, 10) ?? 4;
       const current = await loadSettings();
       await saveSettings({ ...current, maskPadding: pad });
     });
@@ -1565,17 +1628,32 @@ export async function initPopup(): Promise<void> {
       const current = await loadSettings();
       await saveSettings({ ...current, defaultRedactionStyle: defaultDocStyleSelect.value as RedactionStyle });
       if (docStyleSelect) docStyleSelect.value = defaultDocStyleSelect.value;
+      if (docStampContainer) docStampContainer.hidden = docStyleSelect?.value !== "stamp";
+      redrawAllOverlays();
     });
   }
 
   const defaultDocStampInput = document.getElementById("default-doc-stamp-input") as HTMLInputElement | null;
+  const defaultDocStampPresets = document.getElementById("default-doc-stamp-presets") as HTMLSelectElement | null;
+
+  const applyDefaultStampText = async (raw: string) => {
+    const val = raw.trim() || "[REDACTED]";
+    const current = await loadSettings();
+    await saveSettings({ ...current, defaultStampText: val });
+    if (docStampText) {
+      docStampText.value = val;
+      redrawAllOverlays();
+    }
+  };
+
   if (defaultDocStampInput) {
     defaultDocStampInput.value = settings.defaultStampText;
-    defaultDocStampInput.addEventListener("change", async () => {
-      const val = defaultDocStampInput.value.trim() || "[REDACTED]";
-      const current = await loadSettings();
-      await saveSettings({ ...current, defaultStampText: val });
-      if (docStampText) docStampText.value = val;
+    defaultDocStampInput.addEventListener("change", () => void applyDefaultStampText(defaultDocStampInput.value));
+  }
+  if (defaultDocStampPresets && defaultDocStampInput) {
+    defaultDocStampPresets.addEventListener("change", () => {
+      defaultDocStampInput.value = defaultDocStampPresets.value;
+      void applyDefaultStampText(defaultDocStampPresets.value);
     });
   }
 
@@ -1663,7 +1741,7 @@ export async function initPopup(): Promise<void> {
     clearAuditDialog?.close();
     await chrome.storage.local.remove(["audit_log", "audit_key"]);
     const current = await loadSettings();
-    speakAnnouncement("Audit records cleared.", current);
+    speakAnnouncement(t(current.language, "audit_cleared"), current);
   });
 
   document.getElementById("export-audit-btn")?.addEventListener("click", () => {
@@ -1691,9 +1769,24 @@ export async function initPopup(): Promise<void> {
   const saveBtn = document.getElementById("account-save-btn") as HTMLButtonElement | null;
   const purchaseBtn = document.getElementById("account-purchase-btn") as HTMLButtonElement | null;
   const accountStatus = document.getElementById("account-status") as HTMLParagraphElement | null;
+  const oauthConnectBtn = document.getElementById("oauth-connect-btn") as HTMLButtonElement | null;
+  const oauthStatus = document.getElementById("oauth-status") as HTMLParagraphElement | null;
+
+  oauthConnectBtn?.addEventListener("click", () => {
+    if (oauthStatus) oauthStatus.textContent = "Opening GovernWorld sign-in…";
+    void chrome.runtime.sendMessage({
+      type: "POPUP_OAUTH_CONNECT",
+      requestId: requestId(),
+    });
+  });
 
   purchaseBtn?.addEventListener("click", () => {
-    if (accountStatus) accountStatus.textContent = "Opening Stripe checkout…";
+    if (accountStatus) {
+      void (async () => {
+        const current = await loadSettings();
+        accountStatus.textContent = t(current.language, "opening_stripe");
+      })();
+    }
     void chrome.runtime.sendMessage({
       type: "POPUP_ACCOUNT_PURCHASE",
       requestId: requestId(),
@@ -1806,7 +1899,10 @@ export async function initPopup(): Promise<void> {
     const pos = wizardPosInput.value.split("\n").map((s) => s.trim()).filter(Boolean);
     const neg = wizardNegInput.value.split("\n").map((s) => s.trim()).filter(Boolean);
     if (pos.length === 0) {
-      alert("Please provide at least one positive example.");
+      void (async () => {
+        const current = await loadSettings();
+        alert(t(current.language, "wizard_need_positive"));
+      })();
       return;
     }
     void chrome.runtime.sendMessage({
@@ -2029,7 +2125,7 @@ export async function initPopup(): Promise<void> {
     dialog.showModal();
   }
 
-  chrome.runtime.onMessage.addListener((raw: unknown) => {
+  chrome.runtime.onMessage.addListener(async (raw: unknown) => {
     const validation = validateMessage(raw);
     if (!validation.ok) return;
     const message = validation.message;
@@ -2083,14 +2179,9 @@ export async function initPopup(): Promise<void> {
       return;
     }
     if (message.type === "POPUP_DOC_STATE") {
-      const doc = lastDoc ?? {
-        docId: message.docId,
-        fileKey: message.fileKey,
-        name: message.name,
-        mimeType: message.mimeType,
-        kind: message.kind,
-        pages: [],
-      };
+      hideDocProgress();
+      if (!lastDoc || message.docId !== lastDoc.docId) return;
+      const doc = lastDoc;
       doc.docId = message.docId;
       doc.name = message.name;
       doc.fileKey = message.fileKey;
@@ -2157,10 +2248,12 @@ export async function initPopup(): Promise<void> {
             reportDelivery(finalOutcome);
           })();
 
-          setDocStatus(`Downloaded ${message.outputName}. The original file was not changed.`, false);
+          const current = await loadSettings();
+          setDocStatus(t(current.language, "doc_downloaded", { name: message.outputName }), false);
         } catch {
           reportDelivery(false);
-          setDocStatus(`Could not save ${message.outputName}. The original file was not changed.`, true);
+          const current = await loadSettings();
+          setDocStatus(t(current.language, "doc_save_failed", { name: message.outputName }), true);
         }
       } else {
         setDocStatus(`Saved ${message.outputName}. The original file was not changed.`, false);
@@ -2182,9 +2275,10 @@ export async function initPopup(): Promise<void> {
         notificationsToggle.setAttribute("aria-checked", message.granted ? "true" : "false");
       }
       if (notificationsStatus) {
+        const current = await loadSettings();
         notificationsStatus.textContent = message.granted
-          ? "Notifications enabled."
-          : "Notifications permission denied.";
+          ? t(current.language, "notifications_enabled")
+          : t(current.language, "notifications_denied");
       }
       return;
     }
@@ -2215,7 +2309,29 @@ export async function initPopup(): Promise<void> {
       return;
     }
     if (message.type === "POPUP_ACCOUNT_PURCHASE_URL") {
-      if (accountStatus) accountStatus.textContent = "Stripe checkout opened in a new tab.";
+      if (accountStatus) {
+        const current = await loadSettings();
+        accountStatus.textContent = t(current.language, "stripe_checkout_opened");
+      }
+      return;
+    }
+    if (message.type === "POPUP_OAUTH_STATUS") {
+      if (oauthStatus) {
+        if (message.connected) {
+          oauthStatus.textContent = `Connected to ${message.tenantName ?? "GovernWorld"}`;
+          if (oauthConnectBtn) {
+            oauthConnectBtn.textContent = "Disconnect";
+            oauthConnectBtn.onclick = () => {
+              void chrome.runtime.sendMessage({
+                type: "POPUP_API_DISCONNECT",
+                requestId: requestId(),
+              });
+            };
+          }
+        } else if (message.message) {
+          oauthStatus.textContent = message.message;
+        }
+      }
       return;
     }
     if (message.type === "POPUP_CUSTOM_PATTERNS_STATE") {

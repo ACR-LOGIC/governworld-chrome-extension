@@ -9,9 +9,9 @@ const extRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 describe("Instructions, Tab Navigation & Contextual Guidance", () => {
   const pages = ["src/popup/index.html", "src/sidepanel/sidepanel.html"];
 
-  it.each(pages)("%s declares the 5 primary tabs with proper roles", (pagePath) => {
+  it.each(pages)("%s declares the 4 primary tabs with proper roles", (pagePath) => {
     const html = readFileSync(join(extRoot, pagePath), "utf8");
-    for (const tab of ["scanner", "documents", "wizard", "settings", "instructions"]) {
+    for (const tab of ["protection", "logic", "review", "settings"]) {
       expect(html, `${pagePath} missing tab button for ${tab}`).toContain(`data-tab="${tab}"`);
       expect(html, `${pagePath} missing tab panel for ${tab}`).toContain(`id="tab-${tab}"`);
     }

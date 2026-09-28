@@ -83,6 +83,7 @@ const chromeMock = {
       return tab;
     },
     onRemoved: { addListener: () => undefined },
+    onUpdated: { addListener: () => undefined },
   },
   scripting: { executeScript: async () => undefined },
   commands: { onCommand: { addListener: () => undefined } },

@@ -105,6 +105,7 @@ export type PopupMessage =
   | { type: "POPUP_DOC_PREVIEW"; requestId: string; fileKey: string; name: string; mimeType: string; kind: DocKind }
   | { type: "POPUP_DOC_REDACT"; requestId: string; docId: string; fileKey: string; name: string; mimeType: string; kind: DocKind; boxes: { pageIndex: number; rects: Rect[] }[]; findingIds: string[]; options?: RedactionOptions }
   | { type: "POPUP_DOC_CLEAR"; requestId: string; docId: string }
+  | { type: "POPUP_DOC_CANCEL"; requestId: string; docId: string }
   | {
       /**
        * The popup's actual delivery outcome for an artifact the worker could not
@@ -140,13 +141,27 @@ export type PopupMessage =
   | { type: "POPUP_API_DISCONNECT"; requestId: string }
   | { type: "POPUP_API_GET_STATUS"; requestId: string }
   | { type: "POPUP_API_SYNC_POLICY"; requestId: string }
-  | { type: "POPUP_API_SUBMIT_LOGIC"; requestId: string; patternId: string };
+  | { type: "POPUP_API_SUBMIT_LOGIC"; requestId: string; patternId: string }
+  | { type: "POPUP_OAUTH_CONNECT"; requestId: string }
+  | { type: "POPUP_OAUTH_CALLBACK"; requestId: string; code: string; state: string }
+  | {
+      type: "POPUP_OAUTH_STATUS";
+      requestId: string;
+      connected: boolean;
+      message?: string;
+      tenantId?: string;
+      tenantName?: string;
+      apiUrl?: string;
+      capabilities?: string[];
+    };
 
 export interface ScanSettingsMessage {
   enabledCategories: FindingCategory[];
   maxVisibleChars: number;
   maxNodeChars: number;
   maskPlaceholders: boolean;
+  /** Session timeout in milliseconds, or 0 for "never". */
+  sessionTimeoutMs: number;
 }
 
 export type WorkerMessage =
@@ -258,6 +273,16 @@ export type PopupFromWorker =
       error?: { code: string; userMessage: string };
     }
   | { type: "POPUP_ACCOUNT_PURCHASE_URL"; requestId: string; url: string }
+  | {
+      type: "POPUP_OAUTH_STATUS";
+      requestId: string;
+      connected: boolean;
+      message?: string;
+      tenantId?: string;
+      tenantName?: string;
+      apiUrl?: string;
+      capabilities?: string[];
+    }
   | { type: "POPUP_WIZARD_ANALYSIS_RESULT"; requestId: string; proposals: WizardAnalysis[] }
   | { type: "POPUP_WIZARD_TEST_RESULT"; requestId: string; testResult: PatternTestResult[] }
   | { type: "POPUP_CUSTOM_PATTERNS_STATE"; requestId: string; patterns: CustomPattern[] }
@@ -302,6 +327,7 @@ export const MESSAGE_TYPES = new Set<string>([
   "POPUP_DOC_PREVIEW",
   "POPUP_DOC_REDACT",
   "POPUP_DOC_CLEAR",
+  "POPUP_DOC_CANCEL",
   "POPUP_DOC_STATUS",
   "POPUP_DOC_DELIVERY_REPORT",
   "SCAN_PAGE",
@@ -353,6 +379,9 @@ export const MESSAGE_TYPES = new Set<string>([
   "POPUP_API_GET_STATUS",
   "POPUP_API_SYNC_POLICY",
   "POPUP_API_SUBMIT_LOGIC",
+  "POPUP_OAUTH_CONNECT",
+  "POPUP_OAUTH_CALLBACK",
+  "POPUP_OAUTH_STATUS",
   "POPUP_API_STATUS_STATE",
   "POPUP_API_POLICY_STATE",
   "POPUP_API_SUBMIT_RESULT",

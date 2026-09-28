@@ -125,25 +125,22 @@ function assertOk(response: OffscreenResponse, _operation: "preview" | "redact")
 
 export class BrowserDocumentPipeline implements DocumentPipeline {
   async preview(input: DocumentInput): Promise<DocumentPage[]> {
-    try {
-      const response = await callOffscreen({
-        channel: OFFSCREEN_CHANNEL,
-        op: "preview",
-        jobId: crypto.randomUUID(),
-        kind: input.kind,
-        bytes: bytesToBase64(input.bytes),
-        name: input.name,
-        mimeType: input.mimeType,
-        enabledCategories: input.enabledCategories,
-        maxPages: input.maxPages,
-        ocrLanguage: input.ocrLanguage,
-      });
-      assertOk(response, "preview");
-      if (response.op !== "preview") throw new Error("Unexpected offscreen response.");
-      return response.pages;
-    } finally {
-      await closeOffscreenDocument();
-    }
+    const response = await callOffscreen({
+      channel: OFFSCREEN_CHANNEL,
+      op: "preview",
+      jobId: crypto.randomUUID(),
+      kind: input.kind,
+      bytes: bytesToBase64(input.bytes),
+      name: input.name,
+      mimeType: input.mimeType,
+      enabledCategories: input.enabledCategories,
+      maxPages: input.maxPages,
+      ocrLanguage: input.ocrLanguage,
+      customPatterns: input.customPatterns,
+    });
+    assertOk(response, "preview");
+    if (response.op !== "preview") throw new Error("Unexpected offscreen response.");
+    return response.pages;
   }
 
   async redact(
@@ -151,36 +148,32 @@ export class BrowserDocumentPipeline implements DocumentPipeline {
     boxes: { pageIndex: number; rects: Rect[] }[],
     options?: RedactionOptions
   ): Promise<RedactedDocumentResult> {
-    try {
-      const effectiveOptions = options ?? input.options;
-      const response = await callOffscreen({
-        channel: OFFSCREEN_CHANNEL,
-        op: "redact",
-        jobId: crypto.randomUUID(),
-        kind: input.kind,
-        bytes: bytesToBase64(input.bytes),
-        name: input.name,
-        mimeType: input.mimeType,
-        boxes,
-        padding: effectiveOptions?.padding ?? input.padding,
-        options: effectiveOptions,
-      });
-      assertOk(response, "redact");
-      if (response.op !== "redact") throw new Error("Unexpected offscreen response.");
-      return {
-        outputBytes: base64ToBytes(response.outputBytes),
-        outputMimeType: response.outputMimeType,
-        outputName: response.outputName,
-        pages: input.previewPages,
-        summary: {
-          pages: input.previewPages.length,
-          redacted: response.redactedCount,
-          categories: input.categories,
-        },
-        verification: response.verification,
-      };
-    } finally {
-      await closeOffscreenDocument();
-    }
+    const effectiveOptions = options ?? input.options;
+    const response = await callOffscreen({
+      channel: OFFSCREEN_CHANNEL,
+      op: "redact",
+      jobId: crypto.randomUUID(),
+      kind: input.kind,
+      bytes: bytesToBase64(input.bytes),
+      name: input.name,
+      mimeType: input.mimeType,
+      boxes,
+      padding: effectiveOptions?.padding ?? input.padding,
+      options: effectiveOptions,
+    });
+    assertOk(response, "redact");
+    if (response.op !== "redact") throw new Error("Unexpected offscreen response.");
+    return {
+      outputBytes: base64ToBytes(response.outputBytes),
+      outputMimeType: response.outputMimeType,
+      outputName: response.outputName,
+      pages: input.previewPages,
+      summary: {
+        pages: input.previewPages.length,
+        redacted: response.redactedCount,
+        categories: input.categories,
+      },
+      verification: response.verification,
+    };
   }
 }

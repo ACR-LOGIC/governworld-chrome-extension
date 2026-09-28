@@ -3,7 +3,7 @@ import { validateMessage } from "../shared/messages.js";
 import { loadSettings, saveSettings, isCloudAllowed, isAllowedGatewayOrigin, meetsThreshold } from "../shared/settings.js";
 import { recordAudit, exportSignedAuditLog } from "../shared/audit.js";
 import type { Settings } from "../shared/settings.js";
-import type { DocKind, PopupState, ScanMode, WorkerMessage, ExtensionMessage, Finding, PopupFromWorker, Rect, RedactionOptions } from "../shared/types.js";
+import type { DocKind, PopupState, ScanMode, WorkerMessage, ExtensionMessage, Finding, PopupFromWorker, Rect, RedactionOptions, ScanSettingsMessage } from "../shared/types.js";
 import { previewDocument, redactDocument, getLastSession, clearSession as clearDocSession, clearAllFiles } from "./documents.js";
 import { analyzeExamples, testPattern } from "../shared/wizardAnalyzer.js";
 import {
@@ -20,6 +20,12 @@ import {
   submitLogic,
   getCachedCapabilities,
 } from "../api/index.js";
+import {
+  generateOAuthState,
+  verifyOAuthState,
+  buildAuthorizeUrl,
+  exchangeCodeForTokens,
+} from "../api/auth.js";
 import {
   loadCustomPatterns,
   saveCustomPattern,
@@ -38,6 +44,34 @@ import {
 
 const SESSION_KEY_PREFIX = "scan:";
 const SCAN_TIMEOUT_MS = 60_000;
+const FETCH_TIMEOUT_MS = 10_000;
+
+function buildScanSettingsMessage(settings: Settings): ScanSettingsMessage {
+  return {
+    enabledCategories: settings.enabledCategories,
+    maxVisibleChars: settings.maxVisibleChars,
+    maxNodeChars: settings.maxNodeChars,
+    maskPlaceholders: settings.maskPlaceholders,
+    sessionTimeoutMs:
+      settings.sessionTimeout === "never"
+        ? 0
+        : settings.sessionTimeout === "5m"
+          ? 5 * 60 * 1000
+          : settings.sessionTimeout === "15m"
+            ? 15 * 60 * 1000
+            : 30 * 60 * 1000,
+  };
+}
+
+async function fetchWithTimeout(url: string, init?: RequestInit, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 interface SessionState {
   sessionId: string;
@@ -45,6 +79,7 @@ interface SessionState {
   findings: Finding[];
   stats: { visibleChars: number; truncated: boolean };
   scannedAt: number;
+  scanning: boolean;
   /** Stack of previously-applied finding-id sets for undo. Newest last. */
   maskHistory?: string[][];
 }
@@ -162,7 +197,7 @@ async function sendToTab(tabId: number, message: unknown): Promise<unknown> {
 
 /** A mask command succeeded only when the content script explicitly said so. */
 function maskCommandOk(response: unknown): boolean {
-  return response === undefined || (typeof response === "object" && response !== null && (response as { ok?: boolean }).ok !== false);
+  return typeof response === "object" && response !== null && (response as { ok?: boolean }).ok === true;
 }
 
 function buildPopupState(
@@ -172,7 +207,7 @@ function buildPopupState(
 ): PopupState {
   return {
     mode: settings.mode,
-    scanning: false,
+    scanning: session?.scanning ?? false,
     findings: session?.findings ?? [],
     scanned: session !== null,
     truncated: session?.stats.truncated ?? false,
@@ -223,11 +258,11 @@ async function handlePopupScan(mode: ScanMode, requestId: string): Promise<void>
   const timer = setTimeout(() => {
     pendingScans.delete(tabId);
     void (async () => {
-      const session = await readSession(tabId);
+      await clearSession(tabId);
       notifyPopup({
         type: "POPUP_STATE",
         requestId,
-        state: buildPopupState(settings, session, {
+        state: buildPopupState(settings, null, {
           code: "SCAN_TIMEOUT",
           userMessage: "Scan timed out. Try again.",
         }),
@@ -236,19 +271,14 @@ async function handlePopupScan(mode: ScanMode, requestId: string): Promise<void>
   }, SCAN_TIMEOUT_MS);
   pendingScans.set(tab.id, { requestId, sessionId, timer });
 
-  await writeSession(tab.id, { sessionId, mode, findings: [], stats: { visibleChars: 0, truncated: false }, scannedAt: Date.now() });
+  await writeSession(tab.id, { sessionId, mode, findings: [], stats: { visibleChars: 0, truncated: false }, scannedAt: Date.now(), scanning: true });
 
   const message: WorkerMessage = {
     type: "SCAN_PAGE",
     requestId,
     mode,
     sessionId,
-    settings: {
-      enabledCategories: settings.enabledCategories,
-      maxVisibleChars: settings.maxVisibleChars,
-      maxNodeChars: settings.maxNodeChars,
-      maskPlaceholders: settings.maskPlaceholders,
-    },
+    settings: buildScanSettingsMessage(settings),
   };
   await sendToTab(tab.id, message);
 }
@@ -568,15 +598,16 @@ async function handleContentScanResult(message: Extract<WorkerMessage, { type: "
   const pending = pendingScans.get(tabId);
   // Bind the result to the scan that produced it. A stale or mismatched result
   // is dropped fail-closed: never persisted, never surfaced as a success.
-  if (pending) {
-    if (message.sessionId !== pending.sessionId) {
-      clearTimeout(pending.timer);
-      pendingScans.delete(tabId);
-      return;
-    }
+  if (!pending) {
+    return;
+  }
+  if (message.sessionId !== pending.sessionId) {
     clearTimeout(pending.timer);
     pendingScans.delete(tabId);
+    return;
   }
+  clearTimeout(pending.timer);
+  pendingScans.delete(tabId);
   const settings = await loadSettings();
   const findings = message.findings.filter((f) => meetsThreshold(settings, f.category, f.confidence));
   await writeSession(tabId, {
@@ -585,6 +616,7 @@ async function handleContentScanResult(message: Extract<WorkerMessage, { type: "
     findings,
     stats: message.stats,
     scannedAt: Date.now(),
+    scanning: false,
   });
   const tab = await chrome.tabs.get(tabId).catch(() => undefined);
   void recordAudit({
@@ -595,7 +627,7 @@ async function handleContentScanResult(message: Extract<WorkerMessage, { type: "
     outcome: "ok",
   });
   const session = await readSession(tabId);
-  notifyPopup({ type: "POPUP_STATE", requestId: pending?.requestId ?? "state", state: buildPopupState(settings, session) });
+  notifyPopup({ type: "POPUP_STATE", requestId: pending.requestId, state: buildPopupState(settings, session) });
   void maybeNotifyFindings(findings);
 }
 
@@ -765,7 +797,7 @@ async function saveAccount(gatewayOrigin: string, apiKey: string, requestId: str
   }
   const origin = canonicalGatewayOrigin(gatewayOrigin);
   try {
-    const probe = await fetch(`${origin}/health`, { method: "GET", headers: { Accept: "application/json" } });
+    const probe = await fetchWithTimeout(`${origin}/health`, { method: "GET", headers: { Accept: "application/json" } });
     if (!probe.ok) throw new Error(`Gateway health check failed (${probe.status})`);
   } catch (e) {
     await notifyAccountState(requestId, { code: "GATEWAY_UNREACHABLE", userMessage: e instanceof Error ? e.message : "Gateway is not reachable at that origin." });
@@ -792,7 +824,7 @@ async function saveAccount(gatewayOrigin: string, apiKey: string, requestId: str
 
 /** Fetch the authenticated billing catalog from the linked gateway (metadata only). */
 async function fetchPlans(gatewayOrigin: string, apiKey: string): Promise<{ id: string; name: string; priceId: string }[]> {
-  const response = await fetch(`${gatewayOrigin}/v1/billing/plans`, {
+  const response = await fetchWithTimeout(`${gatewayOrigin}/v1/billing/plans`, {
     method: "GET",
     headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
   });
@@ -860,7 +892,7 @@ async function purchasePlan(planId: string, requestId: string): Promise<void> {
     }
     const successUrl = chrome.runtime.getURL("sidepanel.html");
     const cancelUrl = chrome.runtime.getURL("sidepanel.html");
-    const response = await fetch(`${origin}/v1/billing/checkout`, {
+    const response = await fetchWithTimeout(`${origin}/v1/billing/checkout`, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ priceId: plan.priceId, successUrl, cancelUrl }),
@@ -916,6 +948,20 @@ chrome.runtime.onInstalled?.addListener(() => {
   purgeStagedFilesOnLifecycle("extension install/update");
 });
 
+// OAuth callback capture: when the provider redirects to chromiumapp.org,
+// extract the authorization code and state, then close the tab.
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (!tab.url) return;
+  if (!tab.url.includes(".chromiumapp.org/")) return;
+  const url = new URL(tab.url);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  if (code && state) {
+    void chrome.tabs.remove(tabId).catch(() => undefined);
+    void handleOAuthCallback(code, state, crypto.randomUUID());
+  }
+});
+
 // Keyboard shortcuts (manifest "commands"). A command is a deliberate user
 // action, so it may inject the content script just like a popup button press.
 // Results land in storage.session; the popup shows them on next open.
@@ -954,26 +1000,31 @@ chrome.commands.onCommand.addListener((command) => {
   })().catch(() => undefined);
 });
 
+async function syncContextMenus(): Promise<void> {
+  if (!chrome.contextMenus) return;
+  const settings = await loadSettings();
+  await new Promise<void>((resolve) => {
+    chrome.contextMenus.removeAll(() => {
+      if (settings.contextMenusEnabled) {
+        chrome.contextMenus.create({ id: "scan_page", title: "Scan page for sensitive data", contexts: ["page", "selection"] });
+        chrome.contextMenus.create({ id: "redact_selection", title: "Redact selection to clipboard", contexts: ["selection"] });
+        chrome.contextMenus.create({ id: "mask_selection", title: "Mask selected text / element", contexts: ["selection", "page"] });
+      }
+      resolve();
+    });
+  });
+}
+
 if (chrome.runtime.onInstalled) {
   chrome.runtime.onInstalled.addListener(() => {
-    if (chrome.contextMenus) {
-      chrome.contextMenus.removeAll(() => {
-        chrome.contextMenus.create({
-          id: "scan_page",
-          title: "Scan page for sensitive data",
-          contexts: ["page", "selection"],
-        });
-        chrome.contextMenus.create({
-          id: "redact_selection",
-          title: "Redact selection to clipboard",
-          contexts: ["selection"],
-        });
-        chrome.contextMenus.create({
-          id: "mask_selection",
-          title: "Mask selected text / element",
-          contexts: ["selection", "page"],
-        });
-      });
+    void syncContextMenus();
+  });
+}
+
+if (chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.settings) {
+      void syncContextMenus();
     }
   });
 }
@@ -995,12 +1046,7 @@ if (chrome.contextMenus?.onClicked) {
           type: "CONTEXT_REDACT_SELECTION",
           requestId: crypto.randomUUID(),
           selectionText: info.selectionText,
-          settings: {
-            enabledCategories: settings.enabledCategories,
-            maxVisibleChars: settings.maxVisibleChars,
-            maxNodeChars: settings.maxNodeChars,
-            maskPlaceholders: settings.maskPlaceholders,
-          },
+          settings: buildScanSettingsMessage(settings),
         };
         await sendToTab(tabId, msg);
       } else if (info.menuItemId === "mask_selection") {
@@ -1008,12 +1054,7 @@ if (chrome.contextMenus?.onClicked) {
           type: "CONTEXT_MASK_SELECTION",
           requestId: crypto.randomUUID(),
           selectionText: info.selectionText,
-          settings: {
-            enabledCategories: settings.enabledCategories,
-            maxVisibleChars: settings.maxVisibleChars,
-            maxNodeChars: settings.maxNodeChars,
-            maskPlaceholders: settings.maskPlaceholders,
-          },
+          settings: buildScanSettingsMessage(settings),
         };
         await sendToTab(tabId, msg);
       }
@@ -1219,6 +1260,76 @@ async function handleApiDisconnect(requestId: string): Promise<void> {
   });
 }
 
+async function handleOAuthConnect(requestId: string): Promise<void> {
+  try {
+    const state = await generateOAuthState();
+    const authorizeUrl = await buildAuthorizeUrl(state);
+    await chrome.tabs.create({ url: authorizeUrl });
+    notifyPopup({
+      type: "POPUP_OAUTH_STATUS",
+      requestId,
+      connected: false,
+      message: "OAuth authorization page opened. Complete sign-in to connect.",
+    });
+  } catch (error) {
+    notifyPopup({
+      type: "POPUP_OAUTH_STATUS",
+      requestId,
+      connected: false,
+      message: error instanceof Error ? error.message : "Failed to start OAuth flow.",
+    });
+  }
+}
+
+async function handleOAuthCallback(code: string, state: string, requestId: string): Promise<void> {
+  const valid = await verifyOAuthState(state);
+  if (!valid) {
+    notifyPopup({
+      type: "POPUP_OAUTH_STATUS",
+      requestId,
+      connected: false,
+      message: "OAuth state mismatch. Connection denied.",
+    });
+    return;
+  }
+  const client = new GovernWorldApiClient(await getApiUrl());
+  const result = await exchangeCodeForTokens(client, code);
+  if (!result.ok) {
+    notifyPopup({
+      type: "POPUP_OAUTH_STATUS",
+      requestId,
+      connected: false,
+      message: result.error,
+    });
+    return;
+  }
+  const bootstrap = await performBootstrap(client, result.tokens.access_token);
+  if (!bootstrap.success || !bootstrap.tenant) {
+    notifyPopup({
+      type: "POPUP_OAUTH_STATUS",
+      requestId,
+      connected: false,
+      message: bootstrap.error ?? "Bootstrap failed after OAuth.",
+    });
+    return;
+  }
+  await saveAuthSession(result.tokens, {
+    connected: true,
+    tenant_id: bootstrap.tenant.tenant_id,
+    tenant_name: bootstrap.tenant.tenant_name,
+    connected_at: new Date().toISOString(),
+  });
+  notifyPopup({
+    type: "POPUP_OAUTH_STATUS",
+    requestId,
+    connected: true,
+    tenantId: bootstrap.tenant.tenant_id,
+    tenantName: bootstrap.tenant.tenant_name,
+    apiUrl: await getApiUrl(),
+    capabilities: bootstrap.capabilities ?? [],
+  });
+}
+
 async function handleApiSyncPolicy(requestId: string): Promise<void> {
   const tokens = await getStoredTokens();
   const client = new GovernWorldApiClient(await getApiUrl());
@@ -1388,6 +1499,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
         break;
       case "POPUP_DOC_CLEAR":
         await clearDocSession(msg.docId);
+        void recordAudit({ ts: new Date().toISOString(), action: "doc_cleared", outcome: "ok" });
         break;
       case "POPUP_DOC_DELIVERY_REPORT":
         // Closes the audit loop for a fallback delivery the worker handed off.
@@ -1489,6 +1601,9 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
       case "POPUP_API_DISCONNECT":
         await handleApiDisconnect(msg.requestId);
         break;
+      case "POPUP_DOC_CANCEL":
+        await clearDocSession(msg.docId);
+        break;
       case "POPUP_API_GET_STATUS":
         await handleApiGetStatus(msg.requestId);
         break;
@@ -1497,6 +1612,12 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
         break;
       case "POPUP_API_SUBMIT_LOGIC":
         await handleApiSubmitLogic(msg.patternId, msg.requestId);
+        break;
+      case "POPUP_OAUTH_CONNECT":
+        await handleOAuthConnect(msg.requestId);
+        break;
+      case "POPUP_OAUTH_CALLBACK":
+        await handleOAuthCallback(msg.code, msg.state, msg.requestId);
         break;
       default:
         break;

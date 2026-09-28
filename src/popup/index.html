@@ -1,552 +1,607 @@
-<!-- Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved. -->
-
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GovernWorld — Privacy Intelligence</title>
-    <link rel="stylesheet" href="popup.css" />
-  </head>
-  <body>
-    <main id="app" class="app" role="main">
-      <header class="app__header">
-        <div class="app__brand">
-          <span class="app__mark" aria-hidden="true">
-            <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <defs>
-                <linearGradient id="gwshield-popup" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stop-color="#22d3ee" />
-                  <stop offset="1" stop-color="#0ea5e9" />
-                </linearGradient>
-              </defs>
-              <path d="M24 4 L41 10 V23 C41 35 34 42 24 46 C14 42 7 35 7 23 V10 Z" fill="none" stroke="url(#gwshield-popup)" stroke-width="2.6" />
-              <path d="M24 11 L35 14.6 V23 C35 31 30.6 36.4 24 39 C17.4 36.4 13 31 13 23 V14.6 Z" fill="none" stroke="#22d3ee" stroke-width="1.6" opacity="0.85" />
-              <rect x="16" y="24" width="16" height="4.4" rx="2.2" fill="#e6edf7" />
-              <circle cx="24" cy="32.4" r="1.8" fill="#34d399" />
-            </svg>
-          </span>
-          <div class="app__brand-text">
-            <h1 class="app__title" data-i18n="brand_title">GovernWorld</h1>
-            <span class="app__subtitle" data-i18n="brand_subtitle">Privacy Intelligence</span>
-          </div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GovernWorld Redaction</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main id="app" class="app" role="main">
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">◈</span>
+        <div class="brand-text">
+          <h1 data-i18n="brand_title">GovernWorld</h1>
+          <span class="brand-subtitle" data-i18n="brand_subtitle">Privacy Intelligence</span>
         </div>
-        <button type="button" class="help-link help-link--sm" data-guide="guide-local-mode" data-i18n="local_only_badge" title="How local-only processing works" style="margin-left: auto; margin-right: 6px;">
-          Local Only (?)
-        </button>
-        <span class="status-pill" role="status" aria-label="Processing Mode">
-          <span class="status-pill__dot" aria-hidden="true"></span>
-          <span id="mode-badge" data-i18n="local_processing">Local processing</span>
-        </span>
-      </header>
+      </div>
+      <div class="header-actions">
+        <span id="mode-badge" class="mode-badge" data-i18n="local_processing">LOCAL</span>
+        <button id="settings-gear-btn" class="icon-btn" type="button" data-i18n-title="settings_title" title="Settings">⚙</button>
+      </div>
+    </header>
 
-      <!-- Main Navigation Tabs -->
-      <nav class="app__tabs" role="tablist" aria-label="Main Navigation">
-        <button type="button" class="tab-btn tab-btn--active" data-tab="scanner" role="tab" aria-selected="true" id="tab-btn-scanner" aria-controls="tab-scanner" data-i18n="tab_scanner">Scanner</button>
-        <button type="button" class="tab-btn" data-tab="documents" role="tab" aria-selected="false" id="tab-btn-documents" aria-controls="tab-documents" data-i18n="tab_documents">Documents</button>
-        <button type="button" class="tab-btn" data-tab="wizard" role="tab" aria-selected="false" id="tab-btn-wizard" aria-controls="tab-wizard" data-i18n="tab_wizard">Wizard</button>
-        <button type="button" class="tab-btn" data-tab="settings" role="tab" aria-selected="false" id="tab-btn-settings" aria-controls="tab-settings" data-i18n="tab_settings">Settings</button>
-        <button type="button" class="tab-btn" data-tab="instructions" role="tab" aria-selected="false" id="tab-btn-instructions" aria-controls="tab-instructions" data-i18n="tab_instructions">Instructions</button>
-      </nav>
+    <nav class="tab-nav" role="tablist" aria-label="Main navigation">
+      <button class="tab-btn tab-btn--active" type="button" role="tab" aria-selected="true" aria-controls="tab-protection" data-tab="protection" id="tab-btn-protection">
+        <span class="tab-btn__icon" aria-hidden="true">◉</span>
+        <span data-i18n="tab_protection">Protection</span>
+      </button>
+      <button class="tab-btn" type="button" role="tab" aria-selected="false" aria-controls="tab-logic" data-tab="logic" id="tab-btn-logic">
+        <span class="tab-btn__icon" aria-hidden="true">⚡</span>
+        <span data-i18n="tab_logic">Logic</span>
+      </button>
+      <button class="tab-btn" type="button" role="tab" aria-selected="false" aria-controls="tab-review" data-tab="review" id="tab-btn-review">
+        <span class="tab-btn__icon" aria-hidden="true">◈</span>
+        <span data-i18n="tab_review">Review</span>
+      </button>
+      <button class="tab-btn" type="button" role="tab" aria-selected="false" aria-controls="tab-settings" data-tab="settings" id="tab-btn-settings">
+        <span class="tab-btn__icon" aria-hidden="true">⚙</span>
+        <span data-i18n="tab_settings">Settings</span>
+      </button>
+    </nav>
 
-      <!-- Tab 1: Scanner -->
-      <div id="tab-scanner" class="tab-panel tab-panel--active" role="tabpanel" aria-labelledby="tab-btn-scanner">
-        <!-- Proactive Paste & Prompt Shield Live Status Indicator -->
-        <div id="scanner-shield-status" class="shield-banner" role="status" aria-live="polite">
-          <span class="shield-banner__dot" aria-hidden="true"></span>
-          <div class="shield-banner__text">
-            <strong><span data-i18n="shield_title">Proactive Paste &amp; Prompt Shield:</span> <span id="scanner-shield-label" data-i18n="shield_active">Active</span></strong>
-            <span class="footnote" data-i18n="shield_desc">Guarding ChatGPT, Claude, LLMs &amp; web inputs against data leaks</span>
-          </div>
-          <button type="button" class="help-link help-link--sm" data-guide="guide-paste-guard" title="Learn how Paste Shield works" style="margin-left: auto;" data-i18n="info_btn">
-            Info ↗
-          </button>
+    <!-- Protection Tab -->
+    <section id="tab-protection" class="tab-panel tab-panel--active" role="tabpanel" aria-labelledby="tab-btn-protection">
+      <div class="protection-status">
+        <div class="status-indicator" aria-hidden="true">
+          <div class="status-ring"></div>
+          <span class="status-dot"></span>
         </div>
-
-        <div class="section-header">
-          <h2 data-i18n="page_protection">Page Protection</h2>
-          <button type="button" class="help-link" data-guide="guide-page-scan" title="View page scanning instructions" data-i18n="how_to_scan">How to scan ↗</button>
-        </div>
-
-        <section class="controls" aria-label="Scanning controls">
-          <button id="scan-btn" class="btn btn--primary btn--block" type="button" data-i18n="scan_page_btn">Scan Page (Alt+Shift+S)</button>
-          <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-            <button id="open-side-panel-btn" class="btn btn--link" type="button">
-              <span data-i18n="open_side_panel">Open side panel</span>
-              <span class="visually-hidden">(keyboard shortcut: Alt+Shift+P)</span>
-            </button>
-            <button id="clear-data-btn" class="btn btn--link" type="button" data-i18n="clear_session">Clear session</button>
-          </div>
-        </section>
-
-        <!-- Right-Click Context Menu Quick Hint -->
-        <div class="context-tip-card" role="note" aria-label="Right-click shortcuts">
-          <span class="context-tip-card__icon" aria-hidden="true">⚡</span>
-          <div class="context-tip-card__body">
-            <strong data-i18n="ctx_menu_title">Right-Click Protection Menu</strong>
-            <p class="footnote" data-i18n="ctx_menu_desc">Select any text on the page &amp; right-click to instantly <em>Redact to clipboard</em> or <em>Mask selection</em> without opening popup.</p>
-          </div>
-          <button type="button" class="help-link help-link--sm" data-guide="guide-context-menus" title="View context menu guide" data-i18n="ctx_menu_guide">Menu guide ↗</button>
-        </div>
-
-        <section id="scan-summary" class="summary" hidden aria-label="Scan summary">
-          <svg class="summary__icon" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6" />
-            <path fill="none" stroke="currentColor" stroke-width="1.8" d="M8.5 12.2l2.3 2.3 4.7-4.8" />
-          </svg>
-          <div class="summary__text">
-            <strong id="summary-chars" class="summary__chars"></strong>
-            <p id="status" class="summary__note" role="status" aria-live="polite"></p>
-          </div>
-        </section>
-
-        <section id="results-section" class="results" hidden aria-label="Sensitive data findings">
-          <div class="results__bar">
-            <div class="section-header" style="flex: 1;">
-              <h2 class="results__title" data-i18n="findings_title">Sensitive data findings</h2>
-              <button type="button" class="help-link help-link--sm" data-guide="guide-masking" title="Learn how masks work" data-i18n="masking_guide">Masking ↗</button>
-            </div>
-            <span id="results-count" class="count-badge"></span>
-            <div class="results__tools" style="display: flex; gap: 4px;">
-              <button id="toggle-all-findings-btn" class="btn btn--ghost btn--sm" type="button" title="Select / Deselect all findings" data-i18n="select_all">Select All</button>
-              <button id="export-findings-btn" class="btn btn--ghost btn--sm" type="button" title="Export findings (CSV/JSON)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="17 8 12 3 7 8" />
-                  <line x1="12" y1="3" x2="12" y2="15" />
-                </svg>
-              </button>
-            </div>
-          </div>
-          <ul id="findings-list" class="findings" role="list" aria-label="Detected findings list"></ul>
-        </section>
-
-        <footer class="app__footer">
-          <div class="results__actions">
-            <button id="apply-masks-btn" class="btn btn--primary" type="button" data-i18n="apply_masks_btn">Apply selected masks</button>
-            <button id="undo-masks-btn" class="btn btn--ghost" type="button" data-i18n="undo_masks_btn">Undo masks</button>
-            <button id="remove-masks-btn" class="btn btn--danger-ghost" type="button" data-i18n="remove_masks_btn">Remove all masks</button>
-            <button id="copy-redacted-btn" class="btn btn--ghost" type="button" data-i18n="copy_redacted_btn">Copy redacted text</button>
-          </div>
-          <p class="footnote" id="footnote" data-i18n="scanner_footnote">
-            A page mask is an in-browser overlay only. While masks are active,
-            copied text is redacted. The source website is not changed.
-          </p>
-        </footer>
+        <h2 class="status-title" data-i18n="protection_active">Protection Active</h2>
+        <p class="status-desc" data-i18n="protection_running">Your protection is running</p>
       </div>
 
-      <!-- Tab 2: Document Redaction Studio -->
-      <div id="tab-documents" class="tab-panel" hidden role="tabpanel" aria-labelledby="tab-btn-documents">
+      <div class="protection-services">
+        <div class="service-row">
+          <span class="service-icon" aria-hidden="true">◉</span>
+          <span class="service-label" data-i18n="page_protection">Page protection</span>
+          <span class="service-status service-status--active" data-i18n="service_active">Active</span>
+        </div>
+        <div class="service-row">
+          <span class="service-icon" aria-hidden="true">◉</span>
+          <span class="service-label" data-i18n="paste_protection">Paste protection</span>
+          <span class="service-status service-status--active" data-i18n="service_active">Active</span>
+        </div>
+        <div class="service-row">
+          <span class="service-icon" aria-hidden="true">◉</span>
+          <span class="service-label" data-i18n="doc_protection">Document protection</span>
+          <span class="service-status service-status--ready" data-i18n="service_ready">Ready</span>
+        </div>
+      </div>
+
+      <div id="scanner-shield-status" class="shield-banner" role="status" aria-live="polite">
+        <span id="scanner-shield-label" class="shield-banner__label" data-i18n="shield_active">Paste protection active</span>
+        <button type="button" class="help-link help-link--sm" data-guide="guide-paste-guard" data-i18n="info_btn">Info ↗</button>
+      </div>
+
+      <div class="protection-actions">
+        <button id="scan-btn" class="btn btn--primary btn--block" type="button" data-i18n="scan_page_btn">Scan This Page</button>
+        <button type="button" class="help-link help-link--sm" data-guide="guide-page-scan" data-i18n="how_to_scan">How to scan ↗</button>
+        <div class="action-grid">
+          <button id="open-doc-btn" class="btn btn--ghost" type="button" data-i18n="doc_redaction">Document Redaction</button>
+          <button id="open-wizard-btn" class="btn btn--ghost" type="button" data-i18n="create_custom_rule">Create Personal Logic</button>
+        </div>
+        <div class="action-row">
+          <button id="open-side-panel-btn" class="btn btn--link" type="button">
+            <span data-i18n="open_side_panel">Open side panel</span>
+            <span class="visually-hidden">(keyboard shortcut: Alt+Shift+P)</span>
+          </button>
+          <button id="clear-data-btn" class="btn btn--link" type="button" data-i18n="clear_session">Clear session</button>
+        </div>
+      </div>
+
+      <div id="scan-summary" class="scan-summary" hidden>
+        <p id="status" class="status-text"></p>
+        <p id="summary-chars" class="footnote"></p>
+      </div>
+
+      <p id="cloud-notice" class="cloud-notice" hidden></p>
+      <p class="footnote" data-i18n="cloud_disabled_notice">Cloud analysis is disabled in this build — all scanning runs locally on this device.</p>
+
+      <div id="results-section" class="results-section" hidden>
         <div class="section-header">
-          <h2 data-i18n="doc_studio_title">Interactive Redaction Studio</h2>
-          <button type="button" class="help-link" data-guide="guide-doc-redact" title="View document redaction instructions" data-i18n="doc_guide_btn">Document guide ↗</button>
+          <h3 data-i18n="findings_title">Findings</h3>
+          <div class="results-tools">
+            <span id="results-count" class="count-badge">0</span>
+            <button id="toggle-all-findings-btn" class="btn btn--ghost btn--sm" type="button" title="Select / Deselect all findings" data-i18n="select_all">Select All</button>
+            <button id="export-findings-btn" class="btn btn--ghost btn--sm" type="button" title="Export findings (CSV/JSON)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span class="visually-hidden" data-i18n="export_findings_btn">Export findings</span>
+            </button>
+          </div>
         </div>
-
-        <p class="footnote" data-i18n="doc_studio_desc">
-          PDF, Word (<code>.docx</code>), and Image files are scanned entirely on this device.
-          Detected values are masked with high-precision bounding boxes and permanently flattened into the copy you download.
-        </p>
-
-        <!-- Document OCR Language Selector -->
-        <div class="form-row" style="margin-top: 4px; margin-bottom: 8px;">
-          <label for="doc-ocr-language-select" style="font-size: 11px;" data-i18n="ocr_lang_label">Document OCR Recognition Language</label>
-          <select id="doc-ocr-language-select" class="preset-select" aria-label="Document OCR recognition language">
-            <option value="eng">🇺🇸 English (eng)</option>
-            <option value="spa">🇪🇸 Spanish (spa - Español)</option>
-            <option value="fra">🇫🇷 French (fra - Français)</option>
-            <option value="deu">🇩🇪 German (deu - Deutsch)</option>
-            <option value="jpn">🇯🇵 Japanese (jpn - 日本語)</option>
-            <option value="por">🇵🇹 Portuguese (por - Português)</option>
-          </select>
+        <ul id="findings-list" class="findings-list"></ul>
+        <div class="results-actions">
+          <button id="apply-masks-btn" class="btn btn--primary btn--sm" type="button" data-i18n="apply_masks_btn">Apply Masks</button>
+          <button id="undo-masks-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="undo_masks_btn">Undo</button>
+          <button id="remove-masks-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="remove_masks_btn">Remove All</button>
+          <button id="copy-redacted-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="copy_redacted_btn">Copy Redacted</button>
+          <button type="button" class="help-link help-link--sm" data-guide="guide-masking" data-i18n="masking_guide">Masking guide ↗</button>
         </div>
+      </div>
 
-        <!-- Document Drop Zone -->
-        <div id="doc-dropzone" class="dropzone" role="region" aria-label="Document upload dropzone" tabindex="0">
-          <input id="doc-file-input" type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp" class="visually-hidden" aria-label="Select PDF, Word, or image file" />
-          <svg class="dropzone__icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="none" stroke="currentColor" stroke-width="1.8" />
-            <polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" stroke-width="1.8" />
-            <line x1="12" y1="18" x2="12" y2="12" stroke="currentColor" stroke-width="1.8" />
-            <polyline points="9 15 12 12 15 15" fill="none" stroke="currentColor" stroke-width="1.8" />
-          </svg>
+      <div id="doc-workspace" class="doc-workspace" hidden>
+        <div class="doc-header">
+          <strong id="doc-filename" class="doc-filename"></strong>
+          <span id="doc-page-count" class="footnote"></span>
+        </div>
+        <div class="doc-toolbar" role="toolbar" aria-label="Document Studio canvas tools">
+          <button id="tool-draw-box" class="tool-btn tool-btn--active" type="button" data-i18n="tool_draw_box">✏️ Draw Box</button>
+          <button id="tool-clear-custom" class="tool-btn" type="button" data-i18n="tool_clear_custom">🧹 Clear Drawn</button>
+          <button id="tool-toggle-all-doc" class="tool-btn" type="button" data-i18n="tool_toggle_all">☑️ Toggle All</button>
+          <button type="button" class="help-link help-link--sm" data-guide="guide-doc-redact" data-i18n="doc_guide_btn">Document guide ↗</button>
+        </div>
+        <div id="doc-thumbs" class="doc-thumbs" role="region" aria-label="Document page review thumbnails"></div>
+        <div class="doc-style-controls" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+          <div class="form-row" style="margin-top: 0;">
+            <label for="doc-style-select" data-i18n="redaction_style_label">Redaction Style</label>
+            <select id="doc-style-select" class="preset-select" aria-label="Redaction style selection">
+              <option value="blackout" data-i18n="style_blackout">Blackout (Solid opaque black box)</option>
+              <option value="whiteout" data-i18n="style_whiteout">Whiteout (Solid opaque white box)</option>
+              <option value="stamp" data-i18n="style_stamp">Text Stamp (Box with centered text label)</option>
+            </select>
+            <button type="button" class="help-link help-link--sm" data-guide="guide-redaction-styles" data-i18n="info_btn">Info ↗</button>
+          </div>
+          <div id="doc-stamp-container" class="form-row" style="margin-top: 0;" hidden>
+            <label for="doc-stamp-text" data-i18n="stamp_text_label">Stamp Text Label</label>
+            <div style="display: flex; gap: 6px;">
+              <input id="doc-stamp-text" type="text" placeholder="[REDACTED]" value="[REDACTED]" style="flex: 1;" />
+              <select id="doc-stamp-presets" class="preset-select" style="width: auto; min-width: 130px;" aria-label="Quick stamp label presets">
+                <option value="[REDACTED]">[REDACTED]</option>
+                <option value="[CONFIDENTIAL]">[CONFIDENTIAL]</option>
+                <option value="[PHI REMOVED]">[PHI REMOVED]</option>
+                <option value="[PII REMOVED]">[PII REMOVED]</option>
+                <option value="[PII MASKED]">[PII MASKED]</option>
+                <option value="[RESTRICTED]">[RESTRICTED]</option>
+                <option value="[DE-IDENTIFIED]">[DE-IDENTIFIED]</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="doc-findings-section">
+          <div class="section-header">
+            <h4 data-i18n="doc_findings_title">Document Findings</h4>
+            <span id="doc-findings-count" class="count-badge">0</span>
+          </div>
+          <ul id="doc-findings" class="findings-list" role="list"></ul>
+        </div>
+        <div class="doc-actions">
+          <button id="doc-redact-btn" class="btn btn--primary btn--sm" type="button" data-i18n="redact_download_btn">Redact & Download</button>
+          <button id="doc-clear-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="start_over_btn">Start Over</button>
+        </div>
+      </div>
+
+      <div id="doc-progress" class="doc-progress" hidden role="status" aria-live="polite">
+        <div class="doc-progress__spinner" aria-hidden="true"></div>
+        <span id="doc-progress-text" class="doc-progress__text" data-i18n="doc_processing">Processing document…</span>
+        <button id="doc-cancel-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="doc_cancel">Cancel</button>
+      </div>
+
+      <div id="doc-status" class="summary" hidden role="status" aria-live="polite">
+        <p id="doc-status-text" class="summary__note"></p>
+      </div>
+
+      <div class="dropzone-section">
+        <div id="doc-dropzone" class="dropzone" role="region" aria-label="Document upload" tabindex="0">
+          <input id="doc-file-input" type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp" class="visually-hidden" aria-label="Select file" />
           <strong data-i18n="dropzone_title">Drag &amp; drop a document or image here</strong>
           <span class="footnote" data-i18n="dropzone_desc">or click to select file</span>
-          <span class="footnote" style="margin-top: 4px; color: var(--text-faint);" data-i18n="dropzone_formats">Supports PDF (.pdf), Word (.docx), and Images (.png, .jpg, .webp) up to 20 MB</span>
         </div>
-
-        <div id="doc-status" class="summary" hidden role="status" aria-live="polite">
-          <p id="doc-status-text" class="summary__note"></p>
-        </div>
-
-        <div id="doc-workspace" hidden>
-          <div class="doc-header">
-            <strong id="doc-filename" class="doc-filename"></strong>
-            <span id="doc-page-count" class="footnote"></span>
-          </div>
-
-          <!-- Document Studio Canvas Tools Toolbar -->
-          <div class="doc-toolbar" role="toolbar" aria-label="Document Studio canvas tools">
-            <span class="footnote" style="font-weight: 500;">Tools:</span>
-            <div class="doc-toolbar__group">
-              <button id="tool-draw-box" class="tool-btn tool-btn--active" type="button" title="Drag on canvas to draw custom redaction boxes" data-i18n="tool_draw_box">
-                ✏️ Draw Box
-              </button>
-              <button id="tool-clear-custom" class="tool-btn" type="button" title="Remove all manually drawn custom boxes" data-i18n="tool_clear_custom">
-                🧹 Clear Drawn Boxes
-              </button>
-              <button id="tool-toggle-all-doc" class="tool-btn" type="button" title="Select or deselect all detected findings" data-i18n="tool_toggle_all">
-                ☑️ Toggle All
-              </button>
-            </div>
-          </div>
-
-          <div id="doc-thumbs" class="doc-thumbs" role="region" aria-label="Document page review thumbnails"></div>
-
-          <!-- Redaction Style Controls -->
-          <div class="doc-style-controls" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
-            <div class="form-row" style="margin-top: 0;">
-              <label for="doc-style-select" data-i18n="redaction_style_label">Redaction Style</label>
-              <select id="doc-style-select" class="preset-select" aria-label="Redaction style selection">
-                <option value="blackout" data-i18n="style_blackout">Blackout (Solid opaque black box)</option>
-                <option value="whiteout" data-i18n="style_whiteout">Whiteout (Solid opaque white box)</option>
-                <option value="stamp" data-i18n="style_stamp">Text Stamp (Box with centered text label)</option>
-              </select>
-            </div>
-
-            <div id="doc-stamp-container" class="form-row" style="margin-top: 0;" hidden>
-              <label for="doc-stamp-text" data-i18n="stamp_text_label">Stamp Text Label</label>
-              <div style="display: flex; gap: 6px;">
-                <input id="doc-stamp-text" type="text" placeholder="[REDACTED]" value="[REDACTED]" style="flex: 1;" />
-                <select id="doc-stamp-presets" class="preset-select" style="width: auto; min-width: 130px;" aria-label="Quick stamp label presets">
-                  <option value="[REDACTED]">[REDACTED]</option>
-                  <option value="[CONFIDENTIAL]">[CONFIDENTIAL]</option>
-                  <option value="[PHI REMOVED]">[PHI REMOVED]</option>
-                  <option value="[PII MASKED]">[PII MASKED]</option>
-                  <option value="[RESTRICTED]">[RESTRICTED]</option>
-                  <option value="[DE-IDENTIFIED]">[DE-IDENTIFIED]</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div class="section-header" style="margin-top: 10px;">
-            <h3 class="results__title" style="font-size: 12px;" data-i18n="doc_findings_title">Document Findings</h3>
-            <span id="doc-findings-count" class="count-badge"></span>
-          </div>
-          <ul id="doc-findings" class="findings" style="margin-top: 6px;" role="list"></ul>
-
-          <div class="results__actions" style="margin-top: 12px;">
-            <button id="doc-redact-btn" class="btn btn--primary" type="button" disabled data-i18n="redact_download_btn">
-              Redact selected &amp; download
-            </button>
-            <button id="doc-clear-btn" class="btn btn--ghost" type="button" data-i18n="start_over_btn">Start over</button>
-          </div>
+        <div class="form-row" style="margin-top: 8px;">
+          <label for="doc-ocr-language-select" data-i18n="ocr_lang_label">Document OCR Language</label>
+          <select id="doc-ocr-language-select" class="preset-select" aria-label="Document OCR recognition language">
+            <option value="eng">🇺🇸 English (eng)</option>
+            <option value="spa">🇪🇸 Spanish (spa)</option>
+            <option value="fra">🇫🇷 French (fra)</option>
+            <option value="deu">🇩🇪 German (deu)</option>
+            <option value="jpn">🇯🇵 Japanese (jpn)</option>
+            <option value="por">🇵🇹 Portuguese (por)</option>
+          </select>
+          <button type="button" class="help-link help-link--sm" data-guide="guide-ocr-languages" data-i18n="info_btn">Info ↗</button>
         </div>
       </div>
+    </section>
 
-      <!-- Tab 3: Redaction Wizard -->
-      <div id="tab-wizard" class="tab-panel" hidden role="tabpanel" aria-labelledby="tab-btn-wizard">
-        <div class="section-header">
-          <h2 data-i18n="wizard_title">Redaction Wizard</h2>
-          <button type="button" class="help-link" data-guide="guide-wizard" title="View wizard tutorial" data-i18n="wizard_guide_btn">Wizard guide ↗</button>
-        </div>
-        <p class="footnote" data-i18n="wizard_desc">
-          Create and refine custom regex patterns locally using sample text. Raw examples stay strictly on your device.
-        </p>
-        <div class="rulepack-actions">
-          <button id="open-wizard-btn" class="btn btn--primary btn--sm" type="button" data-i18n="create_custom_rule">Create Custom Rule</button>
+    <!-- Logic Tab -->
+    <section id="tab-logic" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-logic" hidden>
+      <div class="section-header">
+        <h2 data-i18n="my_logic">My Logic</h2>
+        <button type="button" class="help-link help-link--sm" data-guide="guide-wizard" data-i18n="wizard_guide_btn">Wizard guide ↗</button>
+      </div>
+      <p class="footnote" data-i18n="logic_desc">Create and manage personal detection logic. All processing happens locally on your device.</p>
+      <div class="logic-actions">
+        <button id="open-wizard-btn-2" class="btn btn--primary" type="button" data-i18n="create_custom_rule">+ Create Personal Logic</button>
+      </div>
+      <div class="custom-patterns-section">
+        <h3 data-i18n="my_custom_patterns">Personal Logic</h3>
+        <p id="no-custom-patterns" class="footnote" data-i18n="no_custom_patterns" hidden>No personal logic yet. Create your first rule.</p>
+        <ul id="custom-patterns-list" class="findings-list"></ul>
+      </div>
+      <div class="community-section">
+        <h3 data-i18n="community_pack_title">Community Logic</h3>
+        <div class="logic-actions">
           <button id="link-community-btn" class="btn btn--ghost btn--sm" type="button" disabled data-i18n="community_account_btn">Community Account Unavailable</button>
-        </div>
-        <p id="community-account-status" class="footnote" role="status" aria-live="polite"></p>
-
-        <h3 class="results__title" style="margin-top: 12px; font-size: 12px;" data-i18n="my_custom_patterns">My Custom Patterns</h3>
-        <ul id="custom-patterns-list" class="findings" style="margin-top: 6px;" role="list"></ul>
-        <p id="no-custom-patterns" class="footnote" data-i18n="no_custom_patterns">No custom patterns created yet.</p>
-
-        <h3 class="results__title" style="margin-top: 12px; font-size: 12px;" data-i18n="community_pack_title">Community Contribution Pack</h3>
-        <div class="rulepack-actions">
           <button id="fetch-community-rules-btn" class="btn btn--ghost btn--sm" type="button" disabled data-i18n="community_rules_btn">Community Rules Unavailable</button>
         </div>
-        <ul id="community-rules-list" class="findings" style="margin-top: 6px;" role="list"></ul>
+        <p id="community-account-status" class="footnote" role="status" aria-live="polite">Community logic is unavailable.</p>
+        <ul id="community-rules-list" class="findings-list"></ul>
+      </div>
+    </section>
+
+    <!-- Review Tab -->
+    <section id="tab-review" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-review" hidden>
+      <div class="section-header">
+        <h2 data-i18n="review_title">Review</h2>
+        <button type="button" class="help-link help-link--sm" data-guide="guide-verification" data-i18n="info_btn">Info ↗</button>
+      </div>
+      <div class="review-stats">
+        <h3 data-i18n="recent_protection">Recent Protection</h3>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-value" id="review-findings-count">0</span>
+            <span class="stat-label" data-i18n="findings_detected">Findings detected</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="review-protected-count">0</span>
+            <span class="stat-label" data-i18n="protected_count">Protected</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-value" id="review-pages-count">0</span>
+            <span class="stat-label" data-i18n="pages_scanned">Pages scanned</span>
+          </div>
+        </div>
+      </div>
+      <div class="coverage-section">
+        <h3 data-i18n="coverage_title">Coverage</h3>
+        <div class="coverage-grid">
+          <div class="coverage-item">
+            <span class="coverage-icon coverage-icon--ok" aria-hidden="true">✓</span>
+            <span data-i18n="coverage_page">Page content</span>
+          </div>
+          <div class="coverage-item">
+            <span class="coverage-icon coverage-icon--ok" aria-hidden="true">✓</span>
+            <span data-i18n="coverage_visible">Visible text</span>
+          </div>
+          <div class="coverage-item">
+            <span class="coverage-icon coverage-icon--ok" aria-hidden="true">✓</span>
+            <span data-i18n="coverage_images">Images</span>
+          </div>
+          <div class="coverage-item">
+            <span class="coverage-icon coverage-icon--ok" aria-hidden="true">✓</span>
+            <span data-i18n="coverage_docs">Documents</span>
+          </div>
+          <div class="coverage-item">
+            <span class="coverage-icon coverage-icon--ok" aria-hidden="true">✓</span>
+            <span data-i18n="coverage_ocr">OCR</span>
+          </div>
+        </div>
+        <p class="footnote" data-i18n="coverage_note">Some content may be inaccessible to the extension. View coverage details.</p>
+        <button id="coverage-details-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="coverage_details">View Details</button>
+      </div>
+      <div class="activity-section">
+        <h3 data-i18n="activity_title">Activity</h3>
+        <p id="activity-empty" class="footnote" data-i18n="activity_empty">No recent activity. Scan a page to get started.</p>
+        <ul id="activity-list" class="findings-list"></ul>
+      </div>
+    </section>
+
+    <!-- Settings Tab -->
+    <section id="tab-settings" class="tab-panel" role="tabpanel" aria-labelledby="tab-btn-settings" hidden>
+      <div class="section-header">
+        <h2 data-i18n="settings_title">Settings</h2>
+        <button type="button" class="help-link help-link--sm" data-guide="guide-settings" data-i18n="info_btn">Info ↗</button>
       </div>
 
-      <!-- Tab 4: Settings -->
-      <div id="tab-settings" class="tab-panel" hidden role="tabpanel" aria-labelledby="tab-btn-settings">
-        <div class="section-header">
-          <h2 data-i18n="settings_title">Detection &amp; Preferences</h2>
-          <button type="button" class="help-link" data-guide="guide-settings" title="Learn about all settings and options">Settings guide ↗</button>
+      <nav class="settings-nav" aria-label="Settings sections">
+        <button class="settings-nav-btn settings-nav-btn--active" type="button" data-settings-page="profile" id="settings-nav-profile">
+          <span data-i18n="settings_profile">Profile &amp; Account</span>
+          <span aria-hidden="true">›</span>
+        </button>
+        <button class="settings-nav-btn" type="button" data-settings-page="protection" id="settings-nav-protection">
+          <span data-i18n="settings_protection">Protection</span>
+          <span aria-hidden="true">›</span>
+        </button>
+        <button class="settings-nav-btn" type="button" data-settings-page="detection" id="settings-nav-detection">
+          <span data-i18n="settings_detection">Detection</span>
+          <span aria-hidden="true">›</span>
+        </button>
+        <button class="settings-nav-btn" type="button" data-settings-page="appearance" id="settings-nav-appearance">
+          <span data-i18n="settings_appearance">Appearance &amp; Accessibility</span>
+          <span aria-hidden="true">›</span>
+        </button>
+        <button class="settings-nav-btn" type="button" data-settings-page="notifications" id="settings-nav-notifications">
+          <span data-i18n="settings_notifications">Notifications</span>
+          <span aria-hidden="true">›</span>
+        </button>
+        <button class="settings-nav-btn" type="button" data-settings-page="privacy" id="settings-nav-privacy">
+          <span data-i18n="settings_privacy">Privacy</span>
+          <span aria-hidden="true">›</span>
+        </button>
+        <button class="settings-nav-btn" type="button" data-settings-page="advanced" id="settings-nav-advanced">
+          <span data-i18n="settings_advanced">Advanced</span>
+          <span aria-hidden="true">›</span>
+        </button>
+        <button class="settings-nav-btn" type="button" data-settings-page="about" id="settings-nav-about">
+          <span data-i18n="settings_about">About &amp; Diagnostics</span>
+          <span aria-hidden="true">›</span>
+        </button>
+      </nav>
+
+      <div class="settings-pages">
+        <div class="settings-page settings-page--active" id="settings-page-profile" data-settings-page="profile">
+          <h3 data-i18n="profile_title">Profile</h3>
+          <div class="form-row">
+            <label data-i18n="account_status_label">Account status</label>
+            <p class="footnote" data-i18n="local_user">Local user — no account required</p>
+          </div>
+          <div class="form-row">
+            <label data-i18n="cloud_connect_label">Cloud connection</label>
+            <button id="oauth-connect-btn" class="btn btn--primary btn--sm" type="button" data-i18n="oauth_connect_btn">Connect to GovernWorld</button>
+            <p id="oauth-status" class="footnote" role="status" aria-live="polite"></p>
+          </div>
+          <hr class="section-divider" />
+          <div class="form-row">
+            <label data-i18n="gateway_origin_label">Gateway origin</label>
+            <input id="gateway-origin-input" type="url" inputmode="url" autocomplete="off" placeholder="https://api.example.com" />
+          </div>
+          <div class="form-row">
+            <label data-i18n="api_key_label">API key</label>
+            <input id="gateway-key-input" type="password" inputmode="text" autocomplete="off" placeholder="gw_live_…" />
+          </div>
+          <div class="form-row">
+            <button id="account-save-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="save_account_btn">Save account</button>
+            <button id="account-purchase-btn" class="btn btn--primary btn--sm" type="button" hidden data-i18n="buy_addon_btn">Buy extension add-on</button>
+          </div>
+          <p id="account-status" class="footnote" role="status" aria-live="polite"></p>
         </div>
 
-        <section class="settings" aria-label="Settings configuration">
-          <!-- General & Appearance -->
-          <details open id="settings-details-general">
-            <summary data-i18n="sec_general_appearance">General &amp; Appearance</summary>
-            
-            <div class="form-row" style="margin-top: 6px;">
-              <label for="lang-select" data-i18n="lang_select_label">Interface Language / Idioma / 语言</label>
-              <select id="lang-select" class="preset-select" aria-label="Select extension interface language">
-                <option value="en">🇺🇸 English</option>
-                <option value="es">🇪🇸 Español (Spanish)</option>
-                <option value="fr">🇫🇷 Français (French)</option>
-                <option value="de">🇩🇪 Deutsch (German)</option>
-                <option value="ja">🇯🇵 日本語 (Japanese)</option>
-                <option value="pt">🇵🇹 Português (Portuguese)</option>
-                <option value="zh">🇨🇳 简体中文 (Simplified Chinese)</option>
-              </select>
-            </div>
+        <div class="settings-page" id="settings-page-protection" data-settings-page="protection" hidden>
+          <h3 data-i18n="protection_settings_title">Protection Settings</h3>
+          <label class="toggle-row">
+            <input id="paste-guard-toggle" type="checkbox" role="switch" aria-checked="true" />
+            <span data-i18n="paste_guard_toggle">Paste Shield</span>
+          </label>
+          <label class="toggle-row">
+            <input id="context-menus-toggle" type="checkbox" role="switch" aria-checked="false" />
+            <span data-i18n="context_menus_toggle">Context Menu Protection</span>
+          </label>
+          <button type="button" class="help-link help-link--sm" data-guide="guide-context-menus" data-i18n="ctx_menu_guide">Context menu guide ↗</button>
+          <label class="toggle-row">
+            <input id="auto-copy-toggle" type="checkbox" role="switch" aria-checked="false" />
+            <span data-i18n="auto_copy_toggle">Automatically copy sanitized text</span>
+          </label>
+          <div class="form-row">
+            <label for="session-timeout-select" data-i18n="session_timeout_label">Session timeout</label>
+            <select id="session-timeout-select" class="preset-select">
+              <option value="never" data-i18n="timeout_never">Never</option>
+              <option value="5m" data-i18n="timeout_5m">5 minutes</option>
+              <option value="15m" data-i18n="timeout_15m">15 minutes</option>
+              <option value="30m" data-i18n="timeout_30m">30 minutes</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="default-doc-style-select" data-i18n="default_style_label">Default redaction style</label>
+            <select id="default-doc-style-select" class="preset-select">
+              <option value="blackout" data-i18n="style_blackout">Blackout</option>
+              <option value="whiteout" data-i18n="style_whiteout">Whiteout</option>
+              <option value="stamp" data-i18n="style_stamp">Text Stamp</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="default-doc-stamp-input" data-i18n="default_stamp_label">Default stamp label</label>
+            <input id="default-doc-stamp-input" type="text" value="[REDACTED]" />
+            <select id="default-doc-stamp-presets" class="preset-select" aria-label="Default stamp label presets">
+              <option value="[REDACTED]" selected>[REDACTED]</option>
+              <option value="[CONFIDENTIAL]">[CONFIDENTIAL]</option>
+              <option value="[PHI REMOVED]">[PHI REMOVED]</option>
+              <option value="[PII REMOVED]">[PII REMOVED]</option>
+              <option value="[PII MASKED]">[PII MASKED]</option>
+              <option value="[RESTRICTED]">[RESTRICTED]</option>
+              <option value="[DE-IDENTIFIED]">[DE-IDENTIFIED]</option>
+            </select>
+          </div>
+        </div>
 
-            <div class="form-row" style="margin-top: 8px;">
-              <label for="font-size-select" data-i18n="font_size_label">Font Size &amp; Visual Scale (Low Vision &amp; Accessibility)</label>
-              <select id="font-size-select" class="preset-select" aria-label="Select font size scale">
-                <option value="default" data-i18n="font_size_default">Default (100% standard size)</option>
-                <option value="medium" data-i18n="font_size_medium">Medium (115% larger text)</option>
-                <option value="large" data-i18n="font_size_large">Large (130% high visibility)</option>
-                <option value="xlarge" data-i18n="font_size_xlarge">Extra Large (150% maximum readability)</option>
-              </select>
-            </div>
-
-            <div class="toggles-group" style="margin-top: 10px; display: flex; flex-direction: column; gap: 8px;">
-              <label class="toggle-row">
-                <input id="high-contrast-toggle" type="checkbox" role="switch" aria-checked="false" />
-                <span data-i18n="high_contrast_toggle">High Contrast Mode (Enhanced borders, pure black background &amp; bright text)</span>
-              </label>
-
-              <label class="toggle-row">
-                <input id="dyslexia-toggle" type="checkbox" role="switch" aria-checked="false" />
-                <span data-i18n="dyslexia_toggle">Dyslexia-Friendly Text Spacing (Expanded letter-spacing, line-height &amp; readability font)</span>
-              </label>
-
-              <label class="toggle-row">
-                <input id="reduced-motion-toggle" type="checkbox" role="switch" aria-checked="false" />
-                <span data-i18n="reduced_motion_toggle">Reduced Motion (Disables UI animations, sliding transitions &amp; pulsing effects)</span>
-              </label>
-            </div>
-          </details>
-
-          <!-- Accessibility & Assistive Tools -->
-          <details open id="settings-details-accessibility">
-            <summary data-i18n="sec_accessibility">Accessibility &amp; Assistive Tools (Screen Readers &amp; Blind Support)</summary>
-            <div class="toggles-group" style="margin-top: 6px; display: flex; flex-direction: column; gap: 8px;">
-              <label class="toggle-row">
-                <input id="speech-toggle" type="checkbox" role="switch" aria-checked="false" />
-                <span data-i18n="speech_toggle">Spoken Findings &amp; Audio Announcements (Web Speech API announces scans &amp; actions for blind users)</span>
-              </label>
-
-              <label class="toggle-row">
-                <input id="verbose-aria-toggle" type="checkbox" role="switch" aria-checked="false" />
-                <span data-i18n="verbose_aria_toggle">Verbose Screen Reader ARIA Mode (Provides detailed spoken descriptions for assistive tech)</span>
-              </label>
-            </div>
-            <div style="margin-top: 8px;">
-              <button type="button" class="help-link help-link--sm" data-guide="guide-accessibility">Accessibility &amp; Voice Guide ↗</button>
-            </div>
-          </details>
-
-          <!-- Detection Engine -->
-          <details open id="settings-details-detection">
-            <summary data-i18n="sec_detection">Global Compliance Presets &amp; Detection Categories</summary>
-            <div class="preset-selector" aria-label="Redaction presets selection">
-              <label for="preset-select" style="display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 4px;" data-i18n="preset_config_label">Preset Configuration</label>
-              <select id="preset-select" class="preset-select" aria-label="Choose a compliance preset">
-                <option value="custom">⚙️ Custom Configuration</option>
-                <option value="hipaa">🏥 HIPAA (Healthcare &amp; PHI)</option>
-                <option value="pci">💳 PCI DSS (Payment Cards &amp; Financial)</option>
-                <option value="gdpr">🇪🇺 GDPR (EU Personal Data)</option>
-                <option value="pipeda">🇨🇦 PIPEDA (Canada SIN &amp; Personal Data)</option>
-                <option value="uk_gdpr">🇬🇧 UK GDPR / NHS (UK NHS &amp; Health Data)</option>
-                <option value="india_dpdp">🇮🇳 DPDP Act (India Aadhaar, PAN &amp; Privacy)</option>
-                <option value="australia_privacy">🇦🇺 Privacy Act (Australia TFN &amp; Privacy)</option>
-                <option value="brazil_lgpd">🇧🇷 LGPD (Brazil CPF &amp; Personal Data)</option>
-                <option value="developer">🔑 Developer (API Keys, Secrets &amp; Tokens)</option>
-              </select>
-            </div>
-
-            <div class="category-filters-row" role="group" aria-label="Quick category filters">
-              <span class="footnote" style="font-weight: 500;" data-i18n="quick_filter_label">Quick Filter:</span>
-              <button id="cat-filter-all" class="btn btn--ghost btn--sm" type="button" data-i18n="filter_all">All (19)</button>
+        <div class="settings-page" id="settings-page-detection" data-settings-page="detection" hidden>
+          <h3 data-i18n="detection_title">Detection</h3>
+          <div class="form-row">
+            <label for="preset-select" data-i18n="preset_config_label">Compliance preset</label>
+            <select id="preset-select" class="preset-select">
+              <option value="custom">Custom</option>
+              <option value="hipaa">HIPAA</option>
+              <option value="pci">PCI DSS</option>
+              <option value="gdpr">GDPR</option>
+              <option value="pipeda">PIPEDA</option>
+              <option value="uk_gdpr">UK GDPR / NHS</option>
+              <option value="india_dpdp">India DPDP</option>
+              <option value="australia_privacy">Australia Privacy</option>
+              <option value="brazil_lgpd">Brazil LGPD</option>
+              <option value="developer">Developer / Secrets</option>
+            </select>
+            <button type="button" class="help-link help-link--sm" data-guide="guide-categories" data-i18n="info_btn">Info ↗</button>
+          </div>
+          <div class="form-row">
+            <label data-i18n="quick_filter_label" aria-label="Quick category filters">Quick filters</label>
+            <div class="filter-buttons">
+              <button id="cat-filter-all" class="btn btn--ghost btn--sm" type="button" data-i18n="filter_all">All</button>
               <button id="cat-filter-health" class="btn btn--ghost btn--sm" type="button" data-i18n="filter_health">Healthcare</button>
               <button id="cat-filter-intl" class="btn btn--ghost btn--sm" type="button" data-i18n="filter_intl">International</button>
               <button id="cat-filter-finance" class="btn btn--ghost btn--sm" type="button" data-i18n="filter_finance">Financial</button>
               <button id="cat-filter-none" class="btn btn--ghost btn--sm" type="button" data-i18n="filter_clear">Clear</button>
             </div>
-
-            <fieldset id="category-list" class="category-list" aria-label="Detection categories list"></fieldset>
-            <p class="footnote" data-i18n="threshold_disclosure">
-              Detection thresholds are applied automatically by the selected
-              compliance preset. Switch to Custom to choose individual categories.
-            </p>
-
-            <div class="toggles-group" style="margin-top: 12px; display: flex; flex-direction: column; gap: 8px;">
-              <label class="toggle-row">
-                <input id="placeholder-toggle" type="checkbox" role="switch" aria-checked="false" />
-                <span data-i18n="placeholder_toggle">Show redaction labels on masks (e.g. <code>[SSN]</code>, <code>[SIN]</code>, <code>[NHS]</code>)</span>
-              </label>
-            </div>
-
-            <div class="form-row" style="margin-top: 10px;">
-              <label for="mask-padding-select" data-i18n="mask_padding_label">Mask Padding (Border bleed protection in pixels)</label>
-              <select id="mask-padding-select" class="preset-select" aria-label="Select mask padding in pixels">
-                <option value="0">0px (Exact bounding box)</option>
-                <option value="2">2px (Tight safety padding)</option>
-                <option value="4">4px (Recommended standard)</option>
-                <option value="8">8px (Generous security padding)</option>
-              </select>
-            </div>
-
-            <div class="form-row" style="margin-top: 8px;">
-              <label for="mask-color-select" data-i18n="mask_color_label">Visual Mask Overlay Color</label>
-              <select id="mask-color-select" class="preset-select" aria-label="Select visual mask color">
-                <option value="#0f172a" data-i18n="color_black">Solid Black (#0f172a)</option>
-                <option value="#ffffff" data-i18n="color_white">Solid White (#ffffff)</option>
-                <option value="#1e293b" data-i18n="color_navy">Deep Navy (#1e293b)</option>
-                <option value="#475569" data-i18n="color_slate">Slate Gray (#475569)</option>
-              </select>
-            </div>
-          </details>
-
-          <!-- Proactive Protection -->
-          <details open id="settings-details-protection">
-            <summary data-i18n="sec_protection">Proactive Protection &amp; Automation</summary>
-            
-            <div class="toggles-group" style="margin-top: 6px; display: flex; flex-direction: column; gap: 8px;">
-              <label class="toggle-row">
-                <input id="paste-guard-toggle" type="checkbox" role="switch" aria-checked="true" />
-                <span data-i18n="paste_guard_toggle">Proactive Paste &amp; Prompt Shield (Chat &amp; LLM Guard for ChatGPT, Claude, Forms)</span>
-              </label>
-
-              <label class="toggle-row">
-                <input id="context-menus-toggle" type="checkbox" role="switch" aria-checked="true" />
-                <span data-i18n="context_menus_toggle">Right-Click Context Menus (Redact selection &amp; quick mask shortcuts)</span>
-              </label>
-
-              <label class="toggle-row">
-                <input id="auto-copy-toggle" type="checkbox" role="switch" aria-checked="false" />
-                <span data-i18n="auto_copy_toggle">Auto-copy sanitized text to clipboard immediately after applying masks</span>
-              </label>
-            </div>
-
-            <div class="form-row" style="margin-top: 10px;">
-              <label for="session-timeout-select" data-i18n="session_timeout_label">Inactivity Session Timeout (Auto-clear sensitive memory)</label>
-              <select id="session-timeout-select" class="preset-select" aria-label="Select session inactivity timeout">
-                <option value="never" data-i18n="timeout_never">Never (Retain until browser closes)</option>
-                <option value="5m" data-i18n="timeout_5m">5 Minutes of inactivity</option>
-                <option value="15m" data-i18n="timeout_15m">15 Minutes of inactivity</option>
-                <option value="30m" data-i18n="timeout_30m">30 Minutes of inactivity</option>
-              </select>
-            </div>
-          </details>
-
-          <!-- Document Studio Defaults -->
-          <details id="settings-details-doc-defaults">
-            <summary data-i18n="sec_doc_defaults">Document Studio Defaults</summary>
-
-            <div class="form-row" style="margin-top: 6px;">
-              <label for="default-doc-style-select" data-i18n="default_style_label">Default Redaction Style for Documents</label>
-              <select id="default-doc-style-select" class="preset-select" aria-label="Select default document redaction style">
-                <option value="blackout" data-i18n="style_blackout">Blackout (Solid opaque black box)</option>
-                <option value="whiteout" data-i18n="style_whiteout">Whiteout (Solid opaque white box)</option>
-                <option value="stamp" data-i18n="style_stamp">Text Stamp (Box with centered text label)</option>
-              </select>
-            </div>
-
-            <div class="form-row" style="margin-top: 8px;">
-              <label for="default-doc-stamp-input" data-i18n="default_stamp_label">Default Text Stamp Label</label>
-              <input id="default-doc-stamp-input" type="text" placeholder="[REDACTED]" value="[REDACTED]" />
-            </div>
-
-            <div class="form-row" style="margin-top: 8px;">
-              <label for="ocr-language-select" data-i18n="ocr_arch_label">Document OCR Language Architecture</label>
-              <select id="ocr-language-select" class="preset-select" aria-label="Select default OCR language">
-                <option value="eng">🇺🇸 English (eng)</option>
-                <option value="spa">🇪🇸 Spanish (spa - Español)</option>
-                <option value="fra">🇫🇷 French (fra - Français)</option>
-                <option value="deu">🇩🇪 German (deu - Deutsch)</option>
-                <option value="jpn">🇯🇵 Japanese (jpn - 日本語)</option>
-                <option value="por">🇵🇹 Portuguese (por - Português)</option>
-              </select>
-            </div>
-          </details>
-
-          <!-- Right Click Shortcuts -->
-          <details id="settings-details-shortcuts">
-            <summary data-i18n="sec_ctx_shortcuts">Right-Click Context Menus &amp; Shortcuts</summary>
-            <div class="context-menus-card" style="margin-top: 6px; padding: 10px; background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-sm);">
-              <p class="footnote" style="margin-bottom: 6px;">GovernWorld integrates directly into your browser's right-click context menu:</p>
-              <ul class="footnote" style="padding-left: 16px; margin: 0; display: flex; flex-direction: column; gap: 4px;">
-                <li><strong>Redact selection to clipboard:</strong> Copies highlighted text with sensitive data masked.</li>
-                <li><strong>Mask selected text / element:</strong> Immediately applies visual privacy overlays to the page.</li>
-                <li><strong>Scan whole page:</strong> Runs instant on-device scan (<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>).</li>
-                <li><strong>Toggle masks on/off:</strong> Quick shortcut (<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>).</li>
-              </ul>
-              <div style="margin-top: 8px;">
-                <button type="button" class="help-link help-link--sm" data-guide="guide-shortcuts" data-i18n="shortcuts_guide_btn">View All Shortcuts ↗</button>
-              </div>
-            </div>
-          </details>
-
-          <!-- Notifications -->
-          <details id="settings-details-notifications">
-            <summary data-i18n="sec_notifications">Notifications</summary>
-            <p class="footnote">
-              Get a notification when a scan finds sensitive data. Notifications are
-              requested only after you enable this toggle.
-            </p>
-            <label class="toggle-row">
-              <input id="notifications-toggle" type="checkbox" role="switch" aria-checked="false" />
-              <span data-i18n="notify_toggle">Notify me when sensitive data is found</span>
-            </label>
-            <p id="notifications-status" class="footnote" role="status" aria-live="polite"></p>
-          </details>
-
-          <!-- Execution Mode -->
-          <div class="section-header" style="margin-top: 10px;">
-            <h3 data-i18n="sec_exec_mode">Execution Mode</h3>
-            <button type="button" class="help-link help-link--sm" data-guide="guide-cloud" title="Learn about cloud status and API readiness" data-i18n="cloud_info_btn">Cloud info ↗</button>
           </div>
+            <p class="footnote" data-i18n="categories_label">Protection Categories</p>
+            <fieldset id="category-list" class="category-list" aria-label="Detection categories list"></fieldset>
+            <p class="footnote" data-i18n="threshold_disclosure">Detection thresholds are applied automatically by the selected compliance preset. Switch to Custom to choose individual categories.</p>
+          <label class="toggle-row">
+            <input id="placeholder-toggle" type="checkbox" role="switch" aria-checked="false" />
+            <span data-i18n="placeholder_toggle">Show redaction labels</span>
+          </label>
+          <div class="form-row">
+            <label for="mask-padding-select" data-i18n="mask_padding_label">Mask padding</label>
+            <select id="mask-padding-select" class="preset-select">
+              <option value="0">0px</option>
+              <option value="2">2px</option>
+              <option value="4" selected>4px</option>
+              <option value="8">8px</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="mask-color-select" data-i18n="mask_color_label">Mask color</label>
+            <select id="mask-color-select" class="preset-select">
+              <option value="#0f172a" data-i18n="color_black">Black</option>
+              <option value="#ffffff" data-i18n="color_white">White</option>
+              <option value="#1e3a5f" data-i18n="color_navy">Navy</option>
+              <option value="#334155" data-i18n="color_slate">Slate</option>
+            </select>
+          </div>
+        </div>
 
-          <section class="segmented" aria-label="Scan mode">
+        <div class="settings-page" id="settings-page-appearance" data-settings-page="appearance" hidden>
+          <h3 data-i18n="appearance_title">Appearance &amp; Accessibility</h3>
+          <div class="form-row">
+            <label for="lang-select" data-i18n="lang_select_label">Language</label>
+            <select id="lang-select" class="preset-select">
+              <option value="en">🇺🇸 English</option>
+              <option value="es">🇪🇸 Español</option>
+              <option value="fr">🇫🇷 Français</option>
+              <option value="de">🇩🇪 Deutsch</option>
+              <option value="ja">🇯🇵 日本語</option>
+              <option value="pt">🇵🇹 Português</option>
+              <option value="zh">🇨🇳 简体中文</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="font-size-select" data-i18n="font_size_label">Text size</label>
+            <select id="font-size-select" class="preset-select">
+              <option value="default" data-i18n="font_size_default">Default</option>
+              <option value="medium" data-i18n="font_size_medium">Medium</option>
+              <option value="large" data-i18n="font_size_large">Large</option>
+              <option value="xlarge" data-i18n="font_size_xlarge">Extra Large</option>
+            </select>
+          </div>
+          <label class="toggle-row">
+            <input id="high-contrast-toggle" type="checkbox" role="switch" aria-checked="false" />
+            <span data-i18n="high_contrast_toggle">High Contrast</span>
+          </label>
+          <label class="toggle-row">
+            <input id="dyslexia-toggle" type="checkbox" role="switch" aria-checked="false" />
+            <span data-i18n="dyslexia_toggle">Dyslexia-Friendly Mode</span>
+          </label>
+          <label class="toggle-row">
+            <input id="reduced-motion-toggle" type="checkbox" role="switch" aria-checked="false" />
+            <span data-i18n="reduced_motion_toggle">Reduced Motion</span>
+          </label>
+          <label class="toggle-row">
+            <input id="speech-toggle" type="checkbox" role="switch" aria-checked="false" />
+            <span data-i18n="speech_toggle">Speech Announcements</span>
+          </label>
+          <label class="toggle-row">
+            <input id="verbose-aria-toggle" type="checkbox" role="switch" aria-checked="false" />
+            <span data-i18n="verbose_aria_toggle">Verbose ARIA Mode</span>
+          </label>
+          <button type="button" class="help-link help-link--sm" data-guide="guide-accessibility" data-i18n="info_btn">Info ↗</button>
+        </div>
+
+        <div class="settings-page" id="settings-page-notifications" data-settings-page="notifications" hidden>
+          <h3 data-i18n="notifications_title">Notifications</h3>
+          <label class="toggle-row">
+            <input id="notifications-toggle" type="checkbox" role="switch" aria-checked="false" />
+            <span data-i18n="notify_toggle">Notify me when sensitive data is found</span>
+          </label>
+          <p id="notifications-status" class="footnote" role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="settings-page" id="settings-page-privacy" data-settings-page="privacy" hidden>
+          <h3 data-i18n="privacy_title">Privacy</h3>
+          <p class="footnote" data-i18n="permissions_explanation">This extension uses your device's hardware (CPU, GPU, and memory) to run OCR and PDF processing locally. No data ever leaves your device.</p>
+          <ul class="footnote" style="padding-left: 16px; margin: 6px 0 0; display: flex; flex-direction: column; gap: 4px;">
+            <li><strong>activeTab:</strong> <span data-i18n="perm_active_tab">Scan pages only when you click Scan.</span></li>
+            <li><strong>scripting:</strong> <span data-i18n="perm_scripting">Inject the local scanning overlay.</span></li>
+            <li><strong>storage:</strong> <span data-i18n="perm_storage">Save settings and signed audit logs.</span></li>
+            <li><strong>downloads:</strong> <span data-i18n="perm_downloads">Save redacted files to your device.</span></li>
+            <li><strong>offscreen:</strong> <span data-i18n="perm_offscreen">Run OCR and PDF processing.</span></li>
+          </ul>
+          <button type="button" class="help-link help-link--sm" data-guide="guide-privacy" data-i18n="info_btn">Info ↗</button>
+          <button type="button" class="help-link help-link--sm" data-guide="guide-local-mode" data-i18n="info_btn">Info ↗</button>
+          <button type="button" class="help-link help-link--sm" data-guide="guide-shortcuts" data-i18n="shortcuts_guide_btn">Shortcuts ↗</button>
+          <div class="form-row" style="margin-top: 12px;">
+            <label data-i18n="local_mode_label">Processing mode</label>
             <label class="segmented__option">
               <input type="radio" name="mode" value="local" id="mode-local" />
               <span data-i18n="mode_local_label">Local only</span>
             </label>
-            <label
-              class="segmented__option"
-              title="Cloud analysis is unavailable until a gateway is deployed"
-            >
+            <label class="segmented__option">
               <input type="radio" name="mode" value="cloud" id="mode-cloud" disabled />
               <span data-i18n="mode_cloud_label">Cloud</span>
-              <svg class="segmented__lock" viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.6" />
-                <path d="M8 11V8a4 4 0 1 1 8 0v3" fill="none" stroke="currentColor" stroke-width="1.6" />
-              </svg>
             </label>
-          </section>
-          <p id="cloud-notice" class="cloud-notice" hidden></p>
-          <p class="footnote" data-i18n="cloud_disabled_notice">
-            Cloud analysis is disabled in this build — all scanning runs locally on this device.
-          </p>
+          </div>
+          <p class="footnote" data-i18n="local_mode_explanation" style="margin-top: 6px;">Local mode: All scanning, detection, and redaction runs entirely on your device.</p>
+        </div>
 
-          <details id="account-details">
-            <summary data-i18n="sec_account">Account &amp; extension license</summary>
-            <p class="footnote">
-              Link this extension to your existing GovernWorld workspace to view your
-              profile and manage the extension add-on. Nothing is sent unless you
-              provide a gateway origin and API key below.
-            </p>
-            <div class="form-row">
-              <label for="gateway-origin-input" data-i18n="gateway_origin_label">Gateway origin</label>
-              <input id="gateway-origin-input" type="url" inputmode="url" autocomplete="off" placeholder="https://api.example.com" />
+        <div class="settings-page" id="settings-page-advanced" data-settings-page="advanced" hidden>
+          <h3 data-i18n="advanced_title">Advanced</h3>
+          <p class="footnote" data-i18n="advanced_warning">Advanced settings can change how GovernWorld protects information.</p>
+          <div class="form-row">
+            <label for="ocr-language-select" data-i18n="ocr_lang_label">Document OCR Language</label>
+            <select id="ocr-language-select" class="preset-select">
+              <option value="eng">🇺🇸 English (eng)</option>
+              <option value="spa">🇪🇸 Spanish (spa)</option>
+              <option value="fra">🇫🇷 French (fra)</option>
+              <option value="deu">🇩🇪 German (deu)</option>
+              <option value="jpn">🇯🇵 Japanese (jpn)</option>
+              <option value="por">🇵🇹 Portuguese (por)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <span class="form-label" data-i18n="ocr_arch_label">OCR Architecture</span>
+            <p class="footnote">Tesseract WASM with local language data</p>
+          </div>
+        </div>
+
+        <div class="settings-page" id="settings-page-about" data-settings-page="about" hidden>
+          <h3 data-i18n="about_title">About &amp; Diagnostics</h3>
+          <div class="diag-grid">
+            <div class="diag-item">
+              <span class="diag-label" data-i18n="diag_engine">Protection Engine</span>
+              <span class="diag-value" data-i18n="diag_operational">Operational ✓</span>
             </div>
-            <div class="form-row">
-              <label for="gateway-key-input" data-i18n="api_key_label">API key</label>
-              <input id="gateway-key-input" type="password" inputmode="text" autocomplete="off" placeholder="gw_live_…" />
+            <div class="diag-item">
+              <span class="diag-label" data-i18n="diag_detection">Detection Engine</span>
+              <span class="diag-value" data-i18n="diag_operational">Operational ✓</span>
             </div>
-            <div class="rulepack-actions">
-              <button id="account-save-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="save_account_btn">Save account</button>
-              <button id="account-purchase-btn" class="btn btn--primary btn--sm" type="button" hidden data-i18n="buy_addon_btn">Buy extension add-on</button>
+            <div class="diag-item">
+              <span class="diag-label" data-i18n="diag_document">Document Engine</span>
+              <span class="diag-value" data-i18n="diag_operational">Operational ✓</span>
             </div>
-            <p id="account-status" class="footnote" role="status" aria-live="polite"></p>
-          </details>
+            <div class="diag-item">
+              <span class="diag-label" data-i18n="diag_ocr">OCR Engine</span>
+              <span class="diag-value" data-i18n="diag_operational">Operational ✓</span>
+            </div>
+            <div class="diag-item">
+              <span class="diag-label" data-i18n="diag_storage">Storage</span>
+              <span class="diag-value" data-i18n="diag_local">Local ✓</span>
+            </div>
+            <div class="diag-item">
+              <span class="diag-label" data-i18n="diag_network">Network</span>
+              <span class="diag-value" data-i18n="diag_no_network">Not used in Local Only mode ✓</span>
+            </div>
+          </div>
+          <div class="form-row" style="margin-top: 12px;">
+            <button id="export-audit-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="export_audit_btn">Export signed audit log</button>
+          </div>
+          <div class="form-row">
+            <button id="reset-settings-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="reset_settings_btn">Reset all settings</button>
+            <button id="clear-audit-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="clear_audit_btn">Clear audit trail</button>
+          </div>
+          <div class="form-row">
+            <a id="privacy-link" href="#" class="footnote" data-i18n="privacy_link">Privacy policy</a>
+          </div>
 
           <details open id="contributions-details">
             <summary data-i18n="sec_contributions">
@@ -566,508 +621,176 @@
               </p>
               <a href="https://buymeacoffee.com/governworld" target="_blank" rel="noopener noreferrer" class="btn btn--coffee btn--block" id="buymeacoffee-link">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.9 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM2 21h18v-2H2v2z"/>
+                  <path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.9 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM2 21h18v-2H2v2z" />
                 </svg>
                 <span>Support on Buy Me a Coffee</span>
               </a>
               <div class="contrib-sublinks">
                 <a href="https://github.com/ACR-LOGIC/governworld-chrome-extension" target="_blank" rel="noopener noreferrer" class="help-link help-link--sm">GitHub Repo ↗</a>
-                <button type="button" class="help-link help-link--sm" data-guide="guide-contributions" title="Learn why GovernWorld is free & local" data-i18n="why_free_btn">Why Free &amp; Local? ↗</button>
+                <button type="button" class="help-link help-link--sm" data-guide="guide-contributions" data-i18n="why_free_btn">Why Free &amp; Local? ↗</button>
+                <button type="button" class="help-link help-link--sm" data-guide="guide-troubleshooting" data-i18n="info_btn">Info ↗</button>
               </div>
             </div>
           </details>
-
-          <!-- Storage, Audit & Reset Controls -->
-          <details open id="settings-details-storage">
-            <summary data-i18n="sec_storage_reset">Storage, Audit &amp; Reset Controls</summary>
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
-              <p class="footnote">
-                Manage extension storage, export signed audit records, or restore default configuration.
-              </p>
-              <div class="rulepack-actions" style="flex-wrap: wrap;">
-                <button id="reset-settings-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="reset_settings_btn">Reset All Settings to Default</button>
-                <button id="clear-audit-btn" class="btn btn--danger-ghost btn--sm" type="button" data-i18n="clear_audit_btn">Clear Audit Trail</button>
-              </div>
-            </div>
-          </details>
-
-          <p class="links">
-            <a href="#" id="privacy-link" rel="noopener noreferrer" data-i18n="privacy_link">Privacy policy</a>
-            <span aria-hidden="true">·</span>
-            <a href="https://buymeacoffee.com/governworld" target="_blank" rel="noopener noreferrer" style="color: #ff813f; font-weight: 500;">☕ Contribute</a>
-            <span aria-hidden="true">·</span>
-            <a href="https://github.com/ACR-LOGIC/governworld-chrome-extension/issues" target="_blank" rel="noopener noreferrer" data-i18n="support_link">Support</a>
-            <span aria-hidden="true">·</span>
-            <button id="export-audit-btn" class="btn btn--link" type="button" data-i18n="export_audit_btn">Export audit log</button>
-          </p>
-        </section>
-      </div>
-
-      <!-- Tab 5: Instructions (Dedicated Guidance Tab) -->
-      <div id="tab-instructions" class="tab-panel" hidden role="tabpanel" aria-labelledby="tab-btn-instructions">
-        <div class="section-header">
-          <h2>Instructions &amp; User Guidance</h2>
-          <span class="guide-badge">Local-First</span>
-        </div>
-
-        <div class="guide-container" role="region" aria-label="Documentation guide sections">
-          <section id="guide-overview" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">1. Overview &amp; Architecture</h3>
-              <span class="guide-badge">Zero Egress</span>
-            </div>
-            <p>
-              GovernWorld brings enterprise-grade detection and redaction directly into your browser.
-              All pattern matching, OCR text recognition, visual overlay masking, and document flattening
-              execute <strong>entirely on this device</strong>. No document bytes, form values, or page text
-              leave your browser.
-            </p>
-          </section>
-
-          <section id="guide-local-mode" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">2. Local-Only Processing</h3>
-              <span class="guide-badge">Device Sandbox</span>
-            </div>
-            <p>
-              By default, GovernWorld operates in <strong>Local Only</strong> mode. Detection runs in isolated Web Workers
-              and browser sandboxes without network requests. Temporary in-memory session data is discarded automatically
-              upon session clear or tab closure.
-            </p>
-          </section>
-
-          <section id="guide-page-scan" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">3. Scanning Web Pages</h3>
-              <span class="guide-badge">Alt+Shift+S</span>
-            </div>
-            <ol>
-              <li>Navigate to any webpage containing sensitive information.</li>
-              <li>Click <strong>Scan Page</strong> in the extension popup or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>.</li>
-              <li>Review the categorized findings in the results list.</li>
-              <li>Check the findings you wish to protect and click <strong>Apply selected masks</strong>.</li>
-            </ol>
-          </section>
-
-          <section id="guide-masking" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">4. Visual Masking &amp; Clipboard Safety</h3>
-              <span class="guide-badge">DOM Overlays</span>
-            </div>
-            <p>
-              Page masks are <strong>non-destructive visual overlays</strong> rendered in a protected Shadow DOM.
-              The original website HTML and underlying server data are never mutated. While masks are active,
-              using <strong>Copy redacted text</strong> copies the sanitized text with solid redaction blocks.
-            </p>
-          </section>
-
-          <section id="guide-doc-redact" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">5. Document Scanning &amp; Redaction</h3>
-              <span class="guide-badge">PDF / DOCX / Image</span>
-            </div>
-            <ol>
-              <li>Switch to the <strong>Documents</strong> tab.</li>
-              <li>Select your target OCR language (English, Spanish, French, German, Japanese, Portuguese).</li>
-              <li>Drag and drop a PDF, Word document (<code>.docx</code>), or image (<code>.png</code>, <code>.jpg</code>, <code>.webp</code>).</li>
-              <li>Use the <strong>Studio Canvas Tools</strong> to draw custom redaction boxes or toggle detected items.</li>
-              <li>Select your desired Redaction Style (Blackout, Whiteout, or Custom Text Stamp).</li>
-              <li>Click <strong>Redact selected &amp; download</strong> to receive a permanently flattened copy.</li>
-            </ol>
-          </section>
-
-          <section id="guide-verification" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">6. Verification Lifecycle</h3>
-              <span class="guide-badge">3-Stage Proof</span>
-            </div>
-            <p>
-              GovernWorld implements a rigorous 3-stage lifecycle for document security:
-            </p>
-            <ul>
-              <li><strong>Detected:</strong> Potential PII/PHI entities identified via deterministic rules.</li>
-              <li><strong>Redacted:</strong> Opaque boxes painted across target coordinates.</li>
-              <li><strong>Verified:</strong> Output bitmap re-evaluated on-device to prove zero readable pixel bleed before download.</li>
-            </ul>
-          </section>
-
-          <section id="guide-wizard" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">7. Redaction Wizard (Custom Rules)</h3>
-              <span class="guide-badge">Custom Logic</span>
-            </div>
-            <ol>
-              <li>Switch to the <strong>Wizard</strong> tab and click <strong>Create Custom Rule</strong>.</li>
-              <li>Enter positive examples (strings that should match) and negative examples (strings to ignore).</li>
-              <li>Click <strong>Analyze Examples</strong> to generate candidate regular expressions locally.</li>
-              <li>Select a proposed pattern, refine the regex, and test it against interactive sample text.</li>
-              <li>Assign a category lane, confidence rating, and label, then click <strong>Save Rule Locally</strong>.</li>
-            </ol>
-            <p>Saved rules immediately integrate into all subsequent page and document scans.</p>
-          </section>
-
-          <section id="guide-categories" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">8. Detection Categories &amp; Global Presets</h3>
-              <span class="guide-badge">Global Compliance</span>
-            </div>
-            <p>
-              GovernWorld includes built-in validators for:
-              <code>SSN</code>, <code>ITIN</code>, <code>Medical Record Number (MRN)</code>, <code>Member ID</code>, <code>DOB</code>,
-              <code>Provider NPI (checksum)</code>, <code>DEA Number</code>, <code>Medicare ID (MBI)</code>,
-              <code>Payment Cards (Luhn validated)</code>, <code>API Keys &amp; Secrets</code>, <code>Email</code>,
-              <code>US Phone</code>, <code>US Address</code>, <code>Canadian SIN</code>, <code>UK NHS Number</code>,
-              <code>Indian Aadhaar (Verhoeff)</code>, <code>Indian PAN</code>, <code>Australian TFN</code>, <code>Brazilian CPF</code>, and <code>Possible Names</code>.
-            </p>
-            <p>
-              Pre-configured global presets:
-              <strong>HIPAA</strong> (Healthcare), <strong>PCI DSS</strong> (Payments),
-              <strong>GDPR</strong> (EU), <strong>PIPEDA</strong> (Canada), <strong>UK GDPR / NHS</strong> (UK),
-              <strong>DPDP Act</strong> (India), <strong>Privacy Act</strong> (Australia), <strong>LGPD</strong> (Brazil), and <strong>Developer</strong> (API secrets).
-            </p>
-          </section>
-
-          <section id="guide-paste-guard" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">9. Proactive Paste &amp; Prompt Shield</h3>
-              <span class="guide-badge">Chat &amp; LLM Guard</span>
-            </div>
-            <p>
-              The Proactive Paste Shield intercepts clipboard paste events on input fields, textareas, and chat interfaces
-              (optimized for <strong>ChatGPT</strong>, <strong>Claude</strong>, <strong>Gemini</strong>, <strong>Slack</strong>, and web forms).
-              When sensitive data is detected:
-            </p>
-            <ul>
-              <li>A floating Shadow DOM review modal displays masked previews of the detected items.</li>
-              <li><strong>Sanitize &amp; Paste:</strong> Replaces detected secrets/PII with solid <code>[REDACTED]</code> blocks before pasting.</li>
-              <li><strong>Paste Unchanged:</strong> Pastes raw content if deliberately intended.</li>
-              <li><strong>Cancel:</strong> Aborts paste completely (<kbd>Esc</kbd>).</li>
-            </ul>
-          </section>
-
-          <section id="guide-context-menus" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">10. Right-Click Context Menus &amp; Shortcuts</h3>
-              <span class="guide-badge">Direct Access</span>
-            </div>
-            <p>
-              Perform privacy actions on any web page without needing to open the popup:
-            </p>
-            <ul>
-              <li><strong>Redact selection to clipboard:</strong> Highlight text and right-click to copy sanitized text with sensitive fields redacted.</li>
-              <li><strong>Mask selected text / element:</strong> Highlight an element and right-click to instantly overlay an in-browser privacy mask.</li>
-              <li><strong>Scan whole page:</strong> Right-click anywhere or press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>.</li>
-              <li><strong>Toggle masks:</strong> Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>.</li>
-              <li><strong>Open Side Panel:</strong> Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>.</li>
-            </ul>
-          </section>
-
-          <section id="guide-ocr-languages" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">11. Multi-Language OCR Architecture</h3>
-              <span class="guide-badge">6 Languages</span>
-            </div>
-            <p>
-              GovernWorld's offline OCR engine processes document images and PDFs in 6 languages:
-              <strong>English</strong> (<code>eng</code>), <strong>Spanish</strong> (<code>spa</code>),
-              <strong>French</strong> (<code>fra</code>), <strong>German</strong> (<code>deu</code>),
-              <strong>Japanese</strong> (<code>jpn</code>), and <strong>Portuguese</strong> (<code>por</code>).
-              Select your target language in Document Studio or Settings.
-            </p>
-          </section>
-
-          <section id="guide-redaction-styles" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">12. Document Redaction Styles</h3>
-              <span class="guide-badge">Styles &amp; Stamps</span>
-            </div>
-            <p>
-              Choose how redacted areas are rendered on exported PDF, Word, and Image files:
-            </p>
-            <ul>
-              <li><strong>Blackout:</strong> Solid opaque black rectangles (standard for legal &amp; forensic security).</li>
-              <li><strong>Whiteout:</strong> Clean white fill (ideal for printed forms and letterheads).</li>
-              <li><strong>Text Stamp:</strong> Opaque fill with centered labels such as <code>[REDACTED]</code>, <code>[CONFIDENTIAL]</code>, or <code>[PHI REMOVED]</code>.</li>
-            </ul>
-          </section>
-
-          <section id="guide-accessibility" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">13. Accessibility, Low Vision &amp; Blind Support</h3>
-              <span class="guide-badge">WCAG AAA</span>
-            </div>
-            <p>
-              GovernWorld is engineered to be fully accessible for all users, including those who are blind or low-vision:
-            </p>
-            <ul>
-              <li><strong>Font Sizing:</strong> Scale text up to 150% (Extra Large) for enhanced readability across all screens.</li>
-              <li><strong>High Contrast Mode:</strong> Increases contrast with pure black backgrounds, high-visibility cyan accents, and bold 2px white borders.</li>
-              <li><strong>Dyslexia-Friendly Mode:</strong> Increases letter spacing, word spacing, and line height to reduce reading fatigue.</li>
-              <li><strong>Reduced Motion:</strong> Disables all transitions and animations for users sensitive to motion.</li>
-              <li><strong>Web Speech Audio Announcements:</strong> Uses the Web Speech API to verbally announce page scan findings, redaction actions, and document downloads for blind users.</li>
-              <li><strong>Verbose ARIA Descriptions:</strong> Extends screen reader hints for full keyboard navigation and NVDA/JAWS/VoiceOver compatibility.</li>
-            </ul>
-          </section>
-
-          <section id="guide-languages" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">14. Multi-Language UI Internationalization</h3>
-              <span class="guide-badge">7 Languages</span>
-            </div>
-            <p>
-              The extension user interface can be dynamically translated into 7 languages:
-              <strong>English</strong>, <strong>Spanish (Español)</strong>, <strong>French (Français)</strong>,
-              <strong>German (Deutsch)</strong>, <strong>Japanese (日本語)</strong>, <strong>Portuguese (Português)</strong>,
-              and <strong>Simplified Chinese (简体中文)</strong>.
-              Select your preferred language under Settings &gt; General &amp; Appearance. Translations are applied immediately and saved locally.
-            </p>
-          </section>
-
-          <section id="guide-settings" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">15. Settings &amp; Customization Guide</h3>
-              <span class="guide-badge">Full Control</span>
-            </div>
-            <p>
-              Customize every aspect of GovernWorld's behavior:
-            </p>
-            <ul>
-              <li><strong>Compliance Presets:</strong> Quickly toggle groups of detectors tailored for HIPAA, PCI DSS, GDPR, PIPEDA, UK NHS, India DPDP, Australia Privacy, or Brazil LGPD.</li>
-              <li><strong>Mask Customization:</strong> Adjust padding (0px to 8px) and overlay color (Black, White, Navy, Slate) to match your workflow.</li>
-              <li><strong>Proactive Shield:</strong> Configure paste protection and auto-copying of sanitized text.</li>
-              <li><strong>Session Inactivity Timeout:</strong> Set memory purge timers (5m, 15m, 30m, or never) to clear temporary scan results from memory.</li>
-              <li><strong>Storage &amp; Reset:</strong> Export signed audit logs or reset all settings to defaults at any time.</li>
-            </ul>
-          </section>
-
-          <section id="guide-shortcuts" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">16. Keyboard Shortcuts &amp; Fast Access</h3>
-              <span class="guide-badge">Keyboard First</span>
-            </div>
-            <ul>
-              <li><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>: Scan active webpage immediately.</li>
-              <li><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>: Open side panel view.</li>
-              <li><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd>: Toggle visual masks on/off.</li>
-              <li><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd>: Navigate through interactive controls and findings.</li>
-              <li><kbd>Enter</kbd> / <kbd>Space</kbd>: Activate buttons, toggles, and checkboxes.</li>
-              <li><kbd>Esc</kbd>: Dismiss open dialogs or abort paste shield.</li>
-            </ul>
-          </section>
-
-          <section id="guide-troubleshooting" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">17. Troubleshooting &amp; FAQ</h3>
-              <span class="guide-badge">FAQ</span>
-            </div>
-            <p><strong>Q: What if a custom identifier isn't detected?</strong><br />
-            A: Open the <strong>Wizard</strong> tab to generate a custom regex rule with your specific positive and negative examples. Saved rules apply instantly to both page scans and document redactions.</p>
-            <p><strong>Q: Why did OCR take a few seconds?</strong><br />
-            A: OCR executes fully on your computer using WebAssembly. Processing speed depends on image resolution and document page count.</p>
-            <p><strong>Q: Are my documents uploaded to a cloud server?</strong><br />
-            A: No. All processing runs 100% locally in isolated browser Web Workers. No network requests are made.</p>
-          </section>
-
-          <section id="guide-cloud" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">18. Cloud Features &amp; API Connectivity</h3>
-              <span class="guide-badge">API Ready</span>
-            </div>
-            <p>
-              Cloud features are <strong>intentionally locked and disabled</strong> in this standalone release.
-              All processing remains strictly local. The extension architecture retains standardized API hooks
-              and gateway connectors so organizations can link enterprise workspace gateways in future deployments.
-            </p>
-          </section>
-
-          <section id="guide-privacy" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">19. Audit Log &amp; Cryptographic Proof</h3>
-              <span class="guide-badge">Ed25519 Signed</span>
-            </div>
-            <p>
-              All protection actions generate an immutable, cryptographically signed audit log stored locally.
-              Click <strong>Export audit log</strong> in Settings to download the JSONL audit ledger and its
-              corresponding cryptographic signature for compliance verification.
-            </p>
-          </section>
-
-          <section id="guide-contributions" class="guide-card">
-            <div class="guide-card__header">
-              <h3 class="guide-card__title">20. Free, Privacy-Respecting &amp; Community Supported</h3>
-              <span class="guide-badge" style="background: rgba(255, 129, 63, 0.15); color: #ff813f; border-color: rgba(255, 129, 63, 0.3);">Community Powered</span>
-            </div>
-            <p>
-              GovernWorld is designed to protect user privacy without compromise. Unlike traditional browser extensions:
-            </p>
-            <ul>
-              <li><strong>100% Local-First:</strong> All regex matching, OCR text recognition, DOM overlays, and document flattening happen entirely on your computer.</li>
-              <li><strong>Zero Data Monetization:</strong> We never log, sell, transmit, or inspect your documents, scanned text, or browsing history.</li>
-              <li><strong>Zero Paywalls for Local Security:</strong> Every core local detection and redaction capability is completely free.</li>
-            </ul>
-            <p>
-              If GovernWorld helps protect your workflow, consider supporting development, offline models, and validator maintenance via
-              <a href="https://buymeacoffee.com/governworld" target="_blank" rel="noopener noreferrer" style="color: #ff813f; font-weight: 600;">Buy Me a Coffee ☕</a>.
-            </p>
-          </section>
+          <div class="guide-container" style="margin-top: 16px;">
+            <div id="guide-overview" class="guide-card"><h4 data-i18n="guide-overview">Overview</h4><p class="footnote">GovernWorld protects sensitive data locally on your device.</p></div>
+            <div id="guide-local-mode" class="guide-card"><h4 data-i18n="guide-local-mode">Local Mode</h4><p class="footnote">All processing happens on your device. No data leaves.</p></div>
+            <div id="guide-page-scan" class="guide-card"><h4 data-i18n="guide-page-scan">Page Scan</h4><p class="footnote">Click Scan to detect sensitive data on the current page.</p></div>
+            <div id="guide-masking" class="guide-card"><h4 data-i18n="guide-masking">Masking</h4><p class="footnote">Select findings to apply visual masks.</p></div>
+            <div id="guide-doc-redact" class="guide-card"><h4 data-i18n="guide-doc-redact">Document Redaction</h4><p class="footnote">Upload PDF, DOCX, or images for local redaction.</p></div>
+            <div id="guide-verification" class="guide-card"><h4 data-i18n="guide-verification">Verification</h4><p class="footnote">Redaction is verified at the pixel level.</p></div>
+            <div id="guide-wizard" class="guide-card"><h4 data-i18n="guide-wizard">Wizard</h4><p class="footnote">Create custom detection logic from examples.</p></div>
+            <div id="guide-categories" class="guide-card"><h4 data-i18n="guide-categories">Categories</h4><p class="footnote">20 detection categories covering PII, PHI, financial, and more.</p></div>
+            <div id="guide-paste-guard" class="guide-card"><h4 data-i18n="guide-paste-guard">Paste Guard</h4><p class="footnote">Intercepts pastes into AI chats and forms.</p></div>
+            <div id="guide-context-menus" class="guide-card"><h4 data-i18n="guide-context-menus">Context Menus</h4><p class="footnote">Right-click to redact, mask, or scan.</p></div>
+            <div id="guide-ocr-languages" class="guide-card"><h4 data-i18n="guide-ocr-languages">OCR Languages</h4><p class="footnote">English, Spanish, French, German, Japanese, Portuguese.</p></div>
+            <div id="guide-redaction-styles" class="guide-card"><h4 data-i18n="guide-redaction-styles">Redaction Styles</h4><p class="footnote">Blackout, whiteout, or text stamp.</p></div>
+            <div id="guide-accessibility" class="guide-card"><h4 data-i18n="guide-accessibility">Accessibility</h4><p class="footnote">High contrast, dyslexia mode, reduced motion, speech.</p></div>
+            <div id="guide-languages" class="guide-card"><h4 data-i18n="guide-languages">Languages</h4><p class="footnote">7 UI languages with instant switching.</p></div>
+            <div id="guide-settings" class="guide-card"><h4 data-i18n="guide-settings">Settings</h4><p class="footnote">Organized by Profile, Protection, Detection, Appearance, and more.</p></div>
+            <div id="guide-shortcuts" class="guide-card"><h4 data-i18n="guide-shortcuts">Shortcuts</h4><p class="footnote">Alt+Shift+S scan, Alt+Shift+M masks, Alt+Shift+P side panel.</p></div>
+            <div id="guide-troubleshooting" class="guide-card"><h4 data-i18n="guide-troubleshooting">Troubleshooting</h4><p class="footnote">If scan fails, try refreshing the page and scanning again.</p></div>
+            <div id="guide-cloud" class="guide-card"><h4 data-i18n="guide-cloud">Cloud</h4><p class="footnote">Cloud features are optional and disabled by default.</p></div>
+            <div id="guide-privacy" class="guide-card"><h4 data-i18n="guide-privacy">Privacy</h4><p class="footnote">Zero data transmission. All processing is local.</p></div>
+            <div id="guide-contributions" class="guide-card"><h4 data-i18n="guide-contributions">Contributions</h4><p class="footnote">Share custom logic with the community.</p></div>
+          </div>
         </div>
       </div>
+    </section>
+  </main>
 
-      <!-- Confirmation Dialogs -->
-      <dialog id="doc-confirm-dialog" class="dialog" aria-labelledby="doc-confirm-title">
-        <h3 id="doc-confirm-title" class="dialog__title" data-i18n="dialog_doc_confirm_title">Confirm Document Redaction</h3>
-        <p data-i18n="dialog_doc_confirm_desc">
-          Download a flattened copy with selected values permanently masked? The
-          original file is never modified.
-        </p>
-        <div class="dialog__actions">
-          <button id="doc-cancel" class="btn btn--ghost" type="button" data-i18n="dialog_cancel">Cancel</button>
-          <button id="doc-confirm" class="btn btn--primary" type="button" data-i18n="dialog_download_redacted">Download redacted copy</button>
-        </div>
-      </dialog>
+  <dialog id="doc-confirm-dialog" class="dialog" aria-labelledby="doc-confirm-title">
+    <h3 id="doc-confirm-title" data-i18n="dialog_doc_confirm_title">Confirm Redaction</h3>
+    <p id="doc-confirm-desc" class="footnote" data-i18n="dialog_doc_confirm_desc">This will create a redacted copy of your document. The original will not be changed.</p>
+    <div class="dialog-actions">
+      <button id="doc-cancel" class="btn btn--ghost btn--sm" type="button" data-i18n="dialog_cancel">Cancel</button>
+      <button id="doc-confirm" class="btn btn--primary btn--sm" type="button" data-i18n="dialog_download_redacted">Download Redacted</button>
+    </div>
+  </dialog>
 
-      <dialog id="copy-dialog" class="dialog" aria-labelledby="copy-dialog-title">
-        <h3 id="copy-dialog-title" class="dialog__title" data-i18n="dialog_copy_title">Copy Redacted Text</h3>
-        <p data-i18n="dialog_copy_desc">
-          The clipboard will contain redacted text. Sensitive values are
-          replaced with solid blocks. Continue?
-        </p>
-        <div class="dialog__actions">
-          <button id="copy-cancel" class="btn btn--ghost" type="button" data-i18n="dialog_cancel">Cancel</button>
-          <button id="copy-confirm" class="btn btn--primary" type="button" data-i18n="dialog_copy_btn">Copy redacted text</button>
-        </div>
-      </dialog>
+  <dialog id="copy-dialog" class="dialog" aria-labelledby="copy-dialog-title">
+    <h3 id="copy-dialog-title" data-i18n="dialog_copy_title">Copy Redacted Text</h3>
+    <p id="copy-dialog-desc" class="footnote" data-i18n="dialog_copy_desc">Sensitive values will be replaced with [REDACTED].</p>
+    <div class="dialog-actions">
+      <button id="copy-cancel" class="btn btn--ghost btn--sm" type="button" data-i18n="dialog_cancel">Cancel</button>
+      <button id="copy-confirm" class="btn btn--primary btn--sm" type="button" data-i18n="dialog_copy_btn">Copy Redacted</button>
+    </div>
+  </dialog>
 
-      <dialog id="verify-dialog" class="dialog" aria-labelledby="verify-dialog-title">
-        <h3 id="verify-dialog-title" class="dialog__title" data-i18n="dialog_verify_title">Please verify your work</h3>
-        <p data-i18n="dialog_verify_desc">
-          GovernWorld uses local, pattern-based detection. It does not guarantee
-          that every sensitive value is found. Review the results before sharing
-          or submitting — and always compare the redacted output against the
-          original for anything you cannot afford to expose.
-        </p>
-        <div class="dialog__actions">
-          <button id="verify-dismiss" class="btn btn--ghost" type="button" data-i18n="dialog_verify_dismiss">Dismiss</button>
-          <button id="verify-understood" class="btn btn--primary" type="button" data-i18n="dialog_verify_understood">I understand</button>
-        </div>
-      </dialog>
+  <dialog id="verify-dialog" class="dialog" aria-labelledby="verify-dialog-title">
+    <h3 id="verify-dialog-title" data-i18n="dialog_verify_title">Please Verify Your Work</h3>
+    <p id="verify-dialog-desc" class="footnote" data-i18n="dialog_verify_desc">GovernWorld helps identify potential sensitive data, but you should always review results before sharing or submitting.</p>
+    <div class="dialog-actions">
+      <button id="verify-dismiss" class="btn btn--ghost btn--sm" type="button" data-i18n="dialog_verify_dismiss">Dismiss</button>
+      <button id="verify-understood" class="btn btn--primary btn--sm" type="button" data-i18n="dialog_verify_understood">I Understand</button>
+    </div>
+  </dialog>
 
-      <dialog id="reset-confirm-dialog" class="dialog" aria-labelledby="reset-confirm-title">
-        <h3 id="reset-confirm-title" class="dialog__title" data-i18n="dialog_reset_title">Reset All Settings?</h3>
-        <p data-i18n="dialog_reset_desc">
-          This will restore all detection categories, presets, appearance options, accessibility settings, and studio defaults to their original factory values. Custom rules and audit records are preserved.
-        </p>
-        <div class="dialog__actions">
-          <button id="reset-cancel" class="btn btn--ghost" type="button" data-i18n="dialog_cancel">Cancel</button>
-          <button id="reset-confirm" class="btn btn--primary" type="button" data-i18n="dialog_reset_confirm">Reset to Default</button>
-        </div>
-      </dialog>
+  <dialog id="reset-confirm-dialog" class="dialog" aria-labelledby="reset-confirm-title">
+    <h3 id="reset-confirm-title" data-i18n="dialog_reset_title">Reset All Settings</h3>
+    <p id="reset-confirm-desc" class="footnote" data-i18n="dialog_reset_desc">This will restore all settings to their defaults. Your custom logic will be preserved.</p>
+    <div class="dialog-actions">
+      <button id="reset-cancel" class="btn btn--ghost btn--sm" type="button" data-i18n="dialog_cancel">Cancel</button>
+      <button id="reset-confirm" class="btn btn--primary btn--sm" type="button" data-i18n="dialog_reset_confirm">Reset Settings</button>
+    </div>
+  </dialog>
 
-      <dialog id="clear-audit-dialog" class="dialog" aria-labelledby="clear-audit-title">
-        <h3 id="clear-audit-title" class="dialog__title" data-i18n="dialog_clear_audit_title">Clear Audit Trail?</h3>
-        <p data-i18n="dialog_clear_audit_desc">
-          Are you sure you want to permanently delete all local audit records from this device? This action cannot be undone.
-        </p>
-        <div class="dialog__actions">
-          <button id="clear-audit-cancel" class="btn btn--ghost" type="button" data-i18n="dialog_cancel">Cancel</button>
-          <button id="clear-audit-confirm" class="btn btn--danger" type="button" data-i18n="dialog_clear_audit_confirm">Clear Audit Records</button>
-        </div>
-      </dialog>
+  <dialog id="clear-audit-dialog" class="dialog" aria-labelledby="clear-audit-title">
+    <h3 id="clear-audit-title" data-i18n="dialog_clear_audit_title">Clear Audit Trail</h3>
+    <p id="clear-audit-desc" class="footnote" data-i18n="dialog_clear_audit_desc">This will permanently delete all audit records. This action cannot be undone.</p>
+    <div class="dialog-actions">
+      <button id="clear-audit-cancel" class="btn btn--ghost btn--sm" type="button" data-i18n="dialog_cancel">Cancel</button>
+      <button id="clear-audit-confirm" class="btn btn--primary btn--sm" type="button" data-i18n="dialog_clear_audit_confirm">Clear Audit</button>
+    </div>
+  </dialog>
 
-      <!-- Redaction Wizard Dialog -->
-      <dialog id="wizard-dialog" class="dialog" style="max-width: 480px; width: 90%;" aria-label="Redaction custom rule wizard">
-        <div id="wizard-step-1" class="wizard-step">
-          <h3 class="dialog__title">Redaction Wizard — Step 1: Examples</h3>
-          <p class="footnote">Enter sample positive matches (should match) and negative matches (should NOT match). Text is processed entirely in your browser.</p>
-          <div class="form-row">
-            <label for="wizard-pos-input">Positive Examples (one per line):</label>
-            <textarea id="wizard-pos-input" rows="4" style="font-family: var(--mono); font-size: 11px; background: var(--bg-inset); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px;" placeholder="POL-123456&#10;POL-987654"></textarea>
-          </div>
-          <div class="form-row">
-            <label for="wizard-neg-input">Negative Examples (one per line):</label>
-            <textarea id="wizard-neg-input" rows="3" style="font-family: var(--mono); font-size: 11px; background: var(--bg-inset); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px;" placeholder="POL-12&#10;ABC-123456"></textarea>
-          </div>
-          <div class="dialog__actions" style="margin-top: 12px;">
-            <button id="wizard-cancel-1" class="btn btn--ghost" type="button" data-i18n="dialog_cancel">Cancel</button>
-            <button id="wizard-analyze-btn" class="btn btn--primary" type="button">Analyze Examples (Local)</button>
-          </div>
+  <dialog id="wizard-dialog" class="dialog dialog--large" aria-labelledby="wizard-step-1-title">
+    <div class="wizard-steps">
+      <div id="wizard-step-1" class="wizard-step">
+        <h3 data-i18n="wizard_step1_title">What are you trying to protect?</h3>
+        <p class="footnote" data-i18n="wizard_step1_desc">Provide examples of sensitive content. All processing happens locally.</p>
+        <div class="form-row">
+          <label for="wizard-pos-input" data-i18n="wizard_positive_label">Positive examples (one per line)</label>
+          <textarea id="wizard-pos-input" rows="4" placeholder="CUST-12345&#10;CUST-67890"></textarea>
         </div>
+        <div class="form-row">
+          <label for="wizard-neg-input" data-i18n="wizard_negative_label">Negative examples (one per line)</label>
+          <textarea id="wizard-neg-input" rows="2" placeholder="ORDER-12345"></textarea>
+        </div>
+        <div class="dialog-actions">
+          <button id="wizard-cancel-1" class="btn btn--ghost btn--sm" type="button" data-i18n="dialog_cancel">Cancel</button>
+          <button id="wizard-analyze-btn" class="btn btn--primary btn--sm" type="button" data-i18n="wizard_analyze_btn">Analyze</button>
+        </div>
+      </div>
+      <div id="wizard-step-2" class="wizard-step" hidden>
+        <h3 data-i18n="wizard_step2_title">Generated Logic</h3>
+        <p class="footnote" data-i18n="wizard_step2_desc">Review the proposed detection logic.</p>
+        <div id="wizard-proposals-container" class="proposals-container"></div>
+        <div class="dialog-actions">
+          <button id="wizard-back-2" class="btn btn--ghost btn--sm" type="button" data-i18n="wizard_back_btn">Back</button>
+          <button id="wizard-next-2" class="btn btn--primary btn--sm" type="button" data-i18n="wizard_next_btn">Next</button>
+        </div>
+      </div>
+      <div id="wizard-step-3" class="wizard-step" hidden>
+        <h3 data-i18n="wizard_step3_title">Test &amp; Refine</h3>
+        <div class="form-row">
+          <label for="wizard-regex-input" data-i18n="wizard_regex_label">Pattern</label>
+          <input id="wizard-regex-input" type="text" />
+        </div>
+        <div class="form-row">
+          <label for="wizard-test-sample" data-i18n="wizard_test_label">Test sample text</label>
+          <textarea id="wizard-test-sample" rows="3"></textarea>
+        </div>
+        <div id="wizard-test-results-box" class="test-results"></div>
+        <div class="dialog-actions">
+          <button id="wizard-back-3" class="btn btn--ghost btn--sm" type="button" data-i18n="wizard_back_btn">Back</button>
+          <button id="wizard-next-3" class="btn btn--primary btn--sm" type="button" data-i18n="wizard_next_btn">Next</button>
+        </div>
+      </div>
+      <div id="wizard-step-4" class="wizard-step" hidden>
+        <h3 data-i18n="wizard_step4_title">Save Rule</h3>
+        <div class="form-row">
+          <label for="wizard-rule-name" data-i18n="wizard_rule_name_label">Rule name</label>
+          <input id="wizard-rule-name" type="text" placeholder="Customer ID" />
+        </div>
+        <div class="form-row">
+          <label for="wizard-rule-category" data-i18n="wizard_rule_category_label">Category</label>
+          <select id="wizard-rule-category" class="preset-select">
+            <option value="custom">Custom</option>
+            <option value="email">Email</option>
+            <option value="phone">Phone</option>
+            <option value="ssn">SSN</option>
+            <option value="payment_card">Payment Card</option>
+            <option value="secrets">Secrets</option>
+            <option value="address">Address</option>
+            <option value="dob">Date of Birth</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="wizard-rule-confidence" data-i18n="wizard_confidence_label">Confidence (0-1)</label>
+          <input id="wizard-rule-confidence" type="number" min="0" max="1" step="0.05" value="0.85" />
+        </div>
+        <div class="dialog-actions">
+          <button id="wizard-back-4" class="btn btn--ghost btn--sm" type="button" data-i18n="wizard_back_btn">Back</button>
+          <button id="wizard-save-btn" class="btn btn--primary btn--sm" type="button" data-i18n="wizard_save_btn">Save Rule</button>
+        </div>
+      </div>
+    </div>
+  </dialog>
 
-        <div id="wizard-step-2" class="wizard-step" hidden>
-          <h3 class="dialog__title">Step 2: Proposed Regexes</h3>
-          <p class="footnote">Select a suggested pattern or customize it in Step 3.</p>
-          <div id="wizard-proposals-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; margin-top: 8px;"></div>
-          <div class="dialog__actions" style="margin-top: 12px;">
-            <button id="wizard-back-2" class="btn btn--ghost" type="button">Back</button>
-            <button id="wizard-next-2" class="btn btn--primary" type="button">Use Selected</button>
-          </div>
-        </div>
+  <dialog id="contrib-consent-dialog" class="dialog" aria-labelledby="contrib-dialog-title">
+    <h3 id="contrib-dialog-title" data-i18n="contrib_title">Share with GovernWorld?</h3>
+    <p class="footnote" data-i18n="contrib_desc">Your personal logic will be reviewed by GovernWorld before possible publication.</p>
+    <label class="toggle-row">
+      <input id="contrib-consent-checkbox" type="checkbox" />
+      <span data-i18n="contrib_consent_text">I reviewed the logic and understand it will be reviewed before publication.</span>
+    </label>
+    <div class="dialog-actions">
+      <button id="contrib-cancel-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="dialog_cancel">Cancel</button>
+      <button id="contrib-confirm-btn" class="btn btn--primary btn--sm" type="button" data-i18n="contrib_confirm_btn" disabled>Share Logic</button>
+    </div>
+  </dialog>
 
-        <div id="wizard-step-3" class="wizard-step" hidden>
-          <h3 class="dialog__title">Step 3: Test &amp; Refine Pattern</h3>
-          <div class="form-row">
-            <label for="wizard-regex-input">Regex Pattern:</label>
-            <input id="wizard-regex-input" type="text" style="font-family: var(--mono);" />
-          </div>
-          <div class="form-row">
-            <label for="wizard-test-sample">Sample Test Text:</label>
-            <textarea id="wizard-test-sample" rows="3" style="font-family: var(--mono); font-size: 11px; background: var(--bg-inset); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px;"></textarea>
-          </div>
-          <div id="wizard-test-results-box" class="footnote" style="margin-top: 6px; font-family: var(--mono);"></div>
-          <div class="dialog__actions" style="margin-top: 12px;">
-            <button id="wizard-back-3" class="btn btn--ghost" type="button">Back</button>
-            <button id="wizard-next-3" class="btn btn--primary" type="button">Next: Rule Details</button>
-          </div>
-        </div>
-
-        <div id="wizard-step-4" class="wizard-step" hidden>
-          <h3 class="dialog__title">Step 4: Rule Metadata</h3>
-          <div class="form-row">
-            <label for="wizard-rule-name">Rule Label:</label>
-            <input id="wizard-rule-name" type="text" placeholder="e.g. Policy Number" />
-          </div>
-          <div class="form-row">
-            <label for="wizard-rule-category">Category Lane:</label>
-            <select id="wizard-rule-category" style="padding: 6px; background: var(--bg-inset); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius-sm);">
-              <option value="custom">Custom</option>
-              <option value="medical_record_number">Medical Record Number (MRN)</option>
-              <option value="member_id">Member ID</option>
-              <option value="ssn">SSN</option>
-              <option value="dob">DOB</option>
-              <option value="secrets">Secrets / API Keys</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label for="wizard-rule-confidence">Confidence (0.0 to 1.0):</label>
-            <input id="wizard-rule-confidence" type="number" min="0" max="1" step="0.05" value="0.85" />
-          </div>
-          <div class="dialog__actions" style="margin-top: 12px;">
-            <button id="wizard-back-4" class="btn btn--ghost" type="button">Back</button>
-            <button id="wizard-save-btn" class="btn btn--primary" type="button">Save Rule Locally</button>
-          </div>
-        </div>
-      </dialog>
-
-      <dialog id="contrib-consent-dialog" class="dialog" aria-labelledby="contrib-dialog-title">
-        <h3 id="contrib-dialog-title" class="dialog__title">Contribute Rule to Community?</h3>
-        <p class="footnote">
-          You are about to share this regex rule specification with the GovernWorld community.
-        </p>
-        <ul class="footnote" style="padding-left: 16px; margin: 6px 0;">
-          <li>The <strong>rule name, category, regex, flags, capture setting, confidence, optional context cues, and optional length bounds</strong> would be sent for review.</li>
-          <li>Raw examples, page content, document bytes, and page images are not included.</li>
-          <li>Community submission is disabled until server authorization and consent recording are configured.</li>
-        </ul>
-        <label class="toggle-row" style="margin: 10px 0;">
-          <input id="contrib-consent-checkbox" type="checkbox" />
-          <span>I confirm this rule specification contains no private data.</span>
-        </label>
-        <div class="dialog__actions">
-          <button id="contrib-cancel-btn" class="btn btn--ghost" type="button">Keep Local Only</button>
-          <button id="contrib-confirm-btn" class="btn btn--primary" type="button" disabled>Submit Contribution</button>
-        </div>
-      </dialog>
-    </main>
-    <script src="popup.js"></script>
-  </body>
+  <script src="popup.js"></script>
+</body>
 </html>

@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import type { DocKind, Finding, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
+import type { CustomPattern } from "../shared/customPatterns.js";
 import type { RedactionVerification } from "./verify.js";
 
 /**
@@ -35,6 +36,8 @@ export interface DocumentInput {
   options?: RedactionOptions;
   /** Optional OCR language code. */
   ocrLanguage?: string;
+  /** User-defined custom patterns from the Redaction Wizard. */
+  customPatterns?: CustomPattern[];
 }
 
 export interface DocumentPage {
