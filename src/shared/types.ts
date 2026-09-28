@@ -208,8 +208,12 @@ export interface DocPageMeta {
   index: number;
   widthPx: number;
   heightPx: number;
-  /** Scaled-down page image for review; findings carry full-res rects. */
-  previewDataUrl: string;
+  /**
+   * Key of the scaled-down page image in the shared document store; the popup
+   * resolves it to an object URL. Carrying the image itself would exceed
+   * MAX_MESSAGE_BYTES and cause the whole message to be rejected.
+   */
+  previewKey: string;
   findings: Finding[];
 }
 

@@ -155,6 +155,7 @@ export async function previewDocument(
       categories: [],
       ocrLanguage: settings.ocrLanguage,
       customPatterns,
+      previewKeyPrefix: fileKey,
     });
   } catch (error) {
     await deleteFile(fileKey).catch(() => undefined);
@@ -222,6 +223,7 @@ export async function redactDocument(
       enabledCategories: settings.enabledCategories,
       maxPages: MAX_DOC_PAGES,
       padding: effectivePadding,
+      previewKeyPrefix: session.fileKey,
       previewPages: session.pages,
       categories: session.categories,
       options,
