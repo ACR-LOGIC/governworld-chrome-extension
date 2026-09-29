@@ -39,11 +39,81 @@ function prose(text: string): string {
   return text.replace(/`[^`]*`/g, " ").replace(/https?:\/\/\S+/g, " ");
 }
 
+/**
+ * Text with only code spans stripped - URLs deliberately kept.
+ *
+ * The badge "Architecture-100% Local-First" is real, shipped wording that
+ * asserted an absolute the product does not honour, and `prose()` missed it
+ * precisely because the phrase lives inside a shields.io URL, which prose()
+ * strips before the check ever sees it. A claim hidden in a URL is still a
+ * claim, and a badge is the most-read line in a README. This variant exists so
+ * the claim is still checked after the URL is stripped out of the *rendered*
+ * badge text.
+ */
+function proseKeepingUrls(text: string): string {
+  return text.replace(/`[^`]*`/g, " ");
+}
+
 describe("no claim outruns the implementation", () => {
-  it("does not describe processing as '100% local'", () => {
+  it("does not describe processing as '100% local', including in badges and URLs", () => {
     for (const file of MARKETING) {
-      expect(prose(read(file)), `${file} claims 100% local`).not.toMatch(/100%\s*(local|on-device)/i);
+      expect(prose(read(file)), `${file} claims 100% local in prose`).not.toMatch(
+        /100%\s*(local|on-device)/i,
+      );
+      // The gap that let the badge through: the phrase was URL-encoded inside a
+      // shields.io badge, so stripping URLs removed the claim before the check.
+      const raw = proseKeepingUrls(read(file));
+      const decoded = raw
+        .replace(/%20/g, " ")
+        .replace(/%25/g, "%")
+        .replace(/%7C/g, "|")
+        .replace(/&/g, " ");
+      expect(decoded, `${file} claims 100% local in a badge or URL`).not.toMatch(
+        /100%\s*(local|on-device)/i,
+      );
     }
+  });
+
+  it("does not claim any data never leaves the device", () => {
+    // Page text and documents genuinely never leave, and that narrower claim is
+    // what the copy now makes. The unqualified version is not defensible while
+    // account linking and the community surface exist.
+    for (const file of [...MARKETING, "src/popup/index.html"]) {
+      const text = proseKeepingUrls(read(file)).replace(/\s+/g, " ");
+      const broad = /your data never leaves|without any data ever leaving|strictly local/i;
+      expect(text, `${file} makes an absolute egress claim`).not.toMatch(broad);
+    }
+  });
+
+  it("keeps the narrower claim that page text and documents never leave", () => {
+    // Over-correcting into vagueness would be its own failure: the guarantee is
+    // real and users deserve it stated plainly.
+    for (const file of ["STORE_DESCRIPTION.md", "CHROMEWEBSTORE.md"]) {
+      expect(read(file), `${file} dropped the egress guarantee`).toMatch(
+        /page text and documents never leave/i,
+      );
+    }
+  });
+
+  it("does not advertise a browser the build does not produce", () => {
+    // manifest.firefox.json is MV2 and is not packaged by the build, and Safari
+    // cannot load a Chrome extension. Advertising either as shipped is a claim a
+    // reviewer can falsify in about a minute.
+    const readme = read("README.md");
+    expect(readme).not.toMatch(/badge\/Browsers-[^)]*Firefox/i);
+    expect(readme).not.toMatch(/badge\/Browsers-[^)]*Safari/i);
+    expect(readme).toMatch(/Not supported in this build/i);
+    expect(readme).toMatch(/not supported/i);
+  });
+
+  it("does not hard-code a test count that will drift", () => {
+    // A stale count in a README is worse than no count, and it is what was
+    // wrong here: it still said 31 suites / 546 tests long after the suite grew.
+    const readme = read("README.md");
+    expect(readme, "README hard-codes a test count").not.toMatch(
+      /\d+\s+(?:vitest\s+)?test suites?\s*[/(\s]\s*\d*\s*tests/i,
+    );
+    expect(readme, "README hard-codes a test count").not.toMatch(/\d{3,}\s+tests\s+passing/i);
   });
 
   it("states that local processing is the default, not that nothing ever leaves", () => {
@@ -119,8 +189,47 @@ describe("no claim outruns the implementation", () => {
   });
 });
 
-describe("privacy statements match the code", () => {
-  it("does not promise deletion on service-worker restart", () => {
+describe("disabled community features are not advertised as live", () => {
+  // Both community network paths are stubbed off in the service worker and
+  // return an error. The in-app copy has to say so, or the first support
+  // question is "I clicked contribute and nothing happened" and the first
+  // reviewer question is whether the listing misrepresents the feature.
+  it("states in the UI that community rule packs are not active", () => {
+    for (const file of ["src/popup/index.html", "src/sidepanel/sidepanel.html"]) {
+      expect(read(file), `${file} does not say community sharing is inactive`).toMatch(
+        /not active in this release/i,
+      );
+    }
+  });
+
+  it("does not render a locally generated identity as if it were verified", () => {
+    // linkFreeCommunityAccount() creates a local id. Nothing may present it as a
+    // server-confirmed identity, so the label is deliberately not surfaced.
+    for (const file of ["src/popup/popup.ts", "src/popup/index.html", "src/sidepanel/sidepanel.html"]) {
+      expect(read(file), `${file} renders the unverified contributor label`).not.toMatch(
+        /displayLabel/,
+      );
+    }
+  });
+
+  it("keeps the service worker stubs returning an error", () => {
+    // The copy above is only honest while these are still refusals.
+    const sw = readFileSync(join(extRoot, "src/service-worker/index.ts"), "utf8");
+    for (const msg of ["POPUP_COMMUNITY_CONTRIBUTE", "POPUP_COMMUNITY_FETCH_COMMUNITY_RULES"]) {
+      const idx = sw.indexOf(`case "${msg}"`);
+      expect(idx, `${msg} handler not found`).toBeGreaterThan(-1);
+      const body = sw.slice(idx, idx + 400);
+      // includes(), not a regex: the bracket in `rules: []` is easy to mangle
+      // through template interpolation, and an empty character class silently
+      // matches nothing, which would turn this into a test that passes for the
+      // wrong reason.
+      const refuses = body.includes("success: false") || body.includes("rules: []");
+      expect(refuses, `${msg} no longer refuses`).toBe(true);
+    }
+  });
+});
+
+describe("privacy statements match the code", () => {  it("does not promise deletion on service-worker restart", () => {
     // MV3 workers are suspended when idle and restarted on the next event, and
     // the extension deliberately does not purge on restart: doing so would
     // delete a document the user was still reviewing. Promising deletion here

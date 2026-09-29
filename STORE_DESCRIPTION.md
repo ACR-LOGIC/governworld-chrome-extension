@@ -18,9 +18,11 @@ you cover them up:
 
 - **Scan on demand.** Nothing scans automatically. Open the popup and press
   **Scan this page** to analyze the visible text of the current tab.
-- **Local only — enforced.** This version is strictly local. Scanning,
-  detection, OCR, and redaction all run on your device. Your page text and
-  documents never leave your device.
+- **Local only — enforced.** Scanning, detection, OCR, and redaction all run
+  on your device. Your page text and documents never leave your device, and the
+  local pipeline has no network path at all. The optional account-linking
+  feature contacts GovernWorld for billing metadata only — it is off until you
+  enable it, and it never carries scan content.
 - **Review, then act.** Findings are listed with masked previews (for example,
   `phone: ***-***-1234`). Choose what to cover.
 - **Temporary page masks.** Masks are an on-screen overlay only. They do not

@@ -3,12 +3,12 @@
 [![CI](https://github.com/ACR-LOGIC/governworld-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/ACR-LOGIC/governworld-extension/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Source--Available-orange.svg)](LICENSE)
 [![Manifest V3](https://img.shields.io/badge/Extension-Manifest%20V3-green.svg)](manifest.json)
-[![Local-First](https://img.shields.io/badge/Architecture-100%25%20Local--First-brightgreen.svg)](#local-first-architecture--privacy-guarantees)
-[![Cross-Browser](https://img.shields.io/badge/Browsers-Chrome%20%7C%20Edge%20%7C%20Firefox%20%7C%20Safari%20%7C%20Brave-blue.svg)](#browser-compatibility--cross-platform-installation-guide)
+[![Local-First](https://img.shields.io/badge/Architecture-Local--First-brightgreen.svg)](#local-first-architecture--privacy-guarantees)
+[![Browser Support](https://img.shields.io/badge/Browser-Chrome%20%7C%20Edge-blue.svg)](#1-shipped-and-verified--chrome-and-edge)
 [![Support on Buy Me A Coffee](https://img.shields.io/badge/Support-Buy%20Me%20A%20Coffee-ff813f?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/governworld)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=github)(https://github.com/sponsors/ACR-LOGIC)
 
-The **GovernWorld Extension** is a fully functional, local-first browser protection tool that brings GovernWorld's high-assurance detection and redaction engine directly into your web browser. It empowers users to detect, mask, and redact sensitive Personally Identifiable Information (PII), Protected Health Information (PHI), financial data, credentials, and custom patterns directly on web pages and in uploaded documents (PDF, DOCX, images) **without any data ever leaving the local device**.
+The **GovernWorld Extension** is a fully functional, local-first browser protection tool that brings GovernWorld's high-assurance detection and redaction engine directly into your web browser. It empowers users to detect, mask, and redact sensitive Personally Identifiable Information (PII), Protected Health Information (PHI), financial data, credentials, and custom patterns directly on web pages and in uploaded documents (PDF, DOCX, images). The page text and document content you scan **never leave your device** - the local pipeline has no network path at all. Optional account-linking and community features, described below, do contact GovernWorld servers, and are disabled by default.
 
 > **Licensing:** GovernWorld Extension is source-available and free for non-commercial community use. You may inspect, modify, fork, and run the extension locally for permitted non-commercial purposes. Commercial use, redistribution, resale, hosting, bundling, or incorporation into a commercial product or service requires a separate commercial license from Andres Chavez Ramirez. See [LICENSE](LICENSE). This is not an open-source license.
 
@@ -87,16 +87,13 @@ The **GovernWorld Extension** is a fully functional, local-first browser protect
 GovernWorld is engineered to conform to the **W3C WebExtensions Manifest V3 specification** and runs seamlessly across all modern desktop web browsers.
 
 ```
-┌────────────────────────────────────────────────────────────────────────┐
-│                      Cross-Browser Compatibility                       │
-├─────────────────┬─────────────────┬──────────────────┬─────────────────┤
-│  Google Chrome  │ Microsoft Edge  │ Mozilla Firefox  │  Apple Safari   │
-│   (Version 116+)│  (Version 116+) │  (Version 109+)  │  (Version 15.4+)│
-│      100%       │      100%       │      100%        │      100%       │
-├─────────────────┼─────────────────┼──────────────────┼─────────────────┤
-│  Brave Browser  │ Opera / GX      │     Vivaldi      │   Arc Browser   │
-│      100%       │      100%       │      100%        │      100%       │
-└─────────────────┴─────────────────┴──────────────────┴─────────────────┘
+| Browser | Status | Notes |
+|---|---|---|
+| Chrome 116+ | **Shipped and verified** | Manifest V3. The build target; every automated gate runs against it. |
+| Edge 116+ | **Shipped and verified** | Chromium-based; same MV3 build as Chrome. |
+| Brave, Opera, Vivaldi, Arc | Supported, unverified | Chromium-based and load the same unpacked build. Not covered by the automated gates, so treat as untested rather than confirmed. |
+| Firefox 109+ | **Not supported in this build** | `manifest.firefox.json` is an MV2 manifest and is *not* packaged by `npm run build`. It also has no side panel, no offscreen document, and no `scripting` parity, so the document pipeline would not work. Needs its own port and QA pass. |
+| Safari | **Not supported** | Safari cannot load a Chrome extension. The `safari-web-extension-converter` route below is a manual experiment, not a supported target, and no feature parity has been verified. |
 ```
 
 ### Build the Package First
@@ -129,8 +126,8 @@ This outputs the packaged extension into the `dist/` directory.
 
 ---
 
-### 3. Mozilla Firefox
-GovernWorld includes `browser_specific_settings.gecko` configured for Firefox 109+.
+### 3. Mozilla Firefox - not currently buildable
+`manifest.firefox.json` declares an MV2 extension for Firefox 109+ with its own gecko id, but **`npm run build` does not package it** and it has no side panel, no offscreen document, and no `scripting` permission parity. The document pipeline depends on an offscreen document, so it would not work. The steps below describe the intended shape, not a verified path. Firefox is a follow-up with its own port and QA pass.
 
 #### Temporary / Developer Installation:
 1. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
@@ -176,8 +173,10 @@ GovernWorld includes `browser_specific_settings.gecko` configured for Firefox 10
 
 ---
 
-### 8. Apple Safari (macOS)
-Safari requires converting WebExtensions using Apple's Xcode developer tools:
+### 8. Apple Safari (macOS) - not supported
+Safari cannot load a Chrome extension. The converter route below is a manual experiment and has no verified feature parity - the offscreen document and the `window.print()` print flow in particular have no Safari equivalent that this codebase tests. Listed for completeness only.
+
+Converting requires Apple's Xcode developer tools:
 
 1. Ensure Xcode is installed with Command Line Tools:
    ```bash
@@ -425,7 +424,7 @@ npm install
 # Typecheck TypeScript sources
 npm run typecheck
 
-# Run all 31 Vitest test suites (546 tests)
+# Run the full Vitest suite (count and current result: see the CI badge above)
 npm test
 
 # Run browser verification & Chromium E2E tests
@@ -441,7 +440,7 @@ npm run build
 
 The codebase includes an extensive automated test suite covering all detection algorithms, redaction output integrity, wizard behavior, manifest compliance, and audit trails:
 
-- **Unit & Integration Tests:** 31 test suites / 546 tests passing 100% (`npm test`).
+- **Unit & Integration Tests:** the full Vitest suite via `npm test`, with the current pass count reported by the CI badge above. Counts are not hard-coded here on purpose - a stale number in a README is worse than no number.
 - **Browser Automation Verification:** Real Chromium browser validation (`npm run verify:browser`).
 - **Photo OCR & Coordinate Mapping E2E:** End-to-end verification of document OCR, coordinate mapping, and pixel flattening (`npm run test:photo-e2e`).
 - **Cross-Browser Verification:** Tests verifying compatibility across Chrome, Edge, Firefox, Safari, and Brave (`tests/cross-browser-compatibility.test.ts`).

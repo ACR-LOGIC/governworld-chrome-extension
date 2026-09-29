@@ -26,7 +26,7 @@ release build. Synthetic-only fixtures; no real PII/PHI in any asset.
 | Extension unit tests (`npm test`) | ✅ 115 passed / 0 failed (11 files) |
 | Production build (`npm run build`) | ✅ Pass |
 | Offline OCR smoke test (`npm run test:offline-ocr`) | ✅ Pass ("HELLO", no network) |
-| Security review sign-off | ⚠️ **APPROVED at commit `b4c8614` only** (fail-closed messaging, consent gating, metadata-only signed audit, report-only attr scan, fail-closed document pipeline, vendored-only build, synthetic-only fixtures). **Re-confirmation required for `a62aed6`**: the detector, OCR language handling, community boundary, and all published claims changed after that approval. Not yet re-reviewed. |
+| Security review sign-off | ⚠️ **NOT SIGNED for the current artifact.** Prior approval is at `b4c8614` only, which predates the detector, OCR, community-boundary, and claims work. Two independent automated passes have since been run against the full `8cff8ba..HEAD` range: an adversarial probe of the detector and contribution screener, and a Copilot review. Each found a real defect the other missed - the card pattern absorbing a neighbouring number, the case-sensitive auth schemes, and nine contribution-screener normalisation gaps - all now fixed and regression-tested. **A human reviewer has not signed this artifact.** Reviewer checklist in the handoff notes; nothing here should be read as an approval. |
 | Release-blocker fixes | ✅ DOCX offscreen gate closed (was silently dropped → 180s timeout); SCAN_RESULT bound to pending sessionId; mask-command responses verified; release tooling requires explicit approved commit + clean tree; `gatewayOrigin` validated as https origin (deny-by-default) |
 
 ## Feature additions (2026-08-23, `feat/chrome-extension-release`)
@@ -112,11 +112,19 @@ release build. Synthetic-only fixtures; no real PII/PHI in any asset.
    store listing.~~ **Done** — published at
    `https://governworld.acrlogic.com/chrome-extension-privacy` and linked from
    the popup settings section, `landing.html`, and `STORE_DESCRIPTION.md`.
-2. **Final security review sign-off — outstanding for the current artifact.**
+2. **Final security review sign-off - outstanding for the current artifact.**
    Approved at `b4c8614` (2026-08-22). The detector, OCR language handling,
    community boundary, and every published claim changed after that point, so
-   that approval does not carry over to `a62aed6`. It must be re-confirmed
-   against the exact submitted SHA.
+   that approval does not carry over. Two independent automated passes have
+   been run over the full `8cff8ba..HEAD` range and each found real defects,
+   all since fixed and regression-tested - but automated review is not a human
+   sign-off, and a named reviewer still has to accept this artifact.
+   Suggested reading order, in descending risk: `src/content/detect.ts`
+   (overlap resolution, and any pattern missing `g` or `i`),
+   `src/shared/customPatterns.ts` (`normaliseForScan`, and the decision not to
+   fold non-ASCII digits), `src/document-pipeline/ocr.ts` (fail-closed language
+   handling and `buildOcrWorkerOptions`), then `dist/manifest.json` for the
+   absence of `host_permissions`.
 3. ~~Commit approval → generate ZIP from that exact commit → record artifact
    SHA-256 here.~~ **Done** at `a62aed6`; ZIP + tar.gz + `release/SHA256SUMS`,
    both carrying an identical 28-file payload, both checksums re-verified

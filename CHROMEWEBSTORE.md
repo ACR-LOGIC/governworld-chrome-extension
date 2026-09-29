@@ -20,7 +20,7 @@
 **GovernWorld Redaction** finds sensitive values in the visible text of the page you are viewing and in the PDF, image, and Word files you open, then lets you redact or mask them directly on your device:
 
 - **Scan on demand.** Nothing scans automatically. Open the popup or side panel and press **Scan this page** to analyze the visible text of the current tab.
-- **Local only — enforced.** Scanning, detection, OCR, and redaction all run on your device. Your page text and documents never leave your device.
+- **Local only — enforced.** Scanning, detection, OCR, and redaction all run on your device. Your page text and documents never leave your device, and the local pipeline has no network path at all. The optional account-linking feature contacts GovernWorld for billing metadata only; it is off until enabled and never carries scan content.
 - **Review, then act.** Findings are listed with masked previews (for example, `phone: ***-***-1234`). Choose what to cover.
 - **Temporary page masks.** Masks are an on-screen overlay only. They do not change or store anything on the website you are viewing.
 - **Preset policies.** HIPAA, PCI DSS, GDPR, and Developer (API keys & secrets) presets auto-select the categories they cover.

@@ -80,6 +80,41 @@ export async function langDataPresent(lang: string): Promise<boolean> {
   }
 }
 
+/**
+ * Worker options, assembled in one place so the contract is testable.
+ *
+ * tesseract.js ships defaults that point at a CDN: its default `workerPath` is
+ * `https://cdn.jsdelivr.net/.../worker.min.js`, and inside the worker the
+ * default `langPath` is `https://cdn.jsdelivr.net/npm/@tesseract.js-data/...`.
+ * Every one of those is overridden here, so a correct build never touches the
+ * network. That is an invariant worth a test rather than a comment, because
+ * dropping any one of these three lines would silently reintroduce a remote
+ * fetch of executable code and language data into the document pipeline - the
+ * one pipeline that is supposed to have no network path at all.
+ *
+ * `tests/ocr-offline-assets.test.ts` asserts all three are local asset URLs and
+ * that no value is an absolute URL.
+ */
+export function buildOcrWorkerOptions(): {
+  workerPath: string;
+  workerBlobURL: boolean;
+  corePath: string;
+  langPath: string;
+  // tesseract calls the logger with a progress object, and depending on version
+  // that object can carry recognised text. The signature is deliberately
+  // variadic so the intent is explicit: arguments are accepted and discarded,
+  // never logged.
+  logger: (...args: unknown[]) => void;
+} {
+  return {
+    workerPath: assetUrl("tesseract.worker.min.js"),
+    workerBlobURL: false,
+    corePath: assetUrl("tesseract-core.wasm.js"),
+    langPath: assetUrl("tessdata"),
+    logger: () => {}, // never log recognition output
+  };
+}
+
 export async function getWorker(requestedLang = "eng"): Promise<Worker> {
   // Only a bundled language is accepted. Falling back silently to English when
   // an unbundled one is requested is what made the language selector a lie, so
@@ -90,17 +125,26 @@ export async function getWorker(requestedLang = "eng"): Promise<Worker> {
         `Available offline: ${BUNDLED_OCR_CODES.join(", ")}.`
     );
   }
-  let activeLang = requestedLang;
 
-  const targetPresent = await langDataPresent(activeLang);
+  // Fail closed if the data for the requested language is missing, rather than
+  // substituting English. The previous behaviour was to fall back to English
+  // whenever English happened to be present, which is unreachable today only
+  // because English is the single bundled language - the moment a second
+  // language is vendored, a user selecting it would silently get English OCR
+  // and a clean-looking result. For a tool people use to decide what is safe to
+  // disclose, a wrong answer that reports success is worse than a visible
+  // failure, so the same reasoning that rejects an unbundled language applies
+  // to bundled-but-absent.
+  const targetPresent = await langDataPresent(requestedLang);
   if (!targetPresent) {
-    const engPresent = await langDataPresent("eng");
-    if (engPresent) {
-      activeLang = "eng";
-    } else {
-      throw new Error("Language data is not installed; OCR is unavailable in offline mode.");
-    }
+    throw new Error(
+      `OCR language data for "${requestedLang}" is missing from this build, so ` +
+        `recognition was not run. This is a packaging fault, not a fallback ` +
+        `situation: silently recognising the page in a different language would ` +
+        `produce a result that looks complete and is not.`
+    );
   }
+  const activeLang = requestedLang;
 
   if (workerPromise && currentWorkerLang !== activeLang) {
     await resetOcr();
@@ -108,15 +152,7 @@ export async function getWorker(requestedLang = "eng"): Promise<Worker> {
 
   if (!workerPromise) {
     currentWorkerLang = activeLang;
-    workerPromise = withInitTimeout(
-      createWorker(activeLang, 1, {
-        workerPath: assetUrl("tesseract.worker.min.js"),
-        workerBlobURL: false,
-        corePath: assetUrl("tesseract-core.wasm.js"),
-        langPath: assetUrl("tessdata"),
-        logger: () => {}, // never log recognition output
-      })
-    );
+    workerPromise = withInitTimeout(createWorker(activeLang, 1, buildOcrWorkerOptions()));
     // Reset so a failed init can be retried.
     workerPromise.catch(() => {
       workerPromise = null;
