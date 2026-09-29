@@ -8,7 +8,7 @@
 - **Website:** governworld.acrlogic.com
 - **Privacy contact:** privacy@acrlogic.com
 - **Canonical URL:** `https://governworld.acrlogic.com/chrome-extension-privacy`
-- **Support:** `https://github.com/ACR-LOGIC/governworld/issues`
+- **Support:** `https://github.com/ACR-LOGIC/governworld-extension/issues`
 
 > **Legal notice:** This policy should be reviewed by qualified privacy counsel before being adopted as the company's legally operative policy. The final policy must accurately match the Extension's shipped permissions, APIs, telemetry, authentication, storage, network requests, update mechanism, and Chrome Web Store disclosures.
 
@@ -377,5 +377,5 @@ GovernWorld's objective is to provide the community with a useful additional lay
 **ACR LOGIC**
 Privacy contact: privacy@acrlogic.com
 Website: governworld.acrlogic.com
-Privacy Policy: https://governworld.acrlogic.com/privacy
-Support: https://github.com/ACR-LOGIC/governworld/issues
+Privacy Policy: https://governworld.acrlogic.com/chrome-extension-privacy
+Support: https://github.com/ACR-LOGIC/governworld-extension/issues

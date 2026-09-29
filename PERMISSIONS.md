@@ -14,6 +14,7 @@ uses it, and lists permissions the extension deliberately does **not** request.
 | `downloads`  | Saves the flattened redacted copy the user explicitly creates, with the browser's save dialog (`saveAs: true`). The original file is never touched. | `src/service-worker/documents.ts` |
 | `offscreen`  | Runs document rendering (pdf.js) and OCR (tesseract.js) in a dedicated offscreen document, because MV3 service workers have no DOM or `Worker` API. | `src/offscreen/offscreen.ts` |
 | `sidePanel`  | Shows the GovernWorld side panel, a persistent surface for scanning, findings review, document redaction, notifications, and account/extension-license management. It opens via the popup's "Open side panel" button and the `Alt+Shift+P` command. | `manifest.json` (`side_panel`, `commands`), `src/service-worker/index.ts` (`chrome.sidePanel.open`), `src/popup/popup.ts` |
+| `contextMenus` | Adds three entries to the browser context menu — "Scan page for sensitive data", "Redact selection to clipboard", and "Mask selected text / element" — so the same on-demand actions can be started from a right-click. The entries are created only while the user has the setting enabled and are removed when it is disabled. It grants no access to page content by itself: each entry still runs the existing user-initiated scan path and still depends on an explicit click. | `src/service-worker/index.ts` (`syncContextMenus`, `chrome.contextMenus.onClicked`), `src/shared/settings.ts` (`contextMenusEnabled`) |
 
 ## Optional permissions (requested at runtime, never at install)
 

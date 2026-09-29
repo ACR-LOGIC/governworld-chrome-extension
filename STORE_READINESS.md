@@ -43,7 +43,7 @@ The popup settings section includes:
 - **Privacy policy** link → packaged `PRIVACY.md` (opens via
   `chrome.runtime.getURL`); must also be hosted at the canonical public URL
   before submission.
-- **Support** link → `https://github.com/ACR-LOGIC/governworld/issues`
+- **Support** link → `https://github.com/ACR-LOGIC/governworld-extension/issues`
 - **Export audit log** → signed, metadata-only audit export.
 
 The links are implemented in `src/popup/index.html`; only the canonical
@@ -73,7 +73,9 @@ text, at least 640x400, PNG or JPEG.
 ## Store submission checklist
 
 - [x] Manifest is MV3 with least-privilege permissions (`activeTab`,
-      `scripting`, `storage`, `downloads`, `offscreen`; no `<all_urls>`).
+      `scripting`, `storage`, `downloads`, `offscreen`, `sidePanel`,
+      `contextMenus`; no `<all_urls>`, no `tabs`). Every declared permission
+      is justified in `PERMISSIONS.md` and named in `STORE_DESCRIPTION.md`.
 - [x] Single-purpose description aligned with actual behavior.
 - [x] Privacy policy drafted (`PRIVACY.md`), versioned v1.0.0 with support
       contact; pending publication at the canonical URL after push.
@@ -90,10 +92,16 @@ text, at least 640x400, PNG or JPEG.
 - [x] Accessibility-surface scan shipped report-only (`source:"attr"`,
       `aria-label`/`alt`/`placeholder`/`title`, DOM never mutated, no raw
       attribute values stored) — disclosed in PRIVACY.md and listing copy.
-- [ ] Privacy policy published at the canonical URL and referenced in the
-      listing.
-- [x] Screenshots captured from a local synthetic fixture page (6 required,
-      in `release/screenshots/`).
+- [x] Privacy policy published at
+      `https://governworld.acrlogic.com/chrome-extension-privacy` (the
+      extension's own notice — not the website policy at `/privacy`) and linked
+      from the popup's settings section, `landing.html`, and the listing.
+- [x] Screenshots captured from a local synthetic fixture page in
+      `release/screenshots/`, via `npm run capture:store`. The store requires at
+      least one **1280x800** image and accepts at most 5; the script reads each
+      PNG's IHDR and fails unless every image is exactly 1280x800. The UI
+      walkthrough cannot produce these (it shoots `fullPage` at a 1280x900
+      viewport, so any overflowing surface captures at 1265px wide).
 - [x] Final review that no real PII/PHI appears in any listing asset
       (synthetic fixtures + secret scan; see `RELEASE_EVIDENCE.md`).
 - [x] Security review sign-off before submission (APPROVED at `b4c8614`,
@@ -130,9 +138,12 @@ text, at least 640x400, PNG or JPEG.
 - [x] Optional redaction labels (`maskPlaceholders`): when enabled, applied
       mask blocks show a short white label (e.g. `[SSN]`, `[DOB]`,
       `[API KEY]`) identifying what was covered. Off by default.
-- [ ] ⚠️ Release ZIP is **stale** — feature additions landed after `b4c8614`.
-      Regenerate `release/governworld-redaction-<commit>.zip` from the new
-      approved commit and re-record the artifact SHA-256 before submission.
+- [ ] ⚠️ **Release ZIP must be regenerated** from the current commit. Any ZIP
+      produced from `b4c8614` predates the document-studio transport fix, the
+      active-tab resolution fix, the Terms page, and the enriched About page.
+      Run `npm run release:zip <sha>` on the reviewed commit; the script refuses a
+      dirty tree and refuses a SHA that is not HEAD, so the artifact is
+      reproducible. Then record the SHA-256 in `RELEASE_EVIDENCE.md`.
 
 ## Deployment note (gateway adapter, spec step 8)
 

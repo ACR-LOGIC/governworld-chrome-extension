@@ -7,7 +7,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ACR-LOGIC/governworld-chrome-extension.git"
+    "url": "https://github.com/ACR-LOGIC/governworld-extension.git"
   },
   "funding": "https://buymeacoffee.com/governworld",
   "scripts": {
@@ -22,7 +22,8 @@
     "release:zip": "node scripts/make-release.mjs",
     "typecheck": "tsc --noEmit",
     "sync:sidepanel": "node scripts/sync-sidepanel.mjs",
-    "sync:sidepanel:check": "node scripts/sync-sidepanel.mjs --check"
+    "sync:sidepanel:check": "node scripts/sync-sidepanel.mjs --check",
+    "capture:store": "node scripts/make-store-screenshots.mjs"
   },
   "dependencies": {
     "mammoth": "^1.12.1",

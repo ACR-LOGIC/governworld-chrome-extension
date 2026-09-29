@@ -28,7 +28,7 @@ If GovernWorld helps protect your privacy or workflow, you can support ongoing m
 3. **Enhance UI & Accessibility:**
    - Improve keyboard navigation, high-contrast themes, and screen reader labels.
 4. **Report Bugs & Suggest Features:**
-   - Open an issue on our [GitHub Issue Tracker](https://github.com/ACR-LOGIC/governworld-chrome-extension/issues).
+   - Open an issue on our [GitHub Issue Tracker](https://github.com/ACR-LOGIC/governworld-extension/issues).
 5. **Financial Sponsorship:**
    - Support development at [buymeacoffee.com/governworld](https://buymeacoffee.com/governworld).
 
@@ -44,7 +44,7 @@ If GovernWorld helps protect your privacy or workflow, you can support ongoing m
 ### Setup & Local Development
 1. Clone this repository:
    ```bash
-   git clone https://github.com/ACR-LOGIC/governworld-chrome-extension.git
+   git clone https://github.com/ACR-LOGIC/governworld-extension.git
    cd governworld-chrome-extension
    ```
 2. Install dependencies:

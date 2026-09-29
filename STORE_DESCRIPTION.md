@@ -48,15 +48,15 @@ you cover them up:
 
 - No `*://*` host permissions. No background scanning, keystroke capture, or
   network monitoring. The extension asks only for `activeTab`, `scripting`,
-  `storage`, `downloads`, `offscreen`, and `sidePanel` (plus an optional,
-  runtime-requested `notifications` permission) — each mapped to a specific,
-  user-triggered feature.
+  `storage`, `downloads`, `offscreen`, `sidePanel`, and `contextMenus` (plus an
+  optional, runtime-requested `notifications` permission) — each mapped to a
+  specific, user-triggered feature.
 - No raw scanned text, document bytes, or page images are stored, logged, or
   transmitted. Temporary state is cleared when your browser restarts.
 - Optional account linking (a gateway origin + API key you paste) is used only
   for profile display and extension add-on checkout — never for scan content.
-- A privacy policy is available from the popup's settings section and
-  published at a stable URL.
+- Privacy policy:
+  https://governworld.acrlogic.com/chrome-extension-privacy
 
 **A note on compliance.** This extension helps you redact sensitive values,
 but using it does not by itself make you or your organization HIPAA or
@@ -79,6 +79,10 @@ scan. The extension does not change behavior based on which website is open.
   document.
 - `sidePanel` — show the side panel for scanning, document redaction,
   notifications, and account/license management.
+- `contextMenus` — add "Scan page for sensitive data", "Redact selection to
+  clipboard", and "Mask selected text / element" to the right-click menu, so
+  the same on-demand actions can be started from there. Each entry runs only
+  when you click it, and the entries can be switched off in settings.
 - `notifications` (optional, requested at runtime) — scan-findings notice only
   after you enable it.
 

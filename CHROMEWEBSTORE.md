@@ -43,7 +43,8 @@ Every permission declared in `manifest.json` is strictly required for core local
 | `downloads` | Required to save locally flattened and redacted document files (PDFs/images) directly to the user's download directory. |
 | `offscreen` | Required to execute CPU-intensive local OCR extraction (Tesseract.js) and PDF canvas rendering in an isolated offscreen context without stalling UI responsiveness. |
 | `sidePanel` | Required to provide a persistent side panel interface (`Alt+Shift+P`) for document scanning, live wizard rule creation, and in-depth instruction viewing. |
-| `notifications` *(optional)* | Requested only if the user explicitly opts into desktop notifications for completed background document redactions. |
+| `contextMenus` | Required to add three on-demand entries to the browser context menu — "Scan page for sensitive data", "Redact selection to clipboard", and "Mask selected text / element" — so the same user-initiated actions can be started from a right-click. The entries are created only while the setting is enabled and are removed when it is disabled, and each still runs the existing click-to-scan path. |
+| `notifications` *(optional)* | Requested only if the user explicitly opts into a desktop notification when a scan finds sensitive data. |
 
 ### Host Permissions Justification
 - **Zero Host Permissions:** The extension declares no `host_permissions` and does not automatically access or communicate with any remote origin.
@@ -55,10 +56,24 @@ Every permission declared in `manifest.json` is strictly required for core local
 - **Single Purpose:** Provide local-first detection and redaction of sensitive data in web pages and local files.
 - **Remote Code:** The extension does NOT execute remote code or download scripts dynamically. All scripts and WebAssembly modules are bundled locally within the extension.
 - **Data Collection:** The extension collects **NO user data, NO page content, and NO document bytes**. Everything remains strictly on the local machine.
-- **Privacy Policy:** Published locally in `PRIVACY.md` and packaged in `privacy.html`.
+- **Privacy Policy:** Published at
+  https://governworld.acrlogic.com/chrome-extension-privacy (the extension's own
+  Chrome Extension Privacy Notice). The same policy ships inside the package as
+  `privacy.html` and is linked from the extension's settings section. The Terms &
+  Conditions ship as `legal.html` in the same place.
 
 ---
 
 ## 4. Version History
 
-- **0.1.0 (2026-09-27):** Initial open-source release featuring local-first detection engine, document scanning & redaction, interactive Redaction Wizard, 10-part instruction suite with deep linking, zero host permissions, and locked API-ready cloud integration boundary.
+- **0.1.0 (2026-09-27):** Initial release featuring local-first detection engine,
+  document scanning & redaction, interactive Redaction Wizard, 10-part instruction
+  suite with deep linking, zero host permissions, and locked API-ready cloud
+  integration boundary.
+
+  GovernWorld is released under the **GovernWorld Source-Available Community
+  License**. It is source-available and is *not* an OSI-approved open-source
+  licence, so this listing describes it as free rather than as open source. The
+  third-party libraries it builds on (pdf.js, Tesseract, tesseract.js, pdf-lib,
+  and mammoth) are separately licensed under Apache-2.0, MIT, and BSD-2-Clause
+  and are credited in the extension's About page.
