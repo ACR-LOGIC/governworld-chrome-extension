@@ -135,6 +135,25 @@ async function shot(page, name, note) {
   steps.push({ n: stepNo, name, note, shot: file });
 }
 
+/**
+ * Click through the page's own DOM instead of via the driver.
+ *
+ * Playwright's page.click() focuses the tab, which would make the popup the
+ * browser's active tab. The worker's tab resolver filters extension URLs out but
+ * then falls back to the focused tab, so it would look for a scan session that
+ * belongs to the popup and report "Run a scan first". An in-page el.click()
+ * dispatches the real listener without changing which tab is active.
+ */
+async function clickInPage(page, selector) {
+  const ok = await page.$eval(selector, (el) => {
+    if (!(el instanceof HTMLElement) || el.hasAttribute("disabled")) return false;
+    el.click();
+    return true;
+  });
+  if (!ok) throw new Error(`${selector} is missing or disabled`);
+  return true;
+}
+
 function watch(page, label) {
   page.on("pageerror", (e) => errors.push(`${label}: pageerror ${e}`));
   page.on("console", (m) => {
@@ -267,14 +286,14 @@ try {
 
   // A scan raises the one-time "verify your work" notice unless it has already
   // been acknowledged in this profile. It is modal, so capture and dismiss it
-  // before touching anything else.
+  // before touching anything else. Dismissed in-page so the fixture stays the
+  // active tab and the worker's scan session still resolves.
   await step("verify-notice", async () => {
-    await popup.bringToFront();
     await popup.waitForTimeout(400);
     const open = await popup.$eval("#verify-dialog", (d) => d.open).catch(() => false);
     if (!open) return;
     await shot(popup, "popup-02-verify-notice", "one-time accuracy notice raised after a scan");
-    await popup.click("#verify-understood");
+    await clickInPage(popup, "#verify-understood");
     await popup.waitForTimeout(400);
   });
 
@@ -291,25 +310,23 @@ try {
   await clearModals();
 
   // --- The findings list the real controller rendered ---------------------
+  // Read in-page: bringing the popup to the front would steal tab focus and cost
+  // us the worker's scan session for the apply-masks step below.
   await step("popup-findings-render", async () => {
-    await popup.bringToFront();
-    await popup.click("#tab-btn-protection");
-    await popup.waitForTimeout(600);
     const shown = await popup.evaluate(() => ({
       sectionVisible: !document.getElementById("results-section").hidden,
       rows: document.querySelectorAll("#findings-list .finding").length,
       count: document.getElementById("results-count")?.textContent ?? "",
     }));
     console.log(`  results-section visible=${shown.sectionVisible} rows=${shown.rows} badge=${shown.count}`);
+    if (!shown.sectionVisible || shown.rows === 0) {
+      throw new Error(`findings list not rendered (visible=${shown.sectionVisible} rows=${shown.rows})`);
+    }
     await shot(popup, "popup-02-findings", `${shown.rows} finding rows rendered in the popup`);
   });
 
-  // --- Apply the masks onto the fixture page, while results are still shown ---
+  // --- Apply the masks onto the fixture page, while the fixture is active ---
   await step("apply-masks", async () => {
-    await clearModals();
-    await popup.bringToFront();
-    await popup.click("#tab-btn-protection");
-    await popup.waitForTimeout(400);
     const state = await popup.evaluate(() => ({
       resultsHidden: document.getElementById("results-section")?.hidden,
       rows: document.querySelectorAll("#findings-list .finding").length,
@@ -317,39 +334,29 @@ try {
     }));
     if (state.resultsHidden) throw new Error("results section is hidden; nothing to mask");
     if (!state.enabled) throw new Error(`apply-masks disabled with ${state.rows} findings rendered`);
-    await popup.click("#apply-masks-btn");
-    await popup.waitForTimeout(2000);
+    // Keep the fixture as the active tab and dispatch the real click in-page.
+    await fixture.bringToFront();
+    await clickInPage(popup, "#apply-masks-btn");
+    await popup.waitForTimeout(2500);
     // Masks render inside the content script's shadow root, so the host element is
     // all a light-DOM query can see; count masks through the shadow root.
-    await fixture.bringToFront();
-    await fixture.waitForTimeout(800);
     const overlay = await fixture.evaluate(() => {
       const host = document.querySelector("div[data-gw-scan-overlay]");
       return {
-        contentLoaded: globalThis.__gwRedactionContentLoaded === true,
         host: Boolean(host),
         masks: host?.shadowRoot ? host.shadowRoot.querySelectorAll("[data-kind]").length : 0,
+        kinds: host?.shadowRoot ? [...new Set([...host.shadowRoot.querySelectorAll("[data-kind]")].map((e) => e.getAttribute("data-kind")))] : [],
       };
     });
     maskedCount = overlay.masks;
     const s = await popup.evaluate(() => document.getElementById("status")?.textContent?.trim() ?? "");
-    console.log(`  contentLoaded=${overlay.contentLoaded} host=${overlay.host} masks=${overlay.masks} status="${s}"`);
-    if (!overlay.masks) {
-      // Not a product failure: this harness opens the popup as a tab, which makes
-      // it the browser's active tab, so the worker's per-tab scan session resolves
-      // to the popup instead of the fixture and it reports "Run a scan first".
-      // With the real popup the fixture stays active and this path is reachable;
-      // it is not covered by verify:browser or the photo E2E either.
-      skipped.push(
-        "apply-masks: popup-as-tab harness cannot exercise the per-tab mask path (active tab is the popup, not the fixture)",
-      );
-      console.log("  SKIPPED (harness limitation, see report.json skipped[])");
-      return;
-    }
+    console.log(`  host=${overlay.host} masks=${overlay.masks} kinds=${overlay.kinds.join(",")} status="${s}"`);
+    if (/Run a scan first/.test(s)) throw new Error("worker had no scan session for the fixture tab");
+    if (!overlay.masks) throw new Error(`no mask elements were rendered into the page (host=${overlay.host})`);
     await shot(fixture, "fixture-after-masks", `${overlay.masks} visual mask(s) over the page`);
   });
 
-  // --- Every remaining tab -------------------------------------------------
+  // --- Every remaining tab (from here the popup may take focus freely) -----
   for (const tab of ["logic", "review", "settings"]) {
     await step(`tab-${tab}`, async () => {
       await popup.click(`#tab-btn-${tab}`);

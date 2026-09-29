@@ -16,7 +16,7 @@ npm run capture:ui  # Playwright UI walkthrough → screenshots + video (needs a
 - `npm run test:photo-e2e` — full-chain OCR/redaction E2E in real Chromium. Requires `npm run build` and fixtures via `npm run fixtures:photo`.
 - `npm run test:offline-ocr` — smoke test that Tesseract runs from `dist/assets` with no network. Requires `npm run build` first.
 - `npm run capture:ui` — drives the built extension through a 23-step journey and writes screenshots, webm video and `report.json` to `.tmp-ui-session/` (gitignored). It loads a **throwaway** extension copy under `.tmp-ui-session/ext` that adds a localhost-only `host_permissions` entry, because a live page scan is otherwise impossible: `dist/` ships with no host permissions by design and `activeTab` needs a real toolbar gesture that automation cannot synthesise. The script asserts `dist/manifest.json` has no `host_permissions` before building the variant and never writes to `dist/`.
-- `capture:ui` cannot exercise mask application on a page: it opens the popup as a tab, which makes the popup the browser's active tab, so the worker's per-tab scan session resolves to the popup instead of the fixture. It reports that as `skipped[]`, not a failure.
+- `capture:ui` exercises mask application on the page. The worker's tab resolver filters extension URLs out but then falls back to the focused tab, so the harness must keep the **fixture** as the active tab: it clicks through the popup's own DOM with `el.click()` rather than `page.click()`, which would focus the popup tab and make the worker look for a scan session that belongs to the popup. Assertions check the mask count inside the content script's shadow root (`div[data-gw-scan-overlay]`), not the light DOM.
 
 ## Build
 
