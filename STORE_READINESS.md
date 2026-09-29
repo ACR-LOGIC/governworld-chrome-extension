@@ -102,6 +102,17 @@ text, at least 640x400, PNG or JPEG.
       PNG's IHDR and fails unless every image is exactly 1280x800. The UI
       walkthrough cannot produce these (it shoots `fullPage` at a 1280x900
       viewport, so any overflowing surface captures at 1265px wide).
+- [x] Small promo tile (**440x280**, required; only the 1400x560 marquee tile is
+      optional) at `release/images/promo-tile-440x280.png`, via
+      `npm run capture:promo`. Brand tokens are read from `src/popup/popup.css`
+      so the tile cannot drift from the product's colours.
+- [x] Store icon is 128x128 (`icons/icon-128.png`), already declared in the
+      manifest.
+- [x] Packaged artifact verified independently of `dist/`:
+      `npm run verify:zip <zip>` extracts the release ZIP and loads it in
+      Chromium, asserting the manifest sits at the archive root, every manifest
+      reference and offline asset is present, both legal pages are packaged and
+      linked, and all five pages load CSP-clean.
 - [x] Final review that no real PII/PHI appears in any listing asset
       (synthetic fixtures + secret scan; see `RELEASE_EVIDENCE.md`).
 - [x] Security review sign-off before submission (APPROVED at `b4c8614`,

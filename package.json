@@ -23,7 +23,9 @@
     "typecheck": "tsc --noEmit",
     "sync:sidepanel": "node scripts/sync-sidepanel.mjs",
     "sync:sidepanel:check": "node scripts/sync-sidepanel.mjs --check",
-    "capture:store": "node scripts/make-store-screenshots.mjs"
+    "capture:store": "node scripts/make-store-screenshots.mjs",
+    "verify:zip": "node scripts/verify-release-zip.mjs",
+    "capture:promo": "node scripts/make-promo-tile.mjs"
   },
   "dependencies": {
     "mammoth": "^1.12.1",
