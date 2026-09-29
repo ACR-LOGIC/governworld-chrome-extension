@@ -195,97 +195,101 @@ silently alter detection is a materially different risk from surfacing them for
 the user to judge, and it keeps the user in the loop exactly where the
 extension's threat model wants them.
 
-## 10. Open questions
+## 10. Decisions
 
-### 10.1 Key custody — specified, owner not yet named
+All four questions from the first draft are now answered. The project has one
+maintainer, and that fact changes the key model rather than merely delaying it.
 
-The substance is decided; only a name is missing.
+### 10.1 Key custody — decided: no signing key, ever
 
-**Requirement.** The publisher signing key must be generated and held so that no
-single person, and no single machine reachable from the internet, can sign a
-pack unilaterally. Concretely:
+**There is no publisher signing key.** Two-person control cannot be satisfied by
+one person, and pretending otherwise would mean claiming a control that does not
+exist. The original draft assumed two custodians; that assumption is withdrawn.
 
-- Generated on an offline or air-gapped host. Never on a build server, never in
-  CI, never in a repository.
-- Non-exportable wherever the platform allows it (HSM, or a
-  `CryptoKey` with `extractable: false` in a hardened offline tool).
-- Two-person control: release requires two distinct custodians. A single
-  compromised laptop must not be sufficient to publish rules to every install.
-- Access is logged with a timestamp, the pack id, and the operator identity, and
-  the log is retained beyond pack expiry so a leak can be investigated.
-- **The public key fingerprint is published** in the repository, the store
-  listing, and the docs. A key change that nobody notices is a key compromise
-  that goes undetected.
-- Rotation is a store release, shipping two pinned keys (current and next) with
-  an overlap window, then removing the old one in a later release.
+The consequence is that the signed-pack design in sections 3 to 7 is **not the
+design that will ship**. What ships instead is 10.1.1, which needs no key at all.
+`src/shared/communityPack.ts` stays in the tree as reviewed, tested code for that
+future, but `PINNED_COMMUNITY_PACK_PUBLIC_KEY` remains `null` and is not a
+placeholder waiting to be filled in.
 
-**Still required from the business:** who the two custodians are, and which
-hosting satisfies the offline/non-exportable requirement. Neither is a technical
-decision.
+#### 10.1.1 The design that ships: rules as user-reviewed suggestions
 
-### 10.2 Revocation runbook — procedure specified, owner not yet named
+Community rules are fetched over HTTPS and treated as **untrusted suggestions**.
+Nothing is ever applied automatically. The user reads each rule and decides.
 
-- A revocation list is signed by the **same** publisher key and served from the
-  same endpoint as packs, containing revoked `packId`s with a timestamp and
-  reason. Its signature is verified with the same pinned key.
-- Consulted on every refresh, before installing anything.
-- A revoked `packId` is refused, and its stored `seq` is cleared so a future
-  pack for the same id can be accepted only at a higher sequence.
-- **Target turnaround: publish the list within 4 hours of deciding to revoke.**
-  A pack expiry of 7 days is the backstop, so a stale revocation list cannot
-  extend a compromised pack's life by more than that.
-- Trigger conditions, any of which starts the clock: suspected key compromise,
-  discovery that a hostile rule was published, a validation bypass in the
-  verifier, or a publisher-side signing accident.
+This removes the entire key-management problem, and with it the class of failure
+that keys create: there is no key to steal, no custody policy to violate, no
+rotation to run, and no revocation list to publish. What remains is the original
+transport-authentication risk, and it is bounded by the fact that a hostile rule
+is inert until a human accepts it.
 
-**Still required from the business:** who is on call for that 4-hour target, and
-who can authorise revocation.
+The obligations that replace signing are therefore about *presentation*, not
+cryptography:
 
-### 10.3 `minClientVersion` enforcement point — decided and implemented
+- A community rule must be visibly attributed: who published it, when, and how
+  many reports it has.
+- Its pattern must be shown in full before acceptance, never truncated. A user
+  who cannot read the rule cannot judge it.
+- Its category and confidence must be displayed, because those decide where a
+  finding lands.
+- Acceptance is per rule and user-revocable, with no persistent global switch.
+- `isValidCommunityRule()` still gates everything that reaches the UI. A rule
+  that fails it is never presented as acceptable.
+- The confidence clamp from section 7 still applies when an accepted rule runs.
+- The in-app copy must continue to state that community rules are **not active in
+  this release** until this path is actually built. That copy is asserted by
+  `tests/claims-accuracy.test.ts`.
 
-**Decided: enforce before anything is staged or installed**, in
-`verifyCommunityPack()`, as step 4 of §5. An old client must not learn about
-rules it cannot fully validate, and "community rules unavailable, update
-required" is a better failure than a partially understood policy set. A test
-asserts that an unparseable version on *either* side fails closed rather than
-being coerced.
+**If this is ever revisited**, it becomes a key problem again and the requirement
+is non-negotiable: signing keys require a second holder. A solo maintainer
+should not enable signing. They should use user-reviewed suggestions, which is
+what this project does.
 
-This also means the check must run before `recordAcceptedPack()`, so a rejected
-pack leaves no stored state behind. Implemented and covered.
+### 10.2 Revocation — decided: not applicable under 10.1.1
 
-### 10.4 Rule-acceptance bar — substance specified, threshold open
+There is no signed pack to revoke, and the user *is* the revocation mechanism:
+not accepting a rule, or removing an accepted one, takes effect immediately and
+locally, with no server round trip and nothing to wait for.
 
-The bar for a rule being *accepted into* a pack, because signing proves
-provenance and not quality (§6):
+That is a real advantage of the chosen design and worth stating plainly, because
+section 8 documented a genuine weakness — revocation cannot bind an offline
+client. Under 10.1.1 that weakness does not exist, because authority never leaves
+the user's machine.
 
-**Automated, and must pass before any pack is signed:**
+**If signed packs are ever adopted** despite the above: publish the revocation
+list within **72 hours** of deciding to revoke, maintainer as sole on-call. The
+4-hour target in the first draft was aspirational and is withdrawn as
+unachievable by one person. 72 hours is a commitment a single maintainer can keep,
+and the 7-day pack expiry remains the backstop behind it.
 
-- `isValidCommunityRule()` — the same gate the extension enforces, so a rule can
-  never be published that the extension would reject.
-- A ReDoS check against hostile input of 200k characters, with a hard budget. The
-  extension's `isSafeRegex()` is a syntactic gate, not a proof of bounded
-  execution, so a rule must clear an actual timing measurement.
-- A differential check: the rule must not match on a corpus of benign text
-  (documentation, invoices, code samples) at a rate above a stated threshold.
-  This is what stops a pack from quietly widening over-redaction.
-- A precision floor on a labelled corpus, and a review of any rule that fires on
-  fewer than a minimum number of distinct real-world examples — a rule that only
-  ever matched one sample is a target, not a detector.
+### 10.3 minClientVersion enforcement point — decided, implemented
 
-**Human, and required for:**
+Enforce **before anything is staged or installed**, in `verifyCommunityPack()`,
+as step 4 of section 5. An old client must not learn about rules whose validation
+it cannot perform, and a rejection must leave no stored state behind. Implemented
+and covered by tests.
 
-- Any rule in a `secrets` category. Those match credentials, and a false
-  positive there corrupts a user's configuration while a false negative exposes
-  a credential.
-- Any rule with a lookbehind, a backreference, or a nested quantifier, since
-  those are where the ReDoS and correctness risks concentrate.
-- Any change to a rule an existing pack already ships. Rules are immutable once
-  published; a change is a new rule id, so history stays auditable.
+### 10.4 Rule-acceptance bar — decided, enforced in tooling
 
-**Still required from the business:** who signs off the human review, and the
-numeric thresholds for the precision floor and the benign-corpus false-positive
-rate. The mechanism is specified; the numbers are a judgement call about risk
-tolerance.
+Thresholds are set here as hard numbers, and `scripts/rule-gate.mjs` enforces
+them. A rule that fails any gate is not publishable.
+
+| Gate | Threshold | Rationale |
+|---|---|---|
+| Precision on labelled examples | **≥ 98%** | Below this the rule corrupts documents often enough that users stop trusting output. Precision matters more than recall here: a missed value is one value on a document the user still reviews, while a false positive mangles their file and drives them to uninstall. |
+| Benign-corpus false-positive rate | **< 1 in 20,000** | Measured across all benign documents, not just the ones matched. This is what catches the long tail of formats nobody anticipated. |
+| `secrets` benign-corpus rate | **< 1 in 100,000** | Stricter, because a `secrets` false positive corrupts a user's own config files, which is the fastest route to the extension being removed. |
+| Minimum distinct real examples | **≥ 25** | A rule matching fewer is tuned to one sample, not a detector. |
+| ReDoS budget | **< 250 ms** on 200k hostile chars | `isSafeRegex()` is a syntactic gate, not a proof of bounded execution, so this is measured rather than assumed. |
+| Lookbehind / backreference / nested quantifier | **prohibited** | Where correctness and ReDoS risk concentrate. No threshold; these are refused outright. |
+| Minimum supported client version | **≥ 0.1.0** | Stops a pack from requiring a client older than the rules assume. |
+
+**Human review** is required for anything in the `secrets` category, and for any
+rule a user has reported as a false positive. With one maintainer that review is
+self-review, and this document says so plainly rather than implying a second pair
+of eyes. The compensating control is that publishing is a deliberate, recorded
+act rather than something that happens on request. Rules are immutable once
+published; a change is a new rule id.
 
 ## 11. Non-goals
 
