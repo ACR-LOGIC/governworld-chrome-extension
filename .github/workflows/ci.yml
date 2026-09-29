@@ -41,3 +41,9 @@ jobs:
 
       - name: Verify Built Manifest & Offline Assets
         run: npx vitest run tests/dist-manifest.test.ts tests/offline-assets.test.ts
+
+      # Catches the digests in RELEASE_EVIDENCE.md going stale. Store assets and
+      # the tarball are tracked and must match; the zip is gitignored, so it is
+      # reported as skipped rather than failing here.
+      - name: Verify Release Digests
+        run: npm run verify:digests

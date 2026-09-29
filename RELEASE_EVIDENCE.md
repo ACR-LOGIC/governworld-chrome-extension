@@ -104,6 +104,15 @@ excluded. They are text and are subject to the same CRLF caveat as the
 lockfile above.
 ### Previous (superseded, retained for history)
 
+The digests below are a record, not a distribution channel. The archives
+themselves are build outputs and are not kept in the repository: `*.zip` and
+`release/*.tar.gz` are gitignored, and at 14 MB each they had reached 100 MB of
+`.git` by the time this was fixed. Every one is reproducible from its commit
+with `npm run release:zip <sha>`. Seven tarballs had been committed before the
+ignore rule was added, so they remain in history; purging them is a history
+rewrite and has not been done.
+
+
 | Field | Value |
 |-------|-------|
 | `a62aed6` | `release/governworld-redaction-a62aed6.zip` — **do not submit**; predates the claims, OCR fail-closed, and CDN-guard fixes |

@@ -79,31 +79,49 @@ let failures = 0;
 let checked = 0;
 
 for (const { sha, name } of recorded) {
+  // Every entry resolves to a repo-relative path: the store-asset block already
+  // carries one, the artifact table gives a bare filename.
+  const rel = name.includes("/") || name.includes("\\")
+    ? name.replace(/\\/g, "/")
+    : `release/${name}`;
+
+  // Prefer the committed blob, which is the canonical form and immune to the
+  // CRLF-on-Windows problem that makes working-tree text digests misleading.
   let actual = null;
   let via = "";
+  try {
+    actual = sha256OfBlob(`HEAD:${rel}`);
+    via = "committed blob";
+  } catch {
+    // Not tracked. That is normal for the zip, which is gitignored build
+    // output, so look on disk before deciding it is a failure.
+  }
 
-  if (name.includes("/") || name.includes("\\")) {
-    // Store asset: compare the committed blob, which for a binary image is
-    // byte-identical to the working tree anyway.
+  if (actual === null) {
+    let bytes = null;
     try {
-      actual = sha256OfBlob(`HEAD:${name.replace(/\\/g, "/")}`);
-      via = "committed blob";
+      bytes = readFileSync(join(root, rel));
     } catch {
-      // Not a tracked path; fall back to disk.
-      actual = sha256OfFile(name);
-      via = "working tree";
-    }
-  } else {
-    // Release artifact, named by short SHA rather than a path.
-    const rel = `release/${name}`;
-    try {
-      actual = sha256OfFile(rel);
-      via = "working tree";
-    } catch {
-      console.log(`MISSING  ${name} - expected at ${rel}. Regenerate with: npm run release:zip <sha>`);
-      failures++;
+      const tracked = (() => {
+        try {
+          execFileSync("git", ["ls-files", "--error-unmatch", rel], { cwd: root, stdio: "ignore" });
+          return true;
+        } catch {
+          return false;
+        }
+      })();
+      if (tracked) {
+        console.log(`MISSING  ${rel} - tracked but not present in the working tree`);
+        failures++;
+      } else {
+        // An absent build is not a bad digest. Failing here would make the
+        // checker permanently red on any fresh CI checkout.
+        console.log(`SKIP     ${rel} - not built in this environment (gitignored build output)`);
+      }
       continue;
     }
+    actual = createHash("sha256").update(bytes).digest("hex").toUpperCase();
+    via = "working tree";
   }
 
   checked++;

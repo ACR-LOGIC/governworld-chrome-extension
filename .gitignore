@@ -8,6 +8,14 @@ build/
 *.crx
 *.pem
 
+# Release archives are build outputs, not source. The zip was already ignored
+# and the tarball was not, which meant every packaging iteration added ~14 MB
+# to the repository: seven tarballs are currently tracked, 100 MB of .git for
+# artefacts that are reproducible from a commit. The repository tracks the
+# *evidence* instead - release/SHA256SUMS and the digests recorded in
+# RELEASE_EVIDENCE.md - and `npm run verify:digests` checks them.
+release/*.tar.gz
+
 # Test & coverage
 coverage/
 .tmp*
