@@ -33,11 +33,19 @@ describe("detect", () => {
   });
 
   it("detects SSNs only in valid dash form or with context", () => {
-    const text = "SSN 123-45-6789 and 000-12-3456 and social 123456789";
-    const matches = detect(text, [...ALL]);
-    const ssns = matches.filter((m) => m.category === "ssn");
-    expect(ssns).toHaveLength(2); // 123-45-6789 + context-tagged bare form
-  });
+      const text = "SSN 123-45-6789 and 000-12-3456 and social security number 123456789";
+      const matches = detect(text, [...ALL]);
+      const ssns = matches.filter((m) => m.category === "ssn");
+      expect(ssns).toHaveLength(2); // 123-45-6789 + context-tagged bare form
+    });
+
+    it("does not treat the bare word 'social' as an SSN cue", () => {
+      // "social" on its own is ordinary English. Treating it as a cue meant any
+      // page with the word next to a 9-digit number produced an SSN — "Join our
+      // social 123456789 community" was enough.
+      const matches = detect("Join our social 123456789 community", [...ALL]);
+      expect(matches.filter((m) => m.category === "ssn")).toHaveLength(0);
+    });
 
   it("detects DOB only with contextual cues", () => {
     const withCue = detect("Date of birth: 04/22/1990", [...ALL]);

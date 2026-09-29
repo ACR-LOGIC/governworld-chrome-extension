@@ -187,10 +187,30 @@ export function placeholderLabelFor(category: FindingCategory): string {
   }
 }
 
-const EMAIL_RE = /\b[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*/g;
+/**
+ * Email matcher.
+ *
+ * The local part is matched lazily against a bounded run of characters that
+ * must be followed by `@`, rather than as an unbounded `[...]+@`.
+ *
+ * The unbounded form is polynomial, not exponential, but that is still a denial
+ * of service in a content script: `\b[...]+@` starts a scan at every word
+ * boundary (every `.`, `-`, `/`) and backtracks the whole remaining run looking
+ * for an `@` that is not there. Measured on this machine against a run of
+ * in-class characters with no `@`: 25k -> 0.9s, 50k -> 3.8s, 100k -> 15s, 250k
+ * -> 94s. A `<pre>` block of minified JavaScript or a `data:` URI is enough to
+ * produce one of those, and `detect()` is called on unsized page and OCR text.
+ *
+ * Two changes remove the cost. The local part is capped at the 64 characters
+ * RFC 5321 allows, which bounds the backtracking per attempt, and the whole
+ * detector returns immediately when the text contains no `@` at all, which is
+ * the case for the overwhelming majority of nodes.
+ */
+const EMAIL_RE = /\b[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]{1,64}(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]{1,63})*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*/g;
 
 function detectEmails(text: string): RawMatch[] {
   const out: RawMatch[] = [];
+  if (!text.includes("@")) return out;
   for (const m of text.matchAll(EMAIL_RE)) {
     const raw = m[0];
     let end = m.index + raw.length;
@@ -227,7 +247,10 @@ function detectPhones(text: string): RawMatch[] {
 
 const SSN_DASH_RE = /\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b/g;
 const SSN_BARE_RE = /\b(?!000|666|9\d\d)\d{3}(?!00)\d{2}(?!0000)\d{4}\b/g;
-const SSN_CUE_RE = /\b(?:ssn|social(?:\s+security)?(?:\s*(?:number|no|#))?)\b/i;
+// "social" on its own is an ordinary English word, so any page containing the
+// word next to a 9-digit number produced an SSN — "Join our social 123456789
+// community" was enough. The full phrase is required.
+const SSN_CUE_RE = /\b(?:ssn|social\s+security(?:\s*(?:number|no|#))?)\b/i;
 const ITIN_CUE_RE = /\b(?:itin|individual\s+taxpayer(?:\s+identification)?(?:\s*(?:number|no|#))?)\b/i;
 const ITIN_RE = /\b9\d{2}[- ]\d{2}[- ]\d{4}\b|\b9\d{8}\b/g;
 
@@ -462,25 +485,45 @@ const MRN_LABEL_RE =
   /\b(?:mrn|medical\s+record\s*(?:number|no|#)?|record\s*(?:number|no|#))\s*[:#]?\s*(?=\S)/gi;
 const IDENTIFIER_RE = /[A-Za-z0-9][A-Za-z0-9_-]{2,20}/;
 
+/**
+ * Pull a record or member identifier out from just after its label.
+ *
+ * The identifier must contain a digit. `IDENTIFIER_RE` alone accepts any run of
+ * letters, so a label followed by ordinary prose produced findings: "MRN pending
+ * review." masked "pending", "The record number is protected health information"
+ * masked "protected", and "Patient ID unknown at admission" masked "unknown".
+ * In clinical and legal prose those phrases are common, so every one of them
+ * masked a random word in the document.
+ *
+ * Medical record numbers and member IDs are alphanumeric in practice and
+ * essentially always carry at least one digit, so requiring one removes the
+ * false positives without losing a real identifier.
+ */
+function identifierAfterLabel(rest: string): { id: string; offset: number } | null {
+  const m = rest.match(IDENTIFIER_RE);
+  if (!m) return null;
+  const id = m[0];
+  if (!/\d/.test(id)) return null;
+  if (/^\d+$/.test(id) && id.length > 12) return null;
+  return { id, offset: m.index ?? 0 };
+}
+
 function detectMrns(text: string): RawMatch[] {
   const out: RawMatch[] = [];
   for (const m of text.matchAll(MRN_LABEL_RE)) {
     const valueStart = m.index + m[0].length;
     const rest = text.slice(valueStart, Math.min(text.length, valueStart + 40));
-    const idMatch = rest.match(IDENTIFIER_RE);
-    if (!idMatch) continue;
-    const rawId = idMatch[0];
-    const idStart = idMatch.index ?? 0;
+    const found = identifierAfterLabel(rest);
+    if (!found) continue;
     // "MRN: 123456" is stronger than a bare label.
     const hasColon = /[:#]/.test(m[0]);
     const confidence = hasColon ? 0.82 : 0.72;
-    if (/^\d+$/.test(rawId) && rawId.length > 12) continue;
     out.push({
       category: "medical_record_number",
       confidence,
-      value: rawId,
-      start: valueStart + idStart,
-      end: valueStart + idStart + rawId.length,
+      value: found.id,
+      start: valueStart + found.offset,
+      end: valueStart + found.offset + found.id.length,
     });
   }
   return out;
@@ -494,18 +537,15 @@ function detectMemberIds(text: string): RawMatch[] {
   for (const m of text.matchAll(MEMBER_LABEL_RE)) {
     const valueStart = m.index + m[0].length;
     const rest = text.slice(valueStart, Math.min(text.length, valueStart + 40));
-    const idMatch = rest.match(IDENTIFIER_RE);
-    if (!idMatch) continue;
-    const rawId = idMatch[0];
-    const idStart = idMatch.index ?? 0;
-    if (/^\d+$/.test(rawId) && rawId.length > 12) continue;
+    const found = identifierAfterLabel(rest);
+    if (!found) continue;
     const hasColon = /[:#]/.test(m[0]);
     out.push({
       category: "member_id",
       confidence: hasColon ? 0.78 : 0.68,
-      value: rawId,
-      start: valueStart + idStart,
-      end: valueStart + idStart + rawId.length,
+      value: found.id,
+      start: valueStart + found.offset,
+      end: valueStart + found.offset + found.id.length,
     });
   }
   return out;
@@ -608,12 +648,46 @@ const SECRET_PATTERNS: { label: string; regex: RegExp; confidence: number }[] = 
   // Requiring one meant the pattern never fired and real tokens fell through to
   // the generic credential-assignment rule at 0.8 confidence.
   { label: "Databricks token", regex: /\bdapi-?[0-9a-fA-F]{32}\b/g, confidence: 0.99 },
+  // AWS access key IDs. These are the most commonly leaked cloud secret and
+  // were previously undetected: the old rules only covered the secret half of
+  // the pair, and the generic credential-assignment rule could not reach
+  // `aws_access_key_id` because `access_key` is followed by `_id=` before the `=`.
+  { label: "AWS access key ID", regex: /\b(?:AKIA|ASIA|AROA|AIDA|ANPA|AGPA|AIPA|ANVA|ABIA|ACCA)[A-Z0-9]{16}\b/g, confidence: 0.99 },
   { label: "AWS secret", regex: /\baws_secret_access_key\s*=\s*['"]?([A-Za-z0-9/+=]{40})['"]?/g, confidence: 0.95 },
   { label: "Azure account key", regex: /\bAccountKey\s*=\s*[A-Za-z0-9+/]{86,88}={0,2}/g, confidence: 0.9 },
-  { label: "Private key", regex: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g, confidence: 0.99 },
+  // A PEM block including its body. The old pattern matched only the 30-character
+  // header, which meant the key itself — the part that must never be published —
+  // was left in plain text directly below the mask.
+  { label: "Private key", regex: /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g, confidence: 0.99 },
+  { label: "PuTTY private key", regex: /PuTTY-User-Key-File-\d+:[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g, confidence: 0.99 },
   { label: "JWT", regex: /\beyJ[A-Za-z0-9_\-]{10,}\.eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b/g, confidence: 0.95 },
+  { label: "GitLab token", regex: /\bglpat-[A-Za-z0-9_\-]{20,}\b/g, confidence: 0.99 },
+  { label: "HuggingFace token", regex: /\bhf_[A-Za-z0-9]{30,}\b/g, confidence: 0.95 },
+  { label: "Discord bot token", regex: /\b(?:Bot\s+)?M[A-Za-z0-9_\-]{23}\.[A-Za-z0-9_\-]{6}\.[A-Za-z0-9_\-]{27}\b/g, confidence: 0.99 },
+  { label: "Telegram bot token", regex: /\b\d{8,10}:AA[A-Za-z0-9_\-]{33}\b/g, confidence: 0.95 },
+  // A lookbehind anchors the match to the token so the reported span excludes
+  // the scheme word: the redacted text still reads "Bearer [REDACTED]", and a
+  // specific rule for the token itself (an OpenAI key, say) wins the overlap on
+  // its own merits rather than losing to a longer span that swallowed "Bearer".
+  { label: "Bearer token", regex: /(?<=Bearer\s)[A-Za-z0-9._~+/=-]{20,}/g, confidence: 0.95 },
+  { label: "Slack webhook", regex: /https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9+\/=_-]{10,}/g, confidence: 0.99 },
+  // Shared Access Signature: a capability URL, so the sig alone grants access.
+  { label: "Azure SAS signature", regex: /[?&]sig=[A-Za-z0-9%+/=]{20,}/g, confidence: 0.95 },
+  // Credentials embedded in a URL. Previously the userinfo was skipped entirely
+  // and the value after the `@` was reported as an email address, so the
+  // username stayed visible and the credential was mislabelled.
+  //
+  // The scheme quantifier is capped at 31 characters. Unbounded, this is
+  // quadratic on text with no `://` in it: `[a-z][a-z0-9+.-]*` starts a scan at
+  // every word boundary and backtracks the whole remaining run. No real URL
+  // scheme comes close to 31 characters (the longest registered is `ms-access-control').
+  { label: "URL with credentials", regex: /\b[a-z][a-z0-9+.-]{0,30}:\/\/[^\s/:@]{1,64}:[^\s/:@]{3,128}@[^\s"'<>`]+/gi, confidence: 0.99 },
+  { label: "HTTP Basic auth", regex: /\bBasic\s+[A-Za-z0-9+/]{16,}={0,2}/g, confidence: 0.95 },
   { label: "DB connection string", regex: /\b(?:postgres|mysql|mongodb|redis|amqp|mssql):\/\/[^\s'"<>]*[A-Za-z0-9=/]/gi, confidence: 0.95 },
-  { label: "Credential assignment", regex: /(?:token|secret|api[_-]?key|access[_-]?key|auth[_-]?token|password|passwd|pwd)\s*[:=]\s*['"]?([A-Za-z0-9_\-+/=]{16,})['"]?/gi, confidence: 0.8 },
+  // The capture class previously omitted `.`, so any value containing a dot was
+  // not matched at all — including every `client_secret`, most passwords, and
+  // every `.env` value that resembles a hostname.
+  { label: "Credential assignment", regex: /(?:token|secret|api[_-]?key|access[_-]?key(?:[_-]?id)?|auth[_-]?token|password|passwd|pwd|client[_-]?secret)\s*[:=]\s*['"]?([A-Za-z0-9._\-+/=%]{16,})['"]?/gi, confidence: 0.8 },
 ];
 
 const PLACEHOLDER_SECRET_RE = /^(?:example|sample|test|changeme|your_|xxxx|sk_test_[0-9a-z]{6}|ghp_TEST)/i;
@@ -626,7 +700,7 @@ function detectSecrets(text: string): RawMatch[] {
     let m: RegExpExecArray | null;
     while ((m = pat.regex.exec(text)) !== null) {
       const value = m[1] ?? m[0];
-      if (PLACEHOLDER_SECRET_RE.test(value)) continue;
+      if (isPlaceholder(pat, value)) continue;
       const start = m.index + m[0].indexOf(value);
       const end = start + value.length;
       if (seen.has(start)) continue;
@@ -637,12 +711,49 @@ function detectSecrets(text: string): RawMatch[] {
   return out;
 }
 
+/**
+ * Decide whether a match is documentation filler rather than a real credential.
+ *
+ * Only the two low-confidence generic rules can be filtered. A structurally
+ * specific rule (Stripe, GitHub, AWS key IDs, Slack webhooks) constrains its
+ * own shape so tightly that a placeholder cannot match it — and applying a
+ * prefix filter to those would silently drop a genuine secret that happened to
+ * begin with "test" or "example", which is the one failure a redaction tool
+ * must never have.
+ *
+ * For the generic rules, over-flagging is the safe error: masking
+ * `postgres://example:example@localhost/db` in a README costs nothing, while
+ * missing a live credential ships it.
+ */
+function isPlaceholder(pat: { confidence: number }, value: string): boolean {
+  if (pat.confidence > 0.8) return false;
+  if (PLACEHOLDER_SECRET_RE.test(value)) return true;
+  // A reference to an environment variable is the opposite of a credential:
+  // there is no secret in `process.env.API_KEY`, only the name of one. The
+  // capture class accepts dots and `$` so that real dotted values are matched,
+  // which makes this check necessary — otherwise every `KEY = os.environ[...]`
+  // line in a code review or a log dump is reported as a leaked secret.
+  if (/^(?:process\.env\.|os\.environ|ENV\[|env:|\$\{?[A-Z][A-Z0-9_]*\}?$)/.test(value)) return true;
+  // Connection strings pointing at reserved/example hosts or default ports with
+  // default credentials are documentation, not configuration.
+  if (/\b(?:localhost|127\.0\.0\.1|0\.0\.0\.0|example\.(?:com|test|org)|host\.docker\.internal)\b/i.test(value)) {
+    return /[:@](?:example|sample|test|changeme|password|root|admin|postgres|redis|mongo)?[:@]?/i.test(value);
+  }
+  return false;
+}
+
 const STREET_RE =
   /(?<![\dA-Za-z])\d{1,5}[^\S\n]+[A-Za-z][A-Za-z0-9.'-]*(?:[^\S\n]+[A-Za-z0-9.'-]+)*[^\S\n]+(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Boulevard|Dr|Drive|Ln|Lane|Ct|Court|Pl|Place|Way|Ter|Terrace|Cir|Circle|Pkwy|Parkway)(?:\.)?\b/g;
 // Optional apt/unit, then city, then state, then ZIP — each bounded by commas
 // so the city clause cannot swallow the state abbreviation.
+//
+// The ZIP group is followed by a negative lookahead on a digit. Without it the
+// optional group matched the first five digits of any longer run, so in
+// "5 Ocean Rd 4111111111111611" the address span ended at "...Rd 41111" and the
+// card match was then discarded as an overlap. A ZIP is exactly five digits;
+// five digits that are part of a longer run are not a ZIP.
 const ADDRESS_TAIL_RE =
-  /(?:,[^\S\n]+(?:Apt|Unit|Suite|#|Ste)\.?[^\S\n]*\d+[A-Za-z]?)?(?:,[^\S\n]+[A-Z][a-zA-Z.'-]*(?:[^\S\n]+[A-Z][a-zA-Z.'-]*)*)?(?:,[^\S\n]+[A-Z]{2}(?:\.[^\S\n]+)?)?(?:[^\S\n]+\d{5}(?:-\d{4})?)?/;
+  /(?:,[^\S\n]+(?:Apt|Unit|Suite|#|Ste)\.?[^\S\n]*\d+[A-Za-z]?)?(?:,[^\S\n]+[A-Z][a-zA-Z.'-]*(?:[^\S\n]+[A-Z][a-zA-Z.'-]*)*)?(?:,[^\S\n]+[A-Z]{2}(?:\.[^\S\n]+)?)?(?:[^\S\n]+\d{5}(?:-\d{4})?(?!\d))?/;
 const ZIP_RE = /\b\d{5}(?:-\d{4})?\b/;
 
 function detectAddresses(text: string): RawMatch[] {
@@ -739,24 +850,58 @@ const DETECTORS: Partial<Record<FindingCategory, (text: string) => RawMatch[]>> 
   cpf: detectCpf,
 };
 
-/** Resolve overlapping matches keeping the highest-priority, longest span. */
+/**
+ * Resolve overlapping matches.
+ *
+ * Group every set of matches that overlap into a cluster, then keep ONE winner
+ * per cluster: highest category priority first, then the longest span, then the
+ * most confident.
+ *
+ * Priority must dominate position. The previous version sorted by start offset
+ * and simply dropped anything that started inside an already-kept span, so an
+ * `address` match beginning at offset 0 beat a `payment_card` match beginning
+ * at offset 11 and the card was discarded — leaving the last 11 digits of a real
+ * card number visible in the page. Sorting by position also meant priority was
+ * only ever consulted for matches at an identical offset, which made the whole
+ * priority table nearly dead.
+ *
+ * `payment_card` is the highest-priority category, so a cluster containing a
+ * card now always resolves to the card and the full number is masked. The
+ * address fragment loses its own label rather than the card losing its mask.
+ */
 export function resolveOverlaps(matches: RawMatch[]): RawMatch[] {
-  const sorted = [...matches].sort((a, b) => {
-    if (a.start !== b.start) return a.start - b.start;
+  if (matches.length === 0) return [];
+  const sorted = [...matches].sort((a, b) => a.start - b.start || a.end - b.end);
+  const winners: RawMatch[] = [];
+  let cluster: RawMatch[] = [];
+
+  const better = (a: RawMatch, b: RawMatch): number => {
     const pri = priorityOf(a.category) - priorityOf(b.category);
     if (pri !== 0) return pri;
     const len = b.end - b.start - (a.end - a.start);
     if (len !== 0) return len;
     return b.confidence - a.confidence;
-  });
+  };
 
-  const merged: RawMatch[] = [];
+  const flush = () => {
+    if (cluster.length === 0) return;
+    winners.push(cluster.reduce((best, m) => (better(m, best) < 0 ? m : best)));
+    cluster = [];
+  };
+
+  let clusterEnd = -1;
   for (const m of sorted) {
-    const last = merged[merged.length - 1];
-    if (last && m.start < last.end) continue; // covered by a higher-priority/longer span
-    merged.push(m);
+    if (cluster.length > 0 && m.start >= clusterEnd) {
+      flush();
+    }
+    cluster.push(m);
+    // A cluster is a maximal run of overlaps: it stays open while the next
+    // match starts before the furthest end seen so far.
+    clusterEnd = cluster.length === 1 ? m.end : Math.max(clusterEnd, m.end);
   }
-  return merged;
+  flush();
+
+  return winners.sort((a, b) => a.start - b.start);
 }
 
 export function runCustomPatterns(text: string, patterns: CustomPattern[]): RawMatch[] {

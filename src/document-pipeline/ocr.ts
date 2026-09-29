@@ -24,8 +24,19 @@ export interface OcrPageResult {
   fullText: string;
 }
 
-export const SUPPORTED_OCR_LANGUAGES = ["eng", "spa", "fra", "deu", "jpn", "por"] as const;
-export type OcrLanguage = (typeof SUPPORTED_OCR_LANGUAGES)[number];
+/**
+ * OCR languages whose traineddata is actually bundled in the package.
+ *
+ * Re-exported from shared/ocrLanguages so the popup can build its language
+ * selector from the same list without importing tesseract.js.
+ */
+export { BUNDLED_OCR_LANGUAGES, BUNDLED_OCR_CODES, isBundledOcrLanguage, traineddataFile } from "../shared/ocrLanguages.js";
+import { BUNDLED_OCR_CODES, traineddataFile } from "../shared/ocrLanguages.js";
+
+export type OcrLanguage = string;
+
+/** Languages the package can actually recognise offline. */
+export const SUPPORTED_OCR_LANGUAGES: readonly string[] = BUNDLED_OCR_CODES;
 
 let currentWorkerLang: string | null = null;
 let workerPromise: Promise<Worker> | null = null;
@@ -60,7 +71,9 @@ export async function langDataPresent(lang: string): Promise<boolean> {
   // Traineddata is vendored into dist/assets/tessdata at build time. If it is
   // absent, fail closed rather than download from a CDN.
   try {
-    const res = await fetch(assetUrl(`tessdata/${lang}.traineddata.gz`));
+    const file = traineddataFile(lang);
+    if (!file) return false;
+    const res = await fetch(assetUrl(`tessdata/${file}`));
     return res.ok;
   } catch {
     return false;
@@ -68,10 +81,18 @@ export async function langDataPresent(lang: string): Promise<boolean> {
 }
 
 export async function getWorker(requestedLang = "eng"): Promise<Worker> {
-  const targetLang = (SUPPORTED_OCR_LANGUAGES as readonly string[]).includes(requestedLang) ? requestedLang : "eng";
-  let activeLang = targetLang;
+  // Only a bundled language is accepted. Falling back silently to English when
+  // an unbundled one is requested is what made the language selector a lie, so
+  // an unbundled request now fails closed with a message that says why.
+  if (!BUNDLED_OCR_CODES.includes(requestedLang)) {
+    throw new Error(
+      `OCR language "${requestedLang}" is not bundled in this build. ` +
+        `Available offline: ${BUNDLED_OCR_CODES.join(", ")}.`
+    );
+  }
+  let activeLang = requestedLang;
 
-  const targetPresent = await langDataPresent(targetLang);
+  const targetPresent = await langDataPresent(activeLang);
   if (!targetPresent) {
     const engPresent = await langDataPresent("eng");
     if (engPresent) {

@@ -1,9 +1,14 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import { describe, it, expect } from "vitest";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { SUPPORTED_OCR_LANGUAGES } from "../src/document-pipeline/ocr.js";
 import { DEFAULT_SETTINGS, normalizeSettings } from "../src/shared/settings.js";
 import { scaleBox } from "../src/document-pipeline/render.js";
 import type { Finding, Rect } from "../src/shared/types.js";
+
+const extRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 describe("Document Studio Interactive Math & Hit Testing", () => {
   const pageMeta = {
@@ -129,14 +134,18 @@ describe("Document Studio Interactive Math & Hit Testing", () => {
 });
 
 describe("Multi-Language OCR Architecture", () => {
-  it("includes all supported language codes in SUPPORTED_OCR_LANGUAGES", () => {
-    expect(SUPPORTED_OCR_LANGUAGES).toContain("eng");
-    expect(SUPPORTED_OCR_LANGUAGES).toContain("spa");
-    expect(SUPPORTED_OCR_LANGUAGES).toContain("fra");
-    expect(SUPPORTED_OCR_LANGUAGES).toContain("deu");
-    expect(SUPPORTED_OCR_LANGUAGES).toContain("jpn");
-    expect(SUPPORTED_OCR_LANGUAGES).toContain("por");
-  });
+    it("advertises exactly the OCR languages whose data is bundled", () => {
+      // This test previously asserted six languages while the build vendored
+      // only English, which is how the mismatch survived: the assertion
+      // documented the intent and nobody checked the package. The list is now
+      // derived from what is actually in vendor/tessdata, so this asserts the
+      // default is available rather than a wish list.
+      // See tests/ocr-bundled-languages.test.ts for the full agreement check.
+      expect(SUPPORTED_OCR_LANGUAGES).toContain("eng");
+      for (const code of SUPPORTED_OCR_LANGUAGES) {
+        expect(existsSync(join(extRoot, "vendor", "tessdata", `${code}.traineddata.gz`))).toBe(true);
+      }
+    });
 
   it("defaults to 'eng' in DEFAULT_SETTINGS", () => {
     expect(DEFAULT_SETTINGS.ocrLanguage).toBe("eng");

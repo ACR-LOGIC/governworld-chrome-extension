@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import { build } from "esbuild";
-import { copyFileSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -82,17 +82,33 @@ copyFileSync(
   join(assetsDir, "tesseract-core.wasm")
 );
 
-// Vendor OCR language data. The build fails closed if the model is absent so a
-// build can never silently ship without offline OCR.
+// Vendor OCR language data.
+//
+// The set copied here is read from src/shared/ocrLanguages.ts, the same list the
+// language selector and the OCR engine use, so the package cannot ship without
+// a language the UI offers, and the UI cannot offer a language the package
+// lacks. The build fails closed if any declared traineddata is missing, so a
+// build can never silently ship without offline OCR for a listed language.
 const tessdataDir = join(assetsDir, "tessdata");
 mkdirSync(tessdataDir, { recursive: true });
-const tessdataSrc = join(root, "vendor", "tessdata", "eng.traineddata.gz");
-if (!existsSync(tessdataSrc)) {
-  throw new Error(
-    "Missing vendored OCR language data at vendor/tessdata/eng.traineddata.gz. " +
-      "Download it from https://tessdata.projectnaptha.com/4.0.0/eng.traineddata.gz and retry."
-  );
+const langSource = readFileSync(join(root, "src", "shared", "ocrLanguages.ts"), "utf8");
+const langEntries = [...langSource.matchAll(/code:\s*"([a-z]{3})"[^}]*?file:\s*"([^"]+)"/g)].map((m) => ({
+  code: m[1],
+  file: m[2],
+}));
+if (langEntries.length === 0) {
+  throw new Error("Could not read BUNDLED_OCR_LANGUAGES from src/shared/ocrLanguages.ts; refusing to build.");
 }
-copyFileSync(tessdataSrc, join(tessdataDir, "eng.traineddata.gz"));
+for (const { code, file } of langEntries) {
+  const src = join(root, "vendor", "tessdata", file);
+  if (!existsSync(src)) {
+    throw new Error(
+      `Missing vendored OCR language data at vendor/tessdata/${file} (declared for "${code}" in ` +
+        "src/shared/ocrLanguages.ts). Add the traineddata or remove the language, then retry."
+    );
+  }
+  copyFileSync(src, join(tessdataDir, file));
+}
+console.log(`Vendored OCR languages: ${langEntries.map((l) => l.code).join(", ")}`);
 
 console.log("Built extension to dist/");

@@ -2,6 +2,24 @@
 import { isRecord } from "./types.js";
 import { isCategory } from "./settings.js";
 import { isSafeRegex } from "./wizardAnalyzer.js";
+import {
+  isValidAadhaar,
+  isValidAustralianTfn,
+  isValidCanadianSin,
+  isValidCpf,
+  isValidCusip,
+  isValidDea,
+  isValidIsin,
+  isValidItin,
+  isValidLoinc,
+  isValidMbi,
+  isValidNhsNumber,
+  isValidNpi,
+  isValidPanIndia,
+  isValidSedol,
+  isValidSsn,
+  luhnValid,
+} from "../validators/index.js";
 import type { FindingCategory } from "./types.js";
 
 /**
@@ -57,17 +75,32 @@ export interface CustomPattern {
 
 /** Lightweight free-account metadata. Tokens are kept in session storage. */
 export interface CommunityAccount {
-  /** Server-assigned account ID (opaque string). */
+  /**
+   * Opaque local identifier. Locally generated, NOT server-assigned: linking
+   * performs no server transaction, so nothing here has been attested by one.
+   */
   id: string;
+  /** Always empty for a locally linked identity; a server-issued account would fill it. */
   email: string;
-  /** Non-sensitive display label cached from the server. */
+  /** Non-sensitive display label. Must not imply authentication. */
   displayLabel: string;
   /** When true, the extension may auto-retrieve community rule pack updates. */
   autoUpdateEnabled: boolean;
   /** Running count of contributed patterns (metadata only). */
   contributionCount: number;
-  /** ISO-8601 timestamp of account linkage on this device. */
+  /** ISO-8601 timestamp of local linkage on this device. */
   linkedAt: string;
+  /**
+   * False for a locally linked identity. A server must reject any submission
+   * from an unverified identity rather than trusting a flag the client set.
+   */
+  verified: boolean;
+  /**
+   * "local-unsigned" for a locally linked identity, "server-issued" once a real
+   * backend has authenticated one. Present so the distinction survives in
+   * storage and can be enforced server-side rather than inferred from the UI.
+   */
+  authority: "local-unsigned" | "server-issued";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -93,8 +126,40 @@ const MAX_CONTEXT_CUES = 10;
 const MAX_CUE_LENGTH = 40;
 const MAX_PATTERNS = 200;
 
-/** Community free-account token format: gw_free_<32 alphanum chars> */
+/**
+ * Server-issued community token format: gw_free_<32 alphanum chars>.
+ *
+ * Retained only for validating a token a real backend would issue. Nothing in
+ * the extension mints one any more: linkFreeCommunityAccount() performs no
+ * server transaction, so it cannot be handed a credential.
+ */
 export const COMMUNITY_TOKEN_RE = /^gw_free_[A-Za-z0-9]{32}$/;
+
+const TOKEN_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+/**
+ * Random identifier from a CSPRNG, with modulo-rejection sampling.
+ *
+ * `chars[floor(Math.random() * n)]` is biased: Math.random is not uniform over
+ * bits, and the bias is worst for the largest alphabets. Rejection sampling
+ * discards the tail of the range so every character is equally likely, which
+ * matters for a value that is used as a unique handle.
+ */
+function randomAlphanumeric(length: number): string {
+  const alphabet = TOKEN_ALPHABET.length;
+  // Largest multiple of the alphabet that fits in a byte; values at or above it
+  // would bias toward the first characters, so they are rejected.
+  const limit = 256 - (256 % alphabet);
+  const out: string[] = [];
+  const buf = new Uint8Array(length * 2);
+  while (out.length < length) {
+    crypto.getRandomValues(buf);
+    for (let i = 0; i < buf.length && out.length < length; i++) {
+      if (buf[i] < limit) out.push(TOKEN_ALPHABET.charAt(buf[i] % alphabet));
+    }
+  }
+  return out.join("");
+}
 
 function isValidFlags(flags: string): boolean {
   return ALLOWED_FLAGS.test(flags) && flags.length <= 4;
@@ -276,11 +341,113 @@ export interface ContributionPayload {
 }
 
 /**
+ * Result of screening a contribution before it leaves the device.
+ */
+export interface ContributionScreenResult {
+  safe: true;
+  payload: ContributionPayload;
+}
+export interface ContributionBlocked {
+  safe: false;
+  /** Field the offending literal was found in, for a message the user can act on. */
+  field: string;
+  /** Category of value found, never the value itself. */
+  kind: string;
+}
+
+/**
+ * Screen a contribution for literal personal data.
+ *
+ * PRIVACY.md promises "your contribution is the logic, not the source data", and
+ * the example text never being stored in `CustomPattern` is what makes that
+ * structurally true for the wizard's own output. It is not true for the fields
+ * a human types: a user can paste `219-09-9999` straight into `pattern`, name a
+ * real patient's MRN in a `name`, or leave a colleague's address as a context
+ * cue. A structural argument about where examples live does not cover a
+ * free-text field, so the free-text fields are screened directly.
+ *
+ * Detection is by checksum wherever one exists (Luhn, SSN, ITIN, DEA, MBI, NHS,
+ * NPI, CUSIP, ISIN, SEDOL, LOINC, SIN, Aadhaar, PAN, TFN, CPF). A match is
+ * overwhelmingly likely to be real data rather than logic: no useful detection
+ * rule hard-codes a checksum-valid identifier, because that would only ever match
+ * that one record. A false positive costs the user one edit to the pattern; a
+ * false negative publishes someone's SSN to a public rule pack permanently.
+ *
+ * The value is never included in the result — only the field and the category —
+ * so a rejection cannot itself leak the data it caught.
+ */
+export function screenContributionPayload(
+  pattern: CustomPattern
+): ContributionScreenResult | ContributionBlocked {
+  const screened: Array<{ field: string; text: string }> = [
+    { field: "name", text: pattern.name },
+    { field: "pattern", text: pattern.pattern },
+  ];
+  for (const cue of pattern.contextCues ?? []) screened.push({ field: "contextCue", text: cue });
+
+  for (const { field, text } of screened) {
+    if (text.length === 0) continue;
+    if (EMAIL_LITERAL_RE.test(text)) return { safe: false, field, kind: "email address" };
+    for (const m of text.matchAll(DEA_LITERAL_RE)) {
+      if (isValidDea(m[0])) return { safe: false, field, kind: "provider identifier" };
+    }
+    for (const m of text.matchAll(NUMERIC_ID_RE)) {
+      const digits = m[0].replace(/[\s-]/g, "");
+      if (digits.length < NUMERIC_ID_MIN_DIGITS || digits.length > NUMERIC_ID_MAX_DIGITS) continue;
+      if (
+        isValidSsn(digits) ||
+        isValidItin(digits) ||
+        isValidMbi(digits) ||
+        isValidNhsNumber(digits) ||
+        isValidNpi(digits) ||
+        isValidCusip(digits) ||
+        isValidIsin(digits) ||
+        isValidSedol(digits) ||
+        isValidLoinc(digits) ||
+        isValidCanadianSin(digits) ||
+        isValidAadhaar(digits) ||
+        isValidPanIndia(digits) ||
+        isValidAustralianTfn(digits) ||
+        isValidCpf(digits) ||
+        /^\d{13,19}$/.test(digits) && luhnValid(digits)
+      ) {
+        return { safe: false, field, kind: "government or provider identifier" };
+      }
+    }
+  }
+  return { safe: true, payload: buildContributionPayload(pattern) };
+}
+
+const EMAIL_LITERAL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
+/**
+ * DEA registration numbers are letter-prefixed, so the digit-run scan misses
+ * them; the checksum is still what confirms the value is a real identifier.
+ */
+const DEA_LITERAL_RE = /\b[A-Za-z][A-Za-z0-9]{8,10}\b/g;
+/**
+ * Candidate identifier runs: digits, optionally separated by hyphen or space.
+ *
+ * The separator matters. SSNs and payment cards are habitually written
+ * `219-09-9999` and `4111 1111 1111 1111`, so a scan for a *contiguous* run of
+ * six or more digits never sees them and passes them straight through. The
+ * separators are stripped before the checksum runs, because the checksum is
+ * defined over digits.
+ *
+ * Structure is not matched: a quantifier or character class (`\d{3}`,
+ * `[0-9]{10}`, `\d{6,19}`) leaves digit groups too short to reach the length
+ * floor, so rules that are purely structural still pass.
+ */
+const NUMERIC_ID_RE = /\d[\d -]{4,24}\d|\d{6,19}/g;
+const NUMERIC_ID_MIN_DIGITS = 6;
+const NUMERIC_ID_MAX_DIGITS = 19;
+
+/**
  * Build the payload that may be sent to GovernWorld for community review.
  *
- * Critically: the `id`, `createdAt`, and `source` fields are stripped.
- * Raw example text was never stored in `CustomPattern` and therefore
- * cannot be present here — it was held in wizard memory only.
+ * The `id`, `createdAt`, and `source` fields are stripped. The wizard's example
+ * text is held in memory only and is never part of `CustomPattern`, so it cannot
+ * appear here — but the free-text fields the user types are screened by
+ * `screenContributionPayload` before this is called.
  */
 export function buildContributionPayload(
   pattern: CustomPattern
@@ -336,14 +503,20 @@ export async function loadCommunityAccount(): Promise<CommunityAccount | null> {
     typeof value.linkedAt !== "string"
   )
     return null;
+  // An account stored before these fields existed predates the notion of a
+  // verified identity, so it defaults to unverified rather than being trusted
+  // by omission. A client-set flag proves nothing; only a server that issued
+  // the account can set `authority: "server-issued"`.
+  const serverIssued = value.verified === true && value.authority === "server-issued";
   return {
     id: value.id,
     email: value.email,
     displayLabel: value.displayLabel,
     autoUpdateEnabled: value.autoUpdateEnabled === true,
-    contributionCount:
-      typeof value.contributionCount === "number" ? value.contributionCount : 0,
+    contributionCount: typeof value.contributionCount === "number" ? value.contributionCount : 0,
     linkedAt: value.linkedAt,
+    verified: serverIssued,
+    authority: serverIssued ? "server-issued" : "local-unsigned",
   };
 }
 
@@ -388,24 +561,37 @@ export async function deleteCustomPattern(id: string): Promise<CustomPattern[]> 
   return filtered;
 }
 
+/**
+ * Establish a local contributor identity.
+ *
+ * This is NOT authentication and must never be presented as such. It creates a
+ * local identifier so the UI can label a contributor and count their rules; it
+ * performs no server transaction, so the server has no record of it and cannot
+ * have granted it any authority. The previous version generated a value named
+ * `token` with `Math.random()` and a `community_user@governworld.local` address
+ * and returned it as though an account had been linked, which is the worst of
+ * both worlds: it looked authenticated in the UI and it was not.
+ *
+ * Two consequences are made explicit rather than implied:
+ *   - the local id is generated with a CSPRNG, not Math.random, because it is
+ *     still a unique handle and Math.random is not suitable for identifiers;
+ *   - `verified` is false and `authority` is "local-unsigned", so a future
+ *     backend can tell an unverified local identity from one it issued, and can
+ *     refuse it. The extension is not the security boundary; the server must be.
+ */
 export async function linkFreeCommunityAccount(): Promise<CommunityAccount> {
-  const id = `comm_${crypto.randomUUID().slice(0, 8)}`;
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let rand = "";
-  for (let i = 0; i < 32; i++) {
-    rand += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  const token = `gw_free_${rand}`;
+  const id = `comm_${randomAlphanumeric(8)}`;
   const account: CommunityAccount = {
     id,
-    email: "community_user@governworld.local",
-    displayLabel: `Community Contributor (${id.slice(0, 10)})`,
+    email: "",
+    displayLabel: `Local Contributor (${id.slice(0, 10)})`,
     autoUpdateEnabled: true,
     contributionCount: 0,
     linkedAt: new Date().toISOString(),
+    verified: false,
+    authority: "local-unsigned",
   };
   await saveCommunityAccount(account);
-  await writeCommunityToken(token);
   return account;
 }
 
@@ -428,6 +614,49 @@ export interface CommunityRule {
   createdAt: string;
 }
 
+/**
+ * Structural check for a rule arriving from the community service.
+ *
+ * Community rules are detection *policy*, not data: a bad pattern degrades
+ * every scan the user runs afterwards, so the boundary deserves the same care as
+ * the document pipeline. Each field is type- and range-checked and every regex
+ * goes through the same isSafeRegex gate the local wizard uses, so a hostile or
+ * merely broken server cannot install a catastrophic-backtracking pattern into
+ * the detector.
+ *
+ * This is input validation, not authentication. It does not establish that the
+ * service is GovernWorld's. Only a signature over the pack, verified against a
+ * key pinned in the extension, can do that, and no such signature exists yet —
+ * until it does, community rules must be treated as untrusted suggestions.
+ */
+export function isValidCommunityRule(raw: unknown): raw is CommunityRule {
+  if (typeof raw !== "object" || raw === null) return false;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.ruleId !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(r.ruleId)) return false;
+  if (typeof r.name !== "string" || r.name.length === 0 || r.name.length > 120) return false;
+  // An unknown category would reach code that switches on it; the detector
+  // routes findings by category, so a typo'd value silently drops the finding
+  // rather than showing it. Validate against the same set the wizard uses.
+  if (!isCustomCategory(r.category)) return false;
+  if (typeof r.pattern !== "string" || r.pattern.length === 0 || r.pattern.length > 500) return false;
+  // Same allowlist as local rules. It is deliberately narrower than /^[gimsuy]*$/:
+  // `y` (sticky) makes a match depend on the previous match's end position, so a
+  // rule authored against one text could quietly match nothing in the next scan.
+  if (typeof r.flags !== "string" || !isValidFlags(r.flags)) return false;
+  if (typeof r.confidence !== "number" || !Number.isFinite(r.confidence) || r.confidence < 0 || r.confidence > 1) {
+    return false;
+  }
+  for (const key of ["totalVotes", "upvotes", "downvotes"] as const) {
+    const v = r[key];
+    if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 1_000_000) return false;
+  }
+  if (typeof r.createdByHandle !== "string" || r.createdByHandle.length > 64) return false;
+  if (typeof r.createdAt !== "string" || Number.isNaN(Date.parse(r.createdAt))) return false;
+  if (typeof r.verificationStatus !== "string" || r.verificationStatus.length > 32) return false;
+  // The pattern must be one the detector is willing to run.
+  return isSafeRegex(r.pattern, r.flags);
+}
+
 export async function fetchCommunityRules(): Promise<CommunityRule[]> {
   try {
     const controller = new AbortController();
@@ -438,8 +667,13 @@ export async function fetchCommunityRules(): Promise<CommunityRule[]> {
     });
     clearTimeout(timer);
     if (!res.ok) return [];
-    const json = await res.json();
-    return Array.isArray(json.rules) ? json.rules : [];
+    const json: unknown = await res.json();
+    if (typeof json !== "object" || json === null) return [];
+    const rules = (json as Record<string, unknown>).rules;
+    if (!Array.isArray(rules)) return [];
+    // Drop anything that does not validate rather than failing the whole fetch:
+    // one malformed rule should not cost the user the rest of the pack.
+    return rules.filter(isValidCommunityRule).slice(0, 500);
   } catch {
     return [];
   }

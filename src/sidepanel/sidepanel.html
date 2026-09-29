@@ -209,12 +209,9 @@
         <div class="form-row" style="margin-top: 8px;">
           <label for="doc-ocr-language-select" data-i18n="ocr_lang_label">Document OCR Language</label>
           <select id="doc-ocr-language-select" class="preset-select" aria-label="Document OCR recognition language">
-            <option value="eng">🇺🇸 English (eng)</option>
-            <option value="spa">🇪🇸 Spanish (spa)</option>
-            <option value="fra">🇫🇷 French (fra)</option>
-            <option value="deu">🇩🇪 German (deu)</option>
-            <option value="jpn">🇯🇵 Japanese (jpn)</option>
-            <option value="por">🇵🇹 Portuguese (por)</option>
+            <!-- Options are populated from src/shared/ocrLanguages.ts so the list can only ever
+                 contain languages whose traineddata is actually bundled. -->
+            <option value="eng">English (eng)</option>
           </select>
           <button type="button" class="help-link help-link--sm" data-guide="guide-ocr-languages" data-i18n="info_btn">Info ↗</button>
         </div>
@@ -565,12 +562,8 @@
           <div class="form-row">
             <label for="ocr-language-select" data-i18n="ocr_lang_label">Document OCR Language</label>
             <select id="ocr-language-select" class="preset-select">
-              <option value="eng">🇺🇸 English (eng)</option>
-              <option value="spa">🇪🇸 Spanish (spa)</option>
-              <option value="fra">🇫🇷 French (fra)</option>
-              <option value="deu">🇩🇪 German (deu)</option>
-              <option value="jpn">🇯🇵 Japanese (jpn)</option>
-              <option value="por">🇵🇹 Portuguese (por)</option>
+              <!-- Populated from src/shared/ocrLanguages.ts; see doc-ocr-language-select. -->
+              <option value="eng">English (eng)</option>
             </select>
           </div>
           <div class="form-row">
@@ -816,7 +809,7 @@
             <div id="guide-categories" class="guide-card"><h4 data-i18n="guide-categories">Categories</h4><p class="footnote">20 detection categories covering PII, PHI, financial, and more.</p></div>
             <div id="guide-paste-guard" class="guide-card"><h4 data-i18n="guide-paste-guard">Paste Guard</h4><p class="footnote">Intercepts pastes into AI chats and forms.</p></div>
             <div id="guide-context-menus" class="guide-card"><h4 data-i18n="guide-context-menus">Context Menus</h4><p class="footnote">Right-click to redact, mask, or scan.</p></div>
-            <div id="guide-ocr-languages" class="guide-card"><h4 data-i18n="guide-ocr-languages">OCR Languages</h4><p class="footnote">English, Spanish, French, German, Japanese, Portuguese.</p></div>
+            <div id="guide-ocr-languages" class="guide-card"><h4 data-i18n="guide-ocr-languages">OCR Languages</h4><p class="footnote">English in this build. Additional languages can be added by bundling their traineddata; nothing is downloaded at runtime.</p></div>
             <div id="guide-redaction-styles" class="guide-card"><h4 data-i18n="guide-redaction-styles">Redaction Styles</h4><p class="footnote">Blackout, whiteout, or text stamp.</p></div>
             <div id="guide-accessibility" class="guide-card"><h4 data-i18n="guide-accessibility">Accessibility</h4><p class="footnote">High contrast, dyslexia mode, reduced motion, speech.</p></div>
             <div id="guide-languages" class="guide-card"><h4 data-i18n="guide-languages">Languages</h4><p class="footnote">7 UI languages with instant switching.</p></div>

@@ -15,6 +15,7 @@ import {
   type SessionTimeoutOption,
 } from "../shared/settings.js";
 import { recordAudit } from "../shared/audit.js";
+import { BUNDLED_OCR_LANGUAGES } from "../shared/ocrLanguages.js";
 import { t, getCategoryLabel, getPresetLabel } from "../shared/i18n.js";
 import type {
   DocKind,
@@ -1333,13 +1334,25 @@ export async function initPopup(): Promise<void> {
     await saveSettings({ ...current, ocrLanguage: val });
   };
 
-  if (ocrLangSelect) {
-    ocrLangSelect.value = settings.ocrLanguage || "eng";
-    ocrLangSelect.addEventListener("change", () => void syncOcrLanguage(ocrLangSelect.value));
-  }
-  if (docOcrLangSelect) {
-    docOcrLangSelect.value = settings.ocrLanguage || "eng";
-    docOcrLangSelect.addEventListener("change", () => void syncOcrLanguage(docOcrLangSelect.value));
+  // Populate the language selectors from the bundled set at runtime, and drop any
+  // option whose data is not in the package. The markup used to list six
+  // languages while only English was vendored, so selecting another one silently
+  // ran English OCR. Deriving the list from BUNDLED_OCR_LANGUAGES means the
+  // selector can never advertise a language the extension cannot read offline.
+  for (const select of [ocrLangSelect, docOcrLangSelect]) {
+    if (!select) continue;
+    const currentValue = select.value;
+    select.replaceChildren(
+      ...BUNDLED_OCR_LANGUAGES.map((lang) => {
+        const opt = document.createElement("option");
+        opt.value = lang.code;
+        opt.textContent = `${lang.label} (${lang.code})`;
+        return opt;
+      })
+    );
+    const wanted = settings.ocrLanguage || "eng";
+    select.value = BUNDLED_OCR_LANGUAGES.some((l) => l.code === wanted) ? wanted : currentValue || "eng";
+    select.addEventListener("change", () => void syncOcrLanguage(select.value));
   }
 
   if (docStyleSelect) {

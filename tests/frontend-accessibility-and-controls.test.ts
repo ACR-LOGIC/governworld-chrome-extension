@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { BUNDLED_OCR_CODES } from "../src/shared/ocrLanguages.js";
 
 const extRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -58,14 +59,27 @@ describe("Frontend Design, Controls & Accessibility (Popup & Sidepanel Parity)",
     expect(html).toContain('aria-label="Quick category filters"');
   });
 
-  it.each(pages)("%s provides complete multi-language OCR dropdown options", (pagePath) => {
-    const html = readFileSync(join(extRoot, pagePath), "utf8");
-    const expectedLangs = ["eng", "spa", "fra", "deu", "jpn", "por"];
-
-    for (const lang of expectedLangs) {
-      expect(html).toContain(`value="${lang}"`);
-    }
-  });
+    it.each(pages)("%s offers only OCR languages whose data is bundled", (pagePath) => {
+      // This previously asserted six hard-coded language codes with
+      // `html.toContain('value="spa"')`, which never actually looked at the OCR
+      // dropdown: `value="spa"` also appears in the compliance-preset select, so
+      // the assertion passed no matter what the dropdown said. Meanwhile the
+      // build vendored only English traineddata, so five of the six offered
+      // languages silently ran English OCR.
+      //
+      // The real property is that the dropdown and the package agree. Scope to
+      // the OCR selects and compare against the declared set, which
+      // ocr-bundled-languages.test.ts ties to vendor/tessdata.
+      const html = readFileSync(join(extRoot, pagePath), "utf8");
+      const selects = html.match(/<select[^>]*id="(?:doc-)?ocr-language-select"[\s\S]*?<\/select>/g) ?? [];
+      expect(selects.length, `${pagePath} has no OCR language select`).toBeGreaterThan(0);
+      for (const select of selects) {
+        const offered = [...select.matchAll(/<option value="([a-z]{3})"/g)].map((m) => m[1]);
+        expect(offered.length, "OCR select has no options in markup").toBeGreaterThan(0);
+        const undeclared = offered.filter((code) => !BUNDLED_OCR_CODES.includes(code));
+        expect(undeclared, `${pagePath} offers unbundled OCR languages: ${undeclared.join(", ")}`).toEqual([]);
+      }
+    });
 
   it.each(pages)("%s provides complete Redaction Style & Stamp Presets dropdowns", (pagePath) => {
     const html = readFileSync(join(extRoot, pagePath), "utf8");

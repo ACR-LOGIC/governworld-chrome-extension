@@ -27,9 +27,14 @@ export function isValidSsn(value: string): boolean {
 
 /**
  * Validates a US ITIN shape (`9XX-XX-XXXX`).
- * ITINs are 9xx area; the group (YY) is restricted to 70-88, 90-92, 94-99
- * and the serial (NNNN) is never 0000. A bare 9xx-xx-xxxx SSN-shaped value
+ * ITINs are 9xx area; the group (YY) is restricted to 50-65, 70-88, 90-92 and
+ * 94-99, and the serial (NNNN) is never 0000. A bare 9xx-xx-xxxx SSN-shaped value
  * with an invalid group (e.g. 900-00-0000) is not an ITIN.
+ *
+ * The 50-65 range is not optional. IRS Publication 4757 and the ITIN
+ * specification both list 50-65 as valid 4th/5th-digit groups; those are the
+ * ITINs issued from 1993, and omitting the range rejected every one of them
+ * while the doc comment above still claimed 70-99 was the rule.
  */
 export function isValidItin(value: string): boolean {
   const digits = value.replace(/\D/g, '');
@@ -38,7 +43,11 @@ export function isValidItin(value: string): boolean {
   const group = Number(digits.slice(3, 5));
   const serial = Number(digits.slice(5));
   if (!area.startsWith('9')) return false;
-  if (![70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 90, 91, 92, 94, 95, 96, 97, 98, 99].includes(group)) return false;
+  const inRange = (group >= 50 && group <= 65)
+    || (group >= 70 && group <= 88)
+    || (group >= 90 && group <= 92)
+    || (group >= 94 && group <= 99);
+  if (!inRange) return false;
   if (serial === 0) return false;
   return true;
 }
@@ -77,7 +86,12 @@ export function isValidDea(value: string): boolean {
   const normalized = value.replace(/[\s-]/g, '');
   if (!/^[A-Z]{2}\d{7}$/.test(normalized)) return false;
   const first = normalized[0];
-  const REGISTRANT_CODES = new Set('ABCDEFGHJKLMX');
+  // Registrant types per DEA/21 CFR 1301.36: A/B/C/D/E/F/G/H/J/K/L/M are
+  // practitioners, P and R are Narcotic Treatment Programs, S and T are
+  // mid-level practitioners, U is data-waiver, X is manufacturer/distributor.
+  // P/R/S/T/U were missing from this set, so no valid number existed for any of
+  // those five prefixes even though the doc comment above already listed them.
+  const REGISTRANT_CODES = new Set('ABCDEFGHJKLMPRSTUX');
   if (!REGISTRANT_CODES.has(first)) return false;
   const digits = normalized.slice(2).split('').map(Number);
   const calc135 = digits[0] + digits[2] + digits[4];
