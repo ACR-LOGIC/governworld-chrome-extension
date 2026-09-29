@@ -1,12 +1,16 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 // Release packaging for the Chrome Web Store.
-// Builds from the current (reviewed) commit and zips the exact dist output.
-// Run from apps/redaction-extension:
+// Builds from the current (reviewed) commit and archives the exact dist output.
+// Run from the repository root:
 //   npm run release:zip            # build + zip current HEAD
 //   npm run release:zip <commit>   # build + zip a specific reviewed commit
-// Output: release/governworld-redaction-<commit>.zip
+// Output:
+//   release/governworld-redaction-<commit>.zip      (what the store accepts)
+//   release/governworld-redaction-<commit>.tar.gz   (same payload, for mirrors)
+//   release/SHA256SUMS                               (checksums for both)
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -61,5 +65,32 @@ execFileSync(
   ],
   { cwd: pkgRoot, stdio: "inherit" }
 );
-
 console.log(`Release zip: ${outZip}`);
+
+// Same payload as a gzip tar, for mirrors that prefer it. Built from the same
+// dist/ so the two can never disagree, and -C dist keeps the archive root flat
+// like the zip. Windows bsdtar has no --sort/--owner, so timestamps and ownership
+// are whatever the platform writes; the SHA256SUMS file below is the integrity
+// record, not reproducibility of the bytes.
+const outTar = join(releaseDir, `governworld-redaction-${shortSha}.tar.gz`);
+if (existsSync(outTar)) rmSync(outTar);
+execFileSync("tar", ["-czf", outTar, "-C", distDir, "."], { cwd: pkgRoot, stdio: "inherit" });
+console.log(`Release tar: ${outTar}`);
+
+function sha256(file) {
+  return createHash("sha256").update(readFileSync(file)).digest("hex").toUpperCase();
+}
+const artifacts = [outZip, outTar].filter((f) => existsSync(f));
+const sums = [
+  `GovernWorld Redaction release ${shortSha}`,
+  `manifest version: ${JSON.parse(readFileSync(join(distDir, "manifest.json"), "utf8")).version}`,
+  "",
+  ...artifacts.map((f) => `${sha256(f)}  ${f.split(/[\\/]/).pop()}`),
+  "",
+].join("\n");
+const sumsPath = join(releaseDir, "SHA256SUMS");
+writeFileSync(sumsPath, sums);
+console.log(`Checksums:  ${sumsPath}`);
+for (const line of sums.split("\n").filter((l) => /^[0-9A-F]{64}/.test(l))) {
+  console.log(`  ${line}`);
+}
