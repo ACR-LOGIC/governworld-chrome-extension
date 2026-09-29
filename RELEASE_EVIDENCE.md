@@ -72,7 +72,7 @@ release build. Synthetic-only fixtures; no real PII/PHI in any asset.
 | Mirror tarball | `release/governworld-redaction-a3138eb.tar.gz` (same payload), SHA-256 `AD4461492609FBD298307A61C83804F05DBB2B1224DE3529C0DA49B6B602FE24` |
 | Checksums | `release/SHA256SUMS` |
 | Artifact size | 14.4 MB (store limit 2 GB) |
-| Lockfile SHA-256 | `CB1A4C62F72D1DFF1E004743BD0747F19596A295000C9C8BFBD6781E286D664E` |
+| Lockfile SHA-256 (as committed in git, LF) | `CB1A4C62F72D1DFF1E004743BD0747F19596A295000C9C8BFBD6781E286D664E` | **Careful:** a Windows checkout with `core.autocrlf=true` materialises CRLF line endings, so hashing the *working-tree* file yields `830BC33A7045CE4D1802E2B44FA09C0D9B2BF9824E51A144C8ADF3E7714B50F2` instead. Both are correct for what they measure. Verify against the committed content with `git show HEAD:package-lock.json` rather than hashing the working tree. |
 | Zip root | `manifest.json` at archive root, no wrapping folder |
 | Manifest | v0.1.0, name 21 chars (limit 45), description 117 chars (limit 132) |
 | Permissions | `activeTab`, `scripting`, `storage`, `downloads`, `offscreen`, `sidePanel`, `contextMenus` + optional `notifications` — no host permissions (re-confirmed in the built `dist/manifest.json`) |
@@ -84,6 +84,24 @@ release build. Synthetic-only fixtures; no real PII/PHI in any asset.
 | Photo OCR/redaction E2E | `npm run test:photo-e2e` — 8 findings across 7 categories; each expected value 100% dark; the two prose false-positive guards (`Amount Due: $248.00`, notes prose) unchanged |
 | UI walkthrough | `npm run capture:ui` — 26 steps, 0 console errors |
 
+
+### Store asset digests (SHA-256)
+
+The Chrome Web Store listing uploads these images separately from the extension
+zip, so the zip checksum does not cover them. Digests of the committed files:
+
+```
+A707493D3E702E0A6BE3E2D430C1736299FDB2AE6A6C2AD10C418B594C7ED5B9  release/images/promo-tile-440x280.png
+C25E77DEE0DB11AE8290C819A942B65395A6E8869421632EAE48A5043BDC109B  release/screenshots/01-protection-idle.png
+7C864FB252B93CCC9260D74387330667BF439F3C431C1242EA37DA8F95F16ADE  release/screenshots/02-findings-masked.png
+38A2BE9D248CF98D51B640FA6C57ADA3EE9C75E62FB62F02DD6B1310E2DD3A1D  release/screenshots/03-page-masks-applied.png
+F6B8F30C9B75AB86D2EA03D1D57F9A1ED96AF15EEEC5951D5419E4E7B2C103EC  release/screenshots/04-document-studio.png
+0281AF692C57497C768C1B086837A2D7C58B9253DFC7C46394E32D758FD52E67  release/screenshots/05-settings-about.png
+```
+
+Note that the four `NOTES.md` files under `release/` are documentation and are
+excluded. They are text and are subject to the same CRLF caveat as the
+lockfile above.
 ### Previous (superseded, retained for history)
 
 | Field | Value |
