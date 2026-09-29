@@ -5,7 +5,7 @@ below is verified against the built artifact; nothing here needs to be
 re-derived at upload time.
 
 - **Target:** Chrome Web Store, single purpose, listing type "Extension"
-- **Artifact:** `release/governworld-redaction-bd9ec12.zip`
+- **Artifact:** `release/governworld-redaction-c273fd0.zip`
 - **Artifact SHA-256:** `67B9D565F01BB763FBD91A313EE53961F0970BFB33E7FD7A3B106B01F53803CD`
 - **Version:** 0.1.0
 - **Digests for every uploaded file:** `npm run verify:digests`
@@ -14,7 +14,7 @@ re-derived at upload time.
 
 ## 1. Package
 
-Upload `release/governworld-redaction-bd9ec12.zip`. That is the file the
+Upload `release/governworld-redaction-c273fd0.zip`. That is the file the
 dashboard wants — not the tarball, and not `dist/`.
 
 Verified in the zip itself: `manifest_version: 3`, 28 files, `manifest.json` at
