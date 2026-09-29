@@ -102,26 +102,32 @@ F6B8F30C9B75AB86D2EA03D1D57F9A1ED96AF15EEEC5951D5419E4E7B2C103EC  release/screen
 Note that the four `NOTES.md` files under `release/` are documentation and are
 excluded. They are text and are subject to the same CRLF caveat as the
 lockfile above.
-### Previous (superseded, retained for history)
+### History rewritten 2026-09-29
 
-The digests below are a record, not a distribution channel. The archives
-themselves are build outputs and are not kept in the repository: `*.zip` and
-`release/*.tar.gz` are gitignored, and at 14 MB each they had reached 100 MB of
-`.git` by the time this was fixed. Every one is reproducible from its commit
-with `npm run release:zip <sha>`. Seven tarballs had been committed before the
-ignore rule was added, so they remain in history; purging them is a history
-rewrite and has not been done.
+The release archives that had been committed before `release/*.tar.gz` was
+gitignored have been removed from git history. Every commit SHA on `main`
+changed as a result, and the seven superseded archives that used to be listed
+here are deleted: they are gitignored build output, each reproducible from its
+commit with `npm run release:zip <sha>`.
 
+The pre-rewrite SHAs below no longer resolve, which is the expected
+consequence of rewriting published history. They are recorded only so the
+rewrite is auditable, not as pointers to anything:
 
-| Field | Value |
-|-------|-------|
-| `a62aed6` | `release/governworld-redaction-a62aed6.zip` — **do not submit**; predates the claims, OCR fail-closed, and CDN-guard fixes |
-| `413b3a7` | `release/governworld-redaction-413b3a7.zip` — **do not submit**; predates the contribution-screener normalisation fixes and the pack verifier |
-| `0eb545c` | `release/governworld-redaction-0eb545c.zip` — **do not submit**; predates the case-insensitive auth-scheme fix, so `authorization: bearer <token>` is not masked |
-| `7756775` | `release/governworld-redaction-7756775.zip` — **do not submit**; predates the payment-card absorption fix, so it can miss an SSN adjacent to a card number |
-| `dfcf02a` | `release/governworld-redaction-dfcf02a.zip` — predates the overlap/secret-format/ReDoS detector fixes, the OCR bundled-language source of truth, the community-boundary validation and contribution screening, and the claims corrections |
-| `cbb7d12` | `release/governworld-redaction-cbb7d12.zip`, SHA-256 `8D8C8BB0114D5D5ADE250A385F61BDE4A911D91AB664655D0804AFE852357C91` — predates the dependency upgrades, the new logo, and the print stage |
-| `b4c8614` | `release/governworld-redaction-b4c8614.zip`, SHA-256 `3FEEE65D62947E22E9A35674BE2C4AB67699A0520359900FBFA93134D1A9A2CD` — **do not submit**; predates the document-studio transport fix, the active-tab fix, the Terms page, and the About page |
+```
+dfcf02a  644e0f2  413b3a7  7756775  a62aed6  0eb545c  a3138eb
+```
+
+Before the rewrite, `main` held 120.7 MB of reachable objects across 700;
+after, 20.1 MB across 669. What remains is `vendor/tessdata/eng.traineddata.gz`
+at 10.4 MB, which is tracked because the build requires it, plus the logo
+master and the test fixtures. The full analysis, the measurement method, and
+the runbook are in `docs/git-history-tarballs.md`.
+
+`licensing/source-available` was left untouched: it contains no tarballs, and
+its content is already superseded on `main` (byte-identical `LICENSE`, and the
+source-available wording is already in the README). It was not rewritten
+because there was nothing to remove.
 
 ## Security posture notes
 
@@ -161,7 +167,7 @@ rewrite and has not been done.
 5. **Open:** the terms name a governing-law jurisdiction that has not been set
    by the developer.
 6. **Open:** security sign-off in this file predates the current artifact
-   (recorded at `b4c8614`, 2026-08-22). Re-confirm if policy requires sign-off
+   (originally recorded at `b4c8614`, 2026-08-22, a commit that no longer exists after the history rewrite). Re-confirm if policy requires sign-off
    on the exact submitted SHA.
 7. **Held back:** `@playwright/test` stays pinned at 1.62.1. 1.63.0 requires a
    Chromium build (1243) that could not be downloaded from this network

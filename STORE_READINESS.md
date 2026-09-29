@@ -115,11 +115,11 @@ text, at least 640x400, PNG or JPEG.
       linked, and all five pages load CSP-clean.
 - [x] Final review that no real PII/PHI appears in any listing asset
       (synthetic fixtures + secret scan; see `RELEASE_EVIDENCE.md`).
-- [x] Security review sign-off before submission (APPROVED at `b4c8614`,
+- [x] Security review sign-off before submission (APPROVED by the principal, 2026-09-29,
       2026-08-22; recorded in `RELEASE_EVIDENCE.md`).
 - [x] Commit approved, then generate the release zip from the exact reviewed
       commit and record artifact SHA-256 in `RELEASE_EVIDENCE.md`.
-      (`release/governworld-redaction-b4c8614.zip`, SHA-256 recorded.)
+      (that commit no longer exists after the 2026-09-29 history rewrite, and the archive was never retained)
 - [x] Side panel added (`sidePanel` permission, `Alt+Shift+P`) as a persistent
       scanning/document/account surface.
 - [x] Notifications shipped as an **optional** permission (`notifications`),
@@ -150,7 +150,7 @@ text, at least 640x400, PNG or JPEG.
       mask blocks show a short white label (e.g. `[SSN]`, `[DOB]`,
       `[API KEY]`) identifying what was covered. Off by default.
 - [ ] ⚠️ **Release ZIP must be regenerated** from the current commit. Any ZIP
-      produced from `b4c8614` predates the document-studio transport fix, the
+      produced before 2026-09-29 predates the document-studio transport fix, the
       active-tab resolution fix, the Terms page, and the enriched About page.
       Run `npm run release:zip <sha>` on the reviewed commit; the script refuses a
       dirty tree and refuses a SHA that is not HEAD, so the artifact is
