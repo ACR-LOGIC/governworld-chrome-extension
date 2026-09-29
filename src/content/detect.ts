@@ -226,8 +226,31 @@ function detectEmails(text: string): RawMatch[] {
   return out;
 }
 
-const PHONE_RE =
-  /(?<![\dA-Za-z])(?:\+?1[\s.-]?)?(?:\([2-9][0-8][0-9]\)[\s.-]?|[2-9][0-8][0-9][\s.-]?)[2-9][0-9]{2}[\s.-]?[0-9]{4}(?![\dA-Za-z])/g;
+/** Contents of the dash character class, without the enclosing brackets. */
+const DASH_CHARS =
+  "\\u002D\\u058A\\u05BE\\u1400\\u1806\\u2010-\\u2015\\u2212\\u2E17\\u2E1A\\u2E3A\\u2E3B\\u2E40\\u301C\\u3030\\u30A0\\uFE31\\uFE32\\uFE58\\uFE63\\uFF0D";
+/**
+ * A bracketed dash class. Kept separate from DASH_CHARS on purpose: interpolating
+ * the bare contents into a pattern without brackets parses as literal text
+ * followed by a stray range, which silently matches nothing at all.
+ */
+const DASH = `[${DASH_CHARS}]`;
+/**
+ * A bracketed dash-or-space class, for patterns accepting either.
+ *
+ * Space is deliberately NOT in the SSN separator set, even though it is in SEP.
+ * Unlike a dash, a space is not visually unambiguous: "123 45 6789" appears in
+ * dense numeric text for reasons that have nothing to do with an SSN, and
+ * accepting it would trade a rare miss for a routine false positive.
+ */
+const SEP = `[\\s${DASH_CHARS}]`;
+
+const PHONE_RE = new RegExp(
+  `(?<![\\dA-Za-z])(?:\\+?1${SEP}?)?` +
+    `(?:\\([2-9][0-8][0-9]\\)${SEP}?|[2-9][0-8][0-9]${SEP}?)` +
+    `[2-9][0-9]{2}${SEP}?[0-9]{4}(?![\\dA-Za-z])`,
+  "g"
+);
 
 function detectPhones(text: string): RawMatch[] {
   const out: RawMatch[] = [];
@@ -245,7 +268,27 @@ function detectPhones(text: string): RawMatch[] {
   return out;
 }
 
-const SSN_DASH_RE = /\b(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}\b/g;
+// `(?<![\dA-Za-z])` and `(?![\dA-Za-z])` are used rather than `\b` on purpose.
+// A non-breaking space and several of the dashes are not word characters, so
+// `\b` after a group ending in one of them does not assert a boundary and the
+// match is rejected outright.
+//
+// Every Unicode dash variant is accepted. This is not cosmetic: a probe found
+// that `219‑09‑9999` written with U+2011, and the same value with U+2013
+// EN DASH, U+2014 EM DASH or U+2212 MINUS SIGN, were each missed entirely, as
+// were the phone and payment-card forms. Word processors and PDF text layers
+// emit these characters routinely, so a document containing a real SSN written
+// with an en dash was passing as clean.
+//
+// The asymmetry is deliberate. A missed identifier is an unprotected disclosure
+// the user never sees; a false positive is one over-redacted span they can
+// notice. For a tool people rely on to decide what is safe to share, recall is
+// the property worth protecting, and these characters are visually
+// indistinguishable from a hyphen to whoever is reading the document.
+const SSN_DASH_RE = new RegExp(
+  `(?<![\\dA-Za-z])(?!000|666|9\\d\\d)\\d{3}${DASH}(?!00)\\d{2}${DASH}(?!0000)\\d{4}(?![\\dA-Za-z])`,
+  "g"
+);
 const SSN_BARE_RE = /\b(?!000|666|9\d\d)\d{3}(?!00)\d{2}(?!0000)\d{4}\b/g;
 // "social" on its own is an ordinary English word, so any page containing the
 // word next to a 9-digit number produced an SSN — "Join our social 123456789
@@ -797,7 +840,14 @@ function luhnValid(value: string): boolean {
 // never detected at all. Losing a high-value finding to a malformed neighbour
 // is the worst failure this detector has, so the groupings are enumerated:
 // 4-4-4-4 (16 digits) and Amex 4-6-5 (15). Unseparated cards are the fallback.
-const CARD_RE = /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b|\b\d{4}[-\s]?\d{6}[-\s]?\d{5}\b|\b\d{13,19}\b/g;
+// The separator class also admits the Unicode dashes, for the reason documented
+// on SSN_DASH_RE above.
+const CARD_RE = new RegExp(
+  `\\b\\d{4}${SEP}?\\d{4}${SEP}?\\d{4}${SEP}?\\d{4}\\b` +
+    `|\\b\\d{4}${SEP}?\\d{6}${SEP}?\\d{5}\\b` +
+    `|\\b\\d{13,19}\\b`,
+  "g"
+);
 const CARD_BRAND_RE = /\b(?:visa|mastercard|amex|american\s+express|discover|card)\b/i;
 
 function detectCards(text: string): RawMatch[] {
