@@ -90,4 +90,15 @@ settled; changing one is a product decision, not a cleanup.
 ## Environment
 
 - Node.js 20+, npm 10+. Targets: Chrome 116+, Firefox 109+.
-- Release packaging: `npm run release:zip` (`scripts/make-release.mjs`).
+- Release packaging: `npm run release:zip <sha>` (`scripts/make-release.mjs`). It
+  takes the commit SHA explicitly and refuses a dirty tree or a HEAD that does
+  not match, so only reviewed content is ever packaged.
+- **Housekeeping:** `npm run clean` reports superseded release archives and test
+  scratch directories; `npm run clean:apply` deletes them. Every packaging
+  iteration otherwise leaves a 14 MB archive pair behind, and several of them
+  are marked do-not-submit in `RELEASE_EVIDENCE.md` - so uploading the wrong one
+  is a live risk, not just wasted disk. The script only deletes an archive whose
+  commit is still in the repository, so anything reproducible is safe to remove
+  and anything else is kept and reported.
+- `npm run verify:digests` re-checks every digest recorded in
+  `RELEASE_EVIDENCE.md` against the committed blob, and runs in CI.

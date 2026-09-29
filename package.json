@@ -24,7 +24,7 @@
     "sync:sidepanel": "node scripts/sync-sidepanel.mjs",
     "sync:sidepanel:check": "node scripts/sync-sidepanel.mjs --check",
     "capture:store": "node scripts/make-store-screenshots.mjs",
-    "verify:zip": "node scripts/verify-release-zip.mjs", "verify:digests": "node scripts/verify-release-digests.mjs",
+    "verify:zip": "node scripts/verify-release-zip.mjs", "verify:digests": "node scripts/verify-release-digests.mjs", "clean": "node scripts/housekeeping.mjs", "clean:apply": "node scripts/housekeeping.mjs --apply",
     "capture:promo": "node scripts/make-promo-tile.mjs",
     "icons": "node scripts/make-icons.mjs",
     "verify:print": "node scripts/verify-print-pipeline.mjs"
