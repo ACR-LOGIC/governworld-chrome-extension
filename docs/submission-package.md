@@ -5,8 +5,8 @@ below is verified against the built artifact; nothing here needs to be
 re-derived at upload time.
 
 - **Target:** Chrome Web Store, single purpose, listing type "Extension"
-- **Artifact:** `release/governworld-redaction-a3138eb.zip`
-- **Artifact SHA-256:** `BEAA93FE97189596306488260345F4A2EF8E0FAD56C8C58A671D96B6CEB85A7C`
+- **Artifact:** `release/governworld-redaction-bd9ec12.zip`
+- **Artifact SHA-256:** `67B9D565F01BB763FBD91A313EE53961F0970BFB33E7FD7A3B106B01F53803CD`
 - **Version:** 0.1.0
 - **Digests for every uploaded file:** `npm run verify:digests`
 
@@ -14,7 +14,7 @@ re-derived at upload time.
 
 ## 1. Package
 
-Upload `release/governworld-redaction-a3138eb.zip`. That is the file the
+Upload `release/governworld-redaction-bd9ec12.zip`. That is the file the
 dashboard wants — not the tarball, and not `dist/`.
 
 Verified in the zip itself: `manifest_version: 3`, 28 files, `manifest.json` at
@@ -91,7 +91,7 @@ privacy statement the listing can make.
 ## 8. Before you press submit
 
 - [ ] `npm run typecheck` clean
-- [ ] `npm test` — 57 files / 1,072 tests
+- [ ] `npm test` — 58 files / 1,078 tests
 - [ ] `npm run build`
 - [ ] `npm run release:zip <sha>` and `npm run verify:zip <zip>`
 - [ ] `npm run verify:digests` — every recorded digest matches
