@@ -1,6 +1,6 @@
 # GovernWorld Extension
 
-[![CI](https://github.com/ACR-LOGIC/governworld-chrome-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/ACR-LOGIC/governworld-chrome-extension/actions/workflows/ci.yml)
+[![CI](https://github.com/ACR-LOGIC/governworld-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/ACR-LOGIC/governworld-extension/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Source--Available-orange.svg)](LICENSE)
 [![Manifest V3](https://img.shields.io/badge/Extension-Manifest%20V3-green.svg)](manifest.json)
 [![Local-First](https://img.shields.io/badge/Architecture-100%25%20Local--First-brightgreen.svg)](#local-first-architecture--privacy-guarantees)
@@ -101,7 +101,7 @@ GovernWorld is engineered to conform to the **W3C WebExtensions Manifest V3 spec
 ### Build the Package First
 Before loading into any browser, build the production bundle:
 ```bash
-git clone https://github.com/ACR-LOGIC/governworld-chrome-extension.git
+git clone https://github.com/ACR-LOGIC/governworld-extension.git
 cd governworld-chrome-extension
 npm install
 npm run build
@@ -388,7 +388,7 @@ The extension is **fully functional in standalone local mode**.
 ### Build Commands
 ```bash
 # Clone repository
-git clone https://github.com/ACR-LOGIC/governworld-chrome-extension.git
+git clone https://github.com/ACR-LOGIC/governworld-extension.git
 cd governworld-chrome-extension
 
 # Install dependencies
