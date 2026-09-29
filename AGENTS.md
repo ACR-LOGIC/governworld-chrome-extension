@@ -58,6 +58,35 @@ npm run capture:ui  # Playwright UI walkthrough → screenshots + video (needs a
 - **Synthetic test data only:** RFC 2606 `.test` domains, never-issued SSN (219-09-9999), documented test card 4111111111111111. Never use real PII in fixtures or tests.
 - **CSP:** `script-src 'self' 'wasm-unsafe-eval'` — no inline scripts, no remote code, no `eval` outside WASM.
 
+## Settled decisions (do not re-raise as gaps)
+
+These were open questions that have been decided deliberately. Treat them as
+settled; changing one is a product decision, not a cleanup.
+
+- **Terms carry no governing-law or venue clause.** Decided: omit it. The
+  liability section already limits itself "to the maximum extent permitted by
+  applicable law", so the document does not assert a jurisdiction it does not
+  have. Do not add a jurisdiction to the Terms without a decision about the
+  entity's actual domicile.
+- **OCR is English-only by design.** `src/shared/ocrLanguages.ts` is the single
+  source of truth for the build, the worker, and the selector, and unbundled
+  languages fail closed. Detection is language-agnostic regex, so non-English
+  text is still covered for structured identifiers; only image OCR is affected.
+  Adding a language is a vendoring decision, not a code change — see
+  `docs/ocr-languages.md`.
+- **Paste Shield stays on-demand.** The extension declares no host permissions
+  and no declarative content scripts, so the guard is absent from any tab the
+  user has not activated. This is the intended privacy trade, documented with
+  its consequences in README. Always-on protection requires an `optional_host_permissions`
+  or `<all_urls>` decision and is out of scope unless explicitly chosen.
+- **Community rules are not yet trusted.** Both community network paths are
+  stubbed off in the service worker and return an error. Do not enable either
+  without working through `docs/community-trust-model.md`, which specifies
+  publisher-key pinning, signed packs, fail-closed verification, and the
+  additive-only rule invariants. The input validation and contribution screening
+  in `src/shared/customPatterns.ts` are defence-in-depth for a disabled path, not
+  a live control.
+
 ## Environment
 
 - Node.js 20+, npm 10+. Targets: Chrome 116+, Firefox 109+.
