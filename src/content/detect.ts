@@ -783,7 +783,15 @@ function luhnValid(value: string): boolean {
   return isValidLuhn(value);
 }
 
-const CARD_RE = /\b(?:\d{4}[\s-]?){3,4}\d{2,4}\b|\b\d{13,19}\b/g;
+// Separated card groupings, written as fixed groupings rather than a repeated
+// "optional separator" group. The previous form, (?:\d{4}[\s-]?){3,4}\d{2,4},
+// let the optional separator sit between groups, so a card followed by any
+// number absorbed it: "4111111111111111 219-09-9999" matched as a 19-digit
+// card "4111111111111111 219" that happened to satisfy Luhn, and the SSN was
+// never detected at all. Losing a high-value finding to a malformed neighbour
+// is the worst failure this detector has, so the groupings are enumerated:
+// 4-4-4-4 (16 digits) and Amex 4-6-5 (15). Unseparated cards are the fallback.
+const CARD_RE = /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b|\b\d{4}[-\s]?\d{6}[-\s]?\d{5}\b|\b\d{13,19}\b/g;
 const CARD_BRAND_RE = /\b(?:visa|mastercard|amex|american\s+express|discover|card)\b/i;
 
 function detectCards(text: string): RawMatch[] {

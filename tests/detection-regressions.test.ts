@@ -39,6 +39,82 @@ const run = (text: string) => detect(text, [...ALL], []);
 const values = (text: string, category?: string) =>
   run(text).filter((m) => (category ? m.category === category : true)).map((m) => m.value);
 
+// Documented test card numbers (Luhn-valid, published in test suites).
+const VISA = "4111111111111111";
+const MC = "5555555555554444";
+const AMEX = "378282246310005";
+const DISCOVER = "6011111111111117";
+const SSN = "219-09-9999";
+
+describe("a card number must never absorb a neighbouring number", () => {
+  // The card pattern used to be (?:\d{4}[\s-]?){3,4}\d{2,4}, whose optional
+  // separator sat *between* groups. A card followed by any number therefore
+  // swallowed it: "4111111111111111 219-09-9999" matched as the 19-character
+  // string "4111111111111111 219", which satisfies Luhn, and the SSN was then
+  // never detected. A card and an SSN on one line is ordinary in a claims form,
+  // so this leaked in exactly the documents this extension exists to protect.
+  it("keeps the card intact and still finds the SSN after it", () => {
+    const found = run(`${VISA} ${SSN}`);
+    expect(values(`${VISA} ${SSN}`, "payment_card")).toEqual([VISA]);
+    expect(values(`${VISA} ${SSN}`, "ssn")).toEqual([SSN]);
+    // The two spans must not overlap, or one of them was silently dropped.
+    const card = found.find((m) => m.category === "payment_card");
+    const ssn = found.find((m) => m.category === "ssn");
+    expect(card, "card not found").toBeDefined();
+    expect(ssn, "SSN not found").toBeDefined();
+    expect(card!.end).toBeLessThanOrEqual(ssn!.start);
+  });
+
+  it("keeps the SSN intact and still finds the card before it", () => {
+    // The reverse order failed differently: the card was lost entirely.
+    expect(values(`${SSN} ${VISA}`, "ssn")).toEqual([SSN]);
+    expect(values(`${SSN} ${VISA}`, "payment_card")).toEqual([VISA]);
+  });
+
+  it.each([3, 4, 5, 6])("does not absorb %i trailing digits", (n) => {
+    const tail = "2".repeat(n);
+    expect(values(`${VISA} ${tail}`, "payment_card")).toEqual([VISA]);
+  });
+
+  it("does not absorb a following ZIP or a following SSN group", () => {
+    for (const tail of ["62704", "09", "9999", "219", "09-9999"]) {
+      expect(values(`${VISA} ${tail}`, "payment_card"), `absorbed "${tail}"`).toEqual([VISA]);
+    }
+  });
+
+  it("still detects every real card format", () => {
+    // The fix narrows the pattern, so the formats that must keep working are
+    // asserted explicitly. Separated and unseparated, plus Amex's 4-6-5.
+    for (const card of [
+      VISA,
+      "4111-1111-1111-1111",
+      "4111 1111 1111 1111",
+      "4111-1111 1111-1111",
+      MC,
+      "5555 5555 5555 4444",
+      AMEX,
+      "3782 822463 10005",
+      "3782-822463-10005",
+      DISCOVER,
+      "6011 1111 1111 1117",
+      "6304000000000000000", // 19-digit Maestro
+      "30569309025904", // Diners, 14
+    ]) {
+      expect(values(card, "payment_card"), `missed card format ${card}`).toEqual([card]);
+    }
+  });
+
+  it("does not match digit runs that are not cards", () => {
+    for (const notCard of ["order 1234 5678 9012 3456 shipped", "phone 1234 5678 9012", "2024 2025 2026"]) {
+      expect(values(notCard, "payment_card"), `false positive on ${notCard}`).toEqual([]);
+    }
+  });
+
+  it("finds two adjacent cards as two separate findings", () => {
+    expect(values(`${VISA} ${MC}`, "payment_card")).toEqual([VISA, MC]);
+  });
+});
+
 /**
  * Assembles a credential-shaped fixture from fragments.
  *
