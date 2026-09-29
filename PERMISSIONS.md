@@ -42,5 +42,5 @@ uses it, and lists permissions the extension deliberately does **not** request.
 
 - No raw scanned text or page snapshots are persisted to storage, logs, telemetry, analytics, or error reporting.
 - Scan session state lives in `chrome.storage.session` (cleared on browser restart) and holds findings metadata with masked previews only.
-- File bytes for the document you open are staged in the extension's private IndexedDB only while you review or redact the file. Clear-data, document-clear, completed redaction, and the next service-worker startup remove staged files.
-- No scan content or raw sensitive data is transmitted to the cloud. All detection, OCR, and redaction execute 100% locally on your machine.
+- File bytes for the document you open are staged in the extension's private IndexedDB only while you review or redact the file. Clear-data, document-clear, completed redaction, browser startup, and extension install/update remove staged files. A service-worker restart does **not**: MV3 workers are suspended when idle and restarted on the next event, so purging on every restart would delete a document the user was still reviewing.
+- No scan content or raw sensitive data is transmitted to the cloud. All detection, OCR, and redaction execute locally on your machine, and the document pipeline has no network path at all.

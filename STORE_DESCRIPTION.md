@@ -47,7 +47,7 @@ you cover them up:
   at the original page size, and it cannot redact anything itself — a box that
   failed to be applied can never print as a clean page.
 - **Signed audit log.** Every scan, mask, document, and preset change is
-  recorded as metadata-only, tamper-evident, ECDSA-signed audit entries.
+  recorded as metadata-only audit entries, and exported logs are ECDSA-signed so an edit to an export is detectable.
 
 **Privacy by design.**
 

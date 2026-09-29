@@ -612,7 +612,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2l8 3.5V11c0 5-3.4 8.6-8 11-4.6-2.4-8-6-8-11V5.5z" /><path d="M12 8v5" /><circle cx="12" cy="16.2" r="0.6" fill="currentColor" /></svg>
             </div>
             <strong>Signed audit trail</strong>
-            <span>Every scan, mask, and policy change is recorded in a tamper-evident, ECDSA-signed audit log.</span>
+            <span>Every scan, mask, and policy change is recorded in a metadata-only audit log, and exports are ECDSA-signed so an edit to an export is detectable.</span>
           </div>
           <div class="feature">
             <div class="feature__icon" aria-hidden="true">
@@ -671,7 +671,7 @@
               <div class="t-line"><span class="t-dim">2026-08-23T09:42:01Z</span> <span class="t-accent">page_scan_completed</span> <span class="t-dim">host=</span>example.com <span class="t-dim">counts=</span>{ssn:1, card:1}</div>
               <div class="t-line"><span class="t-dim">2026-08-23T09:42:12Z</span> <span class="t-accent">masks_applied</span> <span class="t-dim">finding_ids=</span>2</div>
               <div class="t-line"><span class="t-dim">2026-08-23T09:42:20Z</span> <span class="t-accent">doc_redacted</span> <span class="t-dim">pages=</span>4 <span class="t-dim">sha256=</span><span class="t-accent">9f2c…</span></div>
-              <div class="t-line"><span class="t-allow">✓ signature verified · tamper-evident</span></div>
+              <div class="t-line"><span class="t-allow">✓ signature verified · export integrity</span></div>
             </div>
           </div>
         </div>

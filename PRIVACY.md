@@ -83,7 +83,7 @@ The specific detection capabilities may change as the Extension is updated.
 
 **Local first, by default.** All detection, classification, and redaction runs on your device. The extension does not transmit your scanned page text, document contents, or page images anywhere unless you explicitly enable cloud analysis, and cloud analysis is disabled by default.
 
-**Raw content handling.** The Extension does not persist raw scan text or page snapshots. When you open a document, its bytes are held in memory and in the Extension's private IndexedDB store only while you review or redact it. The bytes are deleted when you clear the document, complete redaction, clear extension data, or the Extension service worker restarts. Raw document bytes are not sent to logs, telemetry, analytics, or error reporting.
+**Raw content handling.** The Extension does not persist raw scan text or page snapshots. When you open a document, its bytes are held in memory and in the Extension's private IndexedDB store only while you review or redact it. The bytes are deleted when you clear the document, complete a redaction, clear extension data, or start the browser. They are not deleted merely because the Extension's service worker restarts, which happens routinely: an MV3 service worker is suspended when idle and restarted on the next event, and clearing the document on every restart would destroy a file you were still reviewing. Raw document bytes are not sent to logs, telemetry, analytics, or error reporting.
 
 The Extension also stores only the following non-content data:
 
@@ -267,7 +267,7 @@ The extension does not request the `tabs`, `history`, `bookmarks`, `cookies`, or
 
 Retention depends on the type of information involved.
 
-**Local information:** Information stored locally generally remains on your device until deleted by you, removed through Extension controls, removed when the Extension is uninstalled, removed through browser storage controls, or otherwise overwritten or deleted. Document bytes staged for review are removed by document clear, completed redaction, clear-data, or the next Extension service-worker startup.
+**Local information:** Information stored locally generally remains on your device until deleted by you, removed through Extension controls, removed when the Extension is uninstalled, removed through browser storage controls, or otherwise overwritten or deleted. Document bytes staged for review are removed by document clear, completed redaction, clear-data, browser startup, and Extension install or update. They are **not** removed by a service-worker restart, because an MV3 service worker is suspended when idle and restarted on the next event; purging on every restart would delete a document the user was still reviewing.
 
 **Account information:** Information associated with a GovernWorld account may be retained as reasonably necessary to provide the account and services, maintain contribution history, satisfy legal obligations, resolve disputes, enforce agreements, and maintain security.
 

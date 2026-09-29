@@ -31,7 +31,7 @@ The **GovernWorld Extension** is a fully functional, local-first browser protect
 - [Accessibility & Disability Assistive Features](#accessibility--disability-assistive-features)
 - [Multi-Language Internationalization (i18n)](#multi-language-internationalization-i18n)
 - [Interactive Redaction Studio & Custom Styles](#interactive-redaction-studio--custom-styles)
-- [Proactive "Paste & Prompt" Shield](#proactive-paste--prompt-shield-chat--llm-guard)
+- ["Paste & Prompt" Shield (on-demand)](#paste--prompt-shield-on-demand-chat--llm-guard)
 - [Right-Click Context Menus](#right-click-context-menus)
 - [Interactive Redaction Wizard](#interactive-redaction-wizard)
 - [Document Processing & Redaction Workflow](#document-processing--redaction-workflow)
@@ -52,7 +52,7 @@ The **GovernWorld Extension** is a fully functional, local-first browser protect
    - Highlight detected sensitive entities and apply non-destructive visual overlays directly in the DOM.
    - Copy securely redacted plain text with sensitive values replaced by solid block placeholders `[REDACTED]`.
 
-2. **Proactive "Paste & Prompt" Shield (Chat & LLM Guard):**
+2. **"Paste & Prompt" Shield (on-demand, active on tabs you have activated):**
    - Intercepts paste events in real time on LLM interfaces (**ChatGPT**, **Claude**, **Gemini**, **Slack**, web forms).
    - Shows a non-intrusive floating review modal with masked previews.
    - 1-click **Sanitize & Paste** automatically scrubs secrets/PII before pasting.
@@ -61,7 +61,7 @@ The **GovernWorld Extension** is a fully functional, local-first browser protect
    - Drag-and-drop or select PDF, Microsoft Word (`.docx`), and image files (`.png`, `.jpg`, `.webp`).
    - Interactive canvas: click finding boxes to toggle or drag with mouse to draw custom redaction boxes.
    - Multiple Redaction Styles: **Solid Blackout**, **Clean Whiteout**, or **Compliance Text Stamp** (e.g. `[CONFIDENTIAL]`).
-   - Multi-language OCR architecture supporting 6 languages (English, Spanish, French, German, Japanese, Portuguese).
+   - OCR via a self-contained pipeline that reads bundled language data offline. This build bundles English only; the language list, the build, and the selector share one source of truth (`src/shared/ocrLanguages.ts`) so an unbundled language can never be offered.
 
 4. **Multi-Language UI Internationalization (i18n):**
    - Dynamic interface translation for **English**, **Spanish**, **French**, **German**, **Japanese**, **Portuguese**, and **Simplified Chinese**.
@@ -196,7 +196,7 @@ Safari requires converting WebExtensions using Apple's Xcode developer tools:
 
 ## Local-First Architecture & Privacy Guarantees
 
-GovernWorld Redaction is built from the ground up on a **100% Local-First** security model:
+GovernWorld Redaction is built from the ground up on a **local-processing-by-default** security model:
 
 ```mermaid
 flowchart TD
@@ -301,12 +301,39 @@ The **Document Redaction Studio** provides an interactive canvas interface:
 
 ---
 
-## Proactive "Paste & Prompt" Shield (Chat & LLM Guard)
+## "Paste & Prompt" Shield (on-demand Chat & LLM Guard)
 
-Protects against accidental credential or PII leaks when pasting into AI chats and web forms:
-- Intercepts paste events on `input`, `textarea`, and `[contenteditable]` elements across **ChatGPT**, **Claude**, **Gemini**, **Slack**, and internal web applications.
+Guards against pasting credentials or PII into AI chats and web forms:
+- Intercepts paste events on `input`, `textarea`, and `[contenteditable]` elements in **ChatGPT**, **Claude**, **Gemini**, **Slack**, and internal web applications.
 - Displays a floating Shadow DOM review modal near the input.
 - Actions: **Sanitize & Paste** (replaces secrets with `[REDACTED]`), **Paste Unchanged**, or **Cancel** (<kbd>Esc</kbd>).
+
+### When the guard is active — and when it is not
+
+**The guard is on-demand, not always-on.** GovernWorld declares no host
+permissions and no declarative content scripts, so it has no presence in a tab
+until the user acts on it. The content script is injected on demand (via an
+`activeTab` grant from the toolbar action, the context menu, or the keyboard
+shortcut), and it is torn down with the tab session.
+
+The practical consequence, stated plainly:
+
+| Situation | Guard active? |
+|---|---|
+| You open the GovernWorld popup or side panel on a chat site, then paste | Yes |
+| You invoke a GovernWorld keyboard shortcut or context-menu action on the tab, then paste | Yes |
+| You install GovernWorld, open ChatGPT in a new tab, and paste without touching GovernWorld first | **No** |
+| You close or reload a tab and paste again | **No**, until you activate GovernWorld on that tab again |
+
+This is a deliberate consequence of the zero-host-permissions design, not an
+oversight: an always-on guard requires standing access to every site the user
+pastes into, which is precisely the access this extension exists to avoid. The
+trade is *you activate protection, then it is active*, rather than *it is active
+everywhere, always*.
+
+If you need always-on protection, a `<all_urls>` content-script declaration is
+the mechanism — and it is a decision about the product's privacy model, not a
+tweak. See [PERMISSIONS.md](PERMISSIONS.md) for what is requested and why.
 
 ---
 
@@ -371,7 +398,7 @@ The extension is **fully functional in standalone local mode**.
 | :--- | :--- |
 | `activeTab` | Grants temporary access to the active tab's visible text **solely** when the user clicks "Scan Page". Never runs automatically. |
 | `scripting` | Injects the local scanning content script and renders visual overlay masks in the active tab. |
-| `storage` | Stores user preferences, custom wizard rules, and tamper-evident local audit records in `chrome.storage.local`. |
+| `storage` | Stores user preferences, custom wizard rules, and local audit records in `chrome.storage.local`. Exported logs are signed. |
 | `downloads` | Saves the flattened, redacted output file directly to the user's computer. |
 | `offscreen` | Hosts PDF rendering and WebAssembly OCR execution without stalling the browser UI. |
 | `sidePanel` | Provides a persistent side panel (`Alt+Shift+P`) for document scanning, live wizard rule creation, and in-depth instruction viewing. |

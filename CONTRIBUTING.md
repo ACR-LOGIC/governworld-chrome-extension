@@ -7,7 +7,7 @@ Thank you for your interest in contributing to the GovernWorld Chrome Extension!
 ## 💛 100% Free, Local-First & Community Supported
 
 GovernWorld is built on an uncompromising commitment to privacy:
-* **100% Local-First:** All scanning, OCR, pattern matching, and document flattening happen on your local device.
+* **Local processing by default:** All scanning, OCR, pattern matching, and document flattening happen on your local device, and protected content never leaves it during local scanning and redaction.
 * **Zero Data Monetization:** We never sell, track, monetize, or transmit user data or document contents.
 * **Completely Free:** Every core protection capability is free for everyone.
 

@@ -27,7 +27,7 @@
 - **Custom Redaction Wizard.** Step-by-step wizard to define custom regex, test against live sample text, and activate custom detection rules locally.
 - **Document Processing.** Open a PDF, image, or Word document, review detected values, and download a flattened, securely redacted copy.
 - **Dedicated Instructions & Deep Links.** Comprehensive documentation with contextual in-app guidance jumping straight to relevant instruction cards.
-- **Signed audit log.** Every scan, mask, document, and preset change is recorded as metadata-only, tamper-evident, ECDSA-signed audit entries.
+- **Signed audit export.** Every scan, mask, document, and preset change is recorded as a metadata-only audit entry, and exported logs are ECDSA-signed so an edit to an export is detectable. The signature proves the export was produced by this extension and has not been altered since; it does not prove the log is a complete history.
 
 ---
 
