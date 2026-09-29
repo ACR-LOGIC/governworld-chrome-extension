@@ -669,7 +669,13 @@ const SECRET_PATTERNS: { label: string; regex: RegExp; confidence: number }[] = 
   // the scheme word: the redacted text still reads "Bearer [REDACTED]", and a
   // specific rule for the token itself (an OpenAI key, say) wins the overlap on
   // its own merits rather than losing to a longer span that swallowed "Bearer".
-  { label: "Bearer token", regex: /(?<=Bearer\s)[A-Za-z0-9._~+/=-]{20,}/g, confidence: 0.95 },
+  // The `i` flag is required, not stylistic: RFC 7235 section 2.1 makes the
+  // auth-scheme token case-insensitive, and lowercase `bearer` is what HTTP/2
+  // and most modern APIs actually emit. Without it, `authorization: bearer
+  // <token>` matched nothing and the credential was left in plain text while
+  // the correctly-cased form was masked. Found by Copilot review; the same
+  // applied to the Basic-auth rule below.
+  { label: "Bearer token", regex: /(?<=Bearer\s)[A-Za-z0-9._~+/=-]{20,}/gi, confidence: 0.95 },
   { label: "Slack webhook", regex: /https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9+\/=_-]{10,}/g, confidence: 0.99 },
   // Shared Access Signature: a capability URL, so the sig alone grants access.
   { label: "Azure SAS signature", regex: /[?&]sig=[A-Za-z0-9%+/=]{20,}/g, confidence: 0.95 },
@@ -682,7 +688,7 @@ const SECRET_PATTERNS: { label: string; regex: RegExp; confidence: number }[] = 
   // every word boundary and backtracks the whole remaining run. No real URL
   // scheme comes close to 31 characters (the longest registered is `ms-access-control').
   { label: "URL with credentials", regex: /\b[a-z][a-z0-9+.-]{0,30}:\/\/[^\s/:@]{1,64}:[^\s/:@]{3,128}@[^\s"'<>`]+/gi, confidence: 0.99 },
-  { label: "HTTP Basic auth", regex: /\bBasic\s+[A-Za-z0-9+/]{16,}={0,2}/g, confidence: 0.95 },
+  { label: "HTTP Basic auth", regex: /\bBasic\s+[A-Za-z0-9+/]{16,}={0,2}/gi, confidence: 0.95 },
   { label: "DB connection string", regex: /\b(?:postgres|mysql|mongodb|redis|amqp|mssql):\/\/[^\s'"<>]*[A-Za-z0-9=/]/gi, confidence: 0.95 },
   // The capture class previously omitted `.`, so any value containing a dot was
   // not matched at all — including every `client_secret`, most passwords, and

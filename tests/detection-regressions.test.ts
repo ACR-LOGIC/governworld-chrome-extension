@@ -177,6 +177,45 @@ describe("a finding must never leave part of a credential exposed", () => {
   });
 });
 
+describe("auth schemes are case-insensitive (RFC 7235 2.1)", () => {
+  // Found by a Copilot review of this range: the Bearer and Basic rules were
+  // written without the `i` flag, so only the exactly-capitalised spelling was
+  // masked. RFC 7235 section 2.1 makes the auth-scheme token case-insensitive
+  // and lowercase `bearer` is what HTTP/2 and most modern APIs emit, so the
+  // common spelling was the one leaking. The generic credential-assignment
+  // rule does not cover either form, so nothing else caught them.
+  const TOKEN = "AbCdEf123456ghijklmnopQRST";
+  const B64 = fx("YWRtaW46c3VwZXJz", "ZWNyZXQxMjM=");
+
+  it.each(["Bearer", "bearer", "BEARER", "BeArEr"])(
+    "detects a bearer token under the scheme %s",
+    (scheme) => {
+      expect(values(`Authorization: ${scheme} ${TOKEN}`, "secrets"), scheme).toContain(TOKEN);
+    },
+  );
+
+  it.each(["Basic", "basic", "BASIC", "BaSiC"])(
+    "detects basic-auth credentials under the scheme %s",
+    (scheme) => {
+      const found = values(`Authorization: ${scheme} ${B64}`, "secrets");
+      expect(found.length, `${scheme} leaked`).toBeGreaterThan(0);
+      expect(found.join(" "), `${scheme} leaked`).toContain(B64);
+    },
+  );
+
+  it("does not turn the case-insensitive scheme into a false positive", () => {
+    // The `i` flag is on the scheme word only; it must not turn an ordinary
+    // sentence into a credential.
+    for (const prose of [
+      "The bearer walked ahead of the procession.",
+      "basic arithmetic is taught early",
+      "Please bear with us while we rebuild the index.",
+    ]) {
+      expect(values(prose, "secrets"), `false positive: ${prose}`).toEqual([]);
+    }
+  });
+});
+
 describe("resolveOverlaps picks by priority, not by position", () => {
   it("keeps a high-priority match that starts inside a lower-priority one", () => {
     const merged = resolveOverlaps([
