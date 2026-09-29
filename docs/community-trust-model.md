@@ -93,17 +93,38 @@ Each step aborts on failure and leaves local rules untouched and fully working.
    Failure → abort. This is the only step that establishes authenticity.
 4. `minClientVersion` newer than the running version → abort. An old client
    must not install rules whose validation it cannot perform.
-5. Run every rule through the existing `isValidCommunityRule()` — category,
-   flag allowlist, length bounds, `isSafeRegex()`. Drop failures. If the
-   signature was valid and rules still fail validation, that is a publisher bug
-   and is worth logging.
+5. Every rule must pass `isValidCommunityRule()` — category, flag allowlist,
+   length bounds, `isSafeRegex()`. **One invalid rule rejects the whole pack.**
 6. Anti-rollback: reject any pack whose `seq` is not greater than the highest
    `seq` already accepted for that `packId`.
 7. Install.
 
+Steps 2 to 6 in §10's ordering, with one deliberate change from the first draft
+of this document: rules are now **all-or-nothing** rather than individually
+dropped. A pack is a coherent policy unit, and silently dropping one rule from a
+validly signed pack leaves the user believing they have a protection they do not
+have — which is the same failure mode as a pack that never matches, and is the
+one thing this design exists to prevent. A validly signed pack containing a rule
+that fails validation is a publisher bug, and failing loudly is the right
+response to one.
+
 On any abort the user is told community rules are unavailable. The extension must
 **never** run unverified rules, and must never silently fall back to running them
 anyway.
+
+### What is implemented today
+
+Step 1 of §9 is complete: `src/shared/communityPack.ts` implements the envelope
+format, `parseCommunityPack()`, `verifyCommunityPack()`, the anti-rollback store
+(`readAcceptedSeq` / `recordAcceptedPack`), and a pinned-key constant that is
+**deliberately `null`**. 46 tests cover it, including real ECDSA P-256 signing
+and tamper detection rather than a stubbed verifier.
+
+The pinned key being null is the load-bearing property: it means no pack can
+verify, so the network path cannot be enabled by accident. Wiring it up without
+also provisioning and reviewing a key still leaves the path inert. Nothing
+outside the test file imports the module, and both service-worker community
+cases still return an error.
 
 ## 6. What a signature deliberately does not protect
 
@@ -174,15 +195,97 @@ silently alter detection is a materially different risk from surfacing them for
 the user to judge, and it keeps the user in the loop exactly where the
 extension's threat model wants them.
 
-## 10. Open questions requiring a decision
+## 10. Open questions
 
-- Who holds the publisher signing key, and under what custody and rotation
-  procedure?
-- Who owns the revocation runbook, and what is the target turnaround?
-- Is `minClientVersion` enforced before or after the rules are staged, and
-  should a too-new pack leave a visible "update required" state?
-- What is the review bar for a rule being *accepted into* a pack — a human
-  reviewer, automated checks, or both?
+### 10.1 Key custody — specified, owner not yet named
+
+The substance is decided; only a name is missing.
+
+**Requirement.** The publisher signing key must be generated and held so that no
+single person, and no single machine reachable from the internet, can sign a
+pack unilaterally. Concretely:
+
+- Generated on an offline or air-gapped host. Never on a build server, never in
+  CI, never in a repository.
+- Non-exportable wherever the platform allows it (HSM, or a
+  `CryptoKey` with `extractable: false` in a hardened offline tool).
+- Two-person control: release requires two distinct custodians. A single
+  compromised laptop must not be sufficient to publish rules to every install.
+- Access is logged with a timestamp, the pack id, and the operator identity, and
+  the log is retained beyond pack expiry so a leak can be investigated.
+- **The public key fingerprint is published** in the repository, the store
+  listing, and the docs. A key change that nobody notices is a key compromise
+  that goes undetected.
+- Rotation is a store release, shipping two pinned keys (current and next) with
+  an overlap window, then removing the old one in a later release.
+
+**Still required from the business:** who the two custodians are, and which
+hosting satisfies the offline/non-exportable requirement. Neither is a technical
+decision.
+
+### 10.2 Revocation runbook — procedure specified, owner not yet named
+
+- A revocation list is signed by the **same** publisher key and served from the
+  same endpoint as packs, containing revoked `packId`s with a timestamp and
+  reason. Its signature is verified with the same pinned key.
+- Consulted on every refresh, before installing anything.
+- A revoked `packId` is refused, and its stored `seq` is cleared so a future
+  pack for the same id can be accepted only at a higher sequence.
+- **Target turnaround: publish the list within 4 hours of deciding to revoke.**
+  A pack expiry of 7 days is the backstop, so a stale revocation list cannot
+  extend a compromised pack's life by more than that.
+- Trigger conditions, any of which starts the clock: suspected key compromise,
+  discovery that a hostile rule was published, a validation bypass in the
+  verifier, or a publisher-side signing accident.
+
+**Still required from the business:** who is on call for that 4-hour target, and
+who can authorise revocation.
+
+### 10.3 `minClientVersion` enforcement point — decided and implemented
+
+**Decided: enforce before anything is staged or installed**, in
+`verifyCommunityPack()`, as step 4 of §5. An old client must not learn about
+rules it cannot fully validate, and "community rules unavailable, update
+required" is a better failure than a partially understood policy set. A test
+asserts that an unparseable version on *either* side fails closed rather than
+being coerced.
+
+This also means the check must run before `recordAcceptedPack()`, so a rejected
+pack leaves no stored state behind. Implemented and covered.
+
+### 10.4 Rule-acceptance bar — substance specified, threshold open
+
+The bar for a rule being *accepted into* a pack, because signing proves
+provenance and not quality (§6):
+
+**Automated, and must pass before any pack is signed:**
+
+- `isValidCommunityRule()` — the same gate the extension enforces, so a rule can
+  never be published that the extension would reject.
+- A ReDoS check against hostile input of 200k characters, with a hard budget. The
+  extension's `isSafeRegex()` is a syntactic gate, not a proof of bounded
+  execution, so a rule must clear an actual timing measurement.
+- A differential check: the rule must not match on a corpus of benign text
+  (documentation, invoices, code samples) at a rate above a stated threshold.
+  This is what stops a pack from quietly widening over-redaction.
+- A precision floor on a labelled corpus, and a review of any rule that fires on
+  fewer than a minimum number of distinct real-world examples — a rule that only
+  ever matched one sample is a target, not a detector.
+
+**Human, and required for:**
+
+- Any rule in a `secrets` category. Those match credentials, and a false
+  positive there corrupts a user's configuration while a false negative exposes
+  a credential.
+- Any rule with a lookbehind, a backreference, or a nested quantifier, since
+  those are where the ReDoS and correctness risks concentrate.
+- Any change to a rule an existing pack already ships. Rules are immutable once
+  published; a change is a new rule id, so history stays auditable.
+
+**Still required from the business:** who signs off the human review, and the
+numeric thresholds for the precision floor and the benign-corpus false-positive
+rate. The mechanism is specified; the numbers are a judgement call about risk
+tolerance.
 
 ## 11. Non-goals
 
@@ -191,3 +294,36 @@ extension's threat model wants them.
 - The document pipeline gains **no network path.** OCR and PDF assets stay
   vendored, and OCR stays fail-closed on unbundled languages.
 - This document does not change the stubbed-off state of either community path.
+
+## 12. Contribution screener: known limits
+
+`screenContributionPayload()` exists to enforce PRIVACY.md's "your contribution
+is the logic, not the source data" promise. An independent review flagged
+"separator and normalisation gaps" without listing them, so they were then
+enumerated empirically. Nine were real and are now closed:
+
+- Dot- and slash-separated identifiers (`219.09.9999`, `219/09/9999`).
+- Non-breaking, thin, en, and em spaces and dashes as separators. `\s` already
+  covers the Unicode spaces but not the en/em dashes that appear in text
+  produced by word processors and pasted from typeset documents.
+- Fullwidth digits and fullwidth card numbers, via NFKC folding.
+- Email addresses with a non-ASCII local part, such as `josé@realco.com`.
+
+One trap worth recording: the first version of the normaliser folded `.` and `/`
+to hyphens as well, which silently broke the email check — `a.b@realco.com`
+became `a-b@realco-com` and stopped matching at all. A normalisation that
+destroys the structure the next check depends on is worse than no normalisation.
+Dots and slashes are now handled in the identifier pattern instead, and tests
+assert the ordinary forms still pass.
+
+**Deliberately not folded: Arabic-Indic, Devanagari, and similar digits.** Every
+identifier these checksums cover is defined over ASCII digits, so a string
+written in another script is not a malformed instance of any of them — it is not
+one of them, and there is no checksum for it to satisfy. Folding them would need
+a per-script zero-offset table. `Number()` is not a shortcut either: it parses
+only ASCII, so it returns `NaN` for U+0669, and the first attempt at this
+rewrite replaced such digits with the literal string `"NaN"`.
+
+The normaliser runs only on the screening copy. The submitted rule is the user's
+own text, byte for byte, because normalising it would rewrite someone's pattern
+into a different rule from the one they tested.

@@ -387,12 +387,15 @@ export function screenContributionPayload(
 
   for (const { field, text } of screened) {
     if (text.length === 0) continue;
-    if (EMAIL_LITERAL_RE.test(text)) return { safe: false, field, kind: "email address" };
-    for (const m of text.matchAll(DEA_LITERAL_RE)) {
+    // Only the screening copy is folded. `text` itself, and the payload built
+    // below, stay byte-for-byte what the user typed and tested.
+    const scan = normaliseForScan(text);
+    if (EMAIL_LITERAL_RE.test(scan)) return { safe: false, field, kind: "email address" };
+    for (const m of scan.matchAll(DEA_LITERAL_RE)) {
       if (isValidDea(m[0])) return { safe: false, field, kind: "provider identifier" };
     }
-    for (const m of text.matchAll(NUMERIC_ID_RE)) {
-      const digits = m[0].replace(/[\s-]/g, "");
+    for (const m of scan.matchAll(NUMERIC_ID_RE)) {
+      const digits = m[0].replace(/[./-]/g, "");
       if (digits.length < NUMERIC_ID_MIN_DIGITS || digits.length > NUMERIC_ID_MAX_DIGITS) continue;
       if (
         isValidSsn(digits) ||
@@ -418,17 +421,17 @@ export function screenContributionPayload(
   return { safe: true, payload: buildContributionPayload(pattern) };
 }
 
-const EMAIL_LITERAL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
+const EMAIL_LITERAL_RE = /[\p{L}\p{N}._%+-]+@[\p{L}\p{N}.-]+\.\p{L}{2,}/u;
 /**
  * DEA registration numbers are letter-prefixed, so the digit-run scan misses
  * them; the checksum is still what confirms the value is a real identifier.
  */
 const DEA_LITERAL_RE = /\b[A-Za-z][A-Za-z0-9]{8,10}\b/g;
 /**
- * Candidate identifier runs: digits, optionally separated by hyphen or space.
+ * Candidate identifier runs: digits, optionally separated by punctuation.
  *
  * The separator matters. SSNs and payment cards are habitually written
- * `219-09-9999` and `4111 1111 1111 1111`, so a scan for a *contiguous* run of
+ * `219-09-9999` and `4111 1111 4111 1111`, so a scan for a *contiguous* run of
  * six or more digits never sees them and passes them straight through. The
  * separators are stripped before the checksum runs, because the checksum is
  * defined over digits.
@@ -436,10 +439,54 @@ const DEA_LITERAL_RE = /\b[A-Za-z][A-Za-z0-9]{8,10}\b/g;
  * Structure is not matched: a quantifier or character class (`\d{3}`,
  * `[0-9]{10}`, `\d{6,19}`) leaves digit groups too short to reach the length
  * floor, so rules that are purely structural still pass.
+ *
+ * Every separator here is either a plain hyphen produced by `normaliseForScan`
+ * or a dot or solidus, which it does not fold, so dot- and slash-separated
+ * identifiers are still seen as one run.
  */
-const NUMERIC_ID_RE = /\d[\d -]{4,24}\d|\d{6,19}/g;
+const NUMERIC_ID_RE = /-?\d[\d./-]{4,24}\d|\d{6,19}/g;
 const NUMERIC_ID_MIN_DIGITS = 6;
 const NUMERIC_ID_MAX_DIGITS = 19;
+
+/**
+ * Fold a string into the ASCII shape the identifier checksums are defined over.
+ *
+ * An independent review flagged separator and normalisation gaps, and they were
+ * real: the scan only understood ASCII digits with `-` or space between them.
+ * Everything below passed straight through a screener that is supposed to be
+ * the last thing standing between a user's real data and a public rule pack:
+ *
+ *   - Unicode decimal digits. NFKC folds the fullwidth forms (U+FF10-FF19),
+ *     which is the case that actually occurs, from a system that renders digits
+ *     in fullwidth style.
+ *
+ * Arabic-Indic, Devanagari and similar digits are deliberately NOT folded, and
+ * this is a reasoned decision rather than an oversight. Every identifier
+ * covered here - SSN, ITIN, MBI, NHS, NPI, CUSIP, ISIN, SEDOL, LOINC, SIN,
+ * Aadhaar, PAN, TFN, CPF, and Luhn payment cards - is a format defined over
+ * ASCII digits. A string written in another script is not a malformed instance
+ * of any of them; it is simply not one of them, so there is no checksum to
+ * satisfy and nothing for this screener to catch. Folding them would also
+ * require a per-script zero-offset table, and `Number()` is not a shortcut
+ * here: it parses only ASCII, so it returns NaN for U+0669 and would rewrite
+ * the text to the literal string "NaN".
+ *
+ * Dot and solidus separated SSNs, which some legacy systems emit, are handled
+ * in the identifier pattern itself rather than by folding those characters
+ * here. Folding them broke the email check, which depends on a dot separating
+ * the domain from the top-level name: `a.b@realco.com` was being folded to
+ * `a-b@realco-com` and stopped looking like an address at all.
+ *
+ * This is applied ONLY to the screening copy. The submitted rule is the user's
+ * own text, byte for byte, because normalising it would silently rewrite
+ * someone's pattern - and a rewritten regex is a different rule from the one
+ * they tested. Folding the scan copy does not widen what the detector will
+ * later run: a pattern containing fullwidth digits still will not match ASCII
+ * input.
+ */
+function normaliseForScan(text: string): string {
+  return text.normalize("NFKC").replace(/[\s‐-―−⁃]+/g, "-");
+}
 
 /**
  * Build the payload that may be sent to GovernWorld for community review.

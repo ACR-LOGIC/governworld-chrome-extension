@@ -179,19 +179,20 @@ describe("fetchCommunityRules", () => {
   });
 });
 
+const BASE = {
+  id: "p1",
+  name: "Internal Ticket Reference",
+  category: "custom",
+  pattern: "TKT-\\d{6}",
+  flags: "gi",
+  captureGroup: 0,
+  confidence: 0.8,
+  createdAt: "2026-09-01T00:00:00.000Z",
+  source: "wizard",
+} as const;
+
 describe("contribution screening", () => {
-  const pattern = (overrides: Record<string, unknown> = {}) => ({
-    id: "p1",
-    name: "Internal Ticket Reference",
-    category: "custom",
-    pattern: "TKT-\\d{6}",
-    flags: "gi",
-    captureGroup: 0,
-    confidence: 0.8,
-    createdAt: "2026-09-01T00:00:00.000Z",
-    source: "wizard",
-    ...overrides,
-  });
+  const pattern = (overrides: Record<string, unknown> = {}) => ({ ...BASE, ...overrides });
 
   it("passes a genuine rule through untouched", () => {
     const r = screenContributionPayload(pattern() as never);
@@ -257,5 +258,79 @@ describe("contribution screening", () => {
     if (!r.safe) return;
     const serialized = JSON.stringify(r.payload);
     expect(serialized).not.toMatch(/"id"|"createdAt"|"source"/);
+  });
+});
+
+describe("screening survives how people actually write identifiers", () => {
+  // An independent review noted "separator and normalisation gaps" without
+  // listing them, so they were enumerated empirically. Nine were real and are
+  // now closed; the two that remain open are argued, not overlooked.
+  const pat = (pattern: string) => ({ ...BASE, pattern });
+
+  it.each([
+    ["dot separated", "219.09.9999"],
+    ["slash separated", "219/09/9999"],
+    ["non-breaking space separated", "219 09 9999"],
+    ["thin space separated", "219 09 9999"],
+    ["en dash separated", "219–09–9999"],
+    ["em dash separated", "219—09—9999"],
+    ["fullwidth digits", "２１９-０９-９９９９"],
+    ["fullwidth card", "４５３９５７８７６３６２１４８６"],
+  ])("blocks an SSN written with %s", (_label, pattern) => {
+    vi.mocked(validators.isValidSsn).mockReturnValue(true);
+    const r = screenContributionPayload(pat(pattern) as never);
+    expect(r.safe, `not blocked: ${pattern}`).toBe(false);
+  });
+
+  it("blocks a card written with dashes, spaces, or fullwidth digits", () => {
+    for (const p of ["4539-5787-6362-1486", "4539 5787 6362 1486", "４５３９５７８７６３６２１４８６"]) {
+      expect(screenContributionPayload(pat(p) as never).safe, `not blocked: ${p}`).toBe(false);
+    }
+  });
+
+  it("blocks an email with a unicode local part", () => {
+    for (const p of ["josé@realco.com", "a+b@realco.com", "a.b.c@realco.com"]) {
+      expect(screenContributionPayload(pat(p) as never).safe, `not blocked: ${p}`).toBe(false);
+    }
+  });
+
+  it("does not corrupt ordinary prose into a false positive", () => {
+    // The first version of the normaliser folded "." and "/" to hyphens, which
+    // broke the email check: "a.b@realco.com" became "a-b@realco-com" and
+    // stopped matching at all. These guard the structure the fold must preserve.
+    for (const p of [
+      "case\\.example\\.com",
+      "v1\\.2\\.3",
+      "a\\.b|foo\\.bar",
+      "\\d+\\.\\d+",
+      "path/to/file",
+    ]) {
+      expect(screenContributionPayload(pat(p) as never).safe, `false positive: ${p}`).toBe(true);
+    }
+  });
+
+  it("leaves the submitted rule byte-identical to what the user typed", () => {
+    // The normaliser must never rewrite the rule itself. A rewritten regex is a
+    // different rule from the one the user tested, and normalising the payload
+    // would be a silent behaviour change on the way to a public rule pack.
+    const exotic = "٢١٩-٠٩-9999 \\.x";
+    const r = screenContributionPayload(pat(exotic) as never);
+    expect(r.safe).toBe(true);
+    if (r.safe) expect(r.payload.pattern).toBe(exotic);
+  });
+
+  it("does not fold non-ASCII digits, and does not corrupt them either", () => {
+    // Deliberate: every identifier these checksums cover is defined over ASCII
+    // digits, so a string in another script is not a malformed instance of any
+    // of them - it is not one of them. Folding would need a per-script offset
+    // table, and Number() returns NaN for U+0669, which would have rewritten
+    // the text to the literal string "NaN".
+    const arabic = "٢١٩-٠٩-٩٩٩٩";
+    const r = screenContributionPayload(pat(arabic) as never);
+    expect(r.safe).toBe(true);
+    if (r.safe) {
+      expect(r.payload.pattern).toBe(arabic);
+      expect(r.payload.pattern).not.toContain("NaN");
+    }
   });
 });
