@@ -585,16 +585,29 @@ function detectMbis(text: string): RawMatch[] {
 }
 
 const SECRET_PATTERNS: { label: string; regex: RegExp; confidence: number }[] = [
-  { label: "OpenAI API key", regex: /\bsk-[A-Za-z0-9]{20,}\b/g, confidence: 0.95 },
+  // OpenAI. `sk-proj-` is the current project-key form and contains a hyphen
+  // after `sk-`, so the older `[A-Za-z0-9]{20,}` class stopped at the hyphen and
+  // missed every project key outright. The hyphenated prefix is matched first,
+  // then the plain legacy form.
+  { label: "OpenAI API key", regex: /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\b/g, confidence: 0.95 },
   { label: "Anthropic API key", regex: /\bsk-ant-[A-Za-z0-9_\-]{20,}\b/g, confidence: 0.95 },
   { label: "Google API key", regex: /\bAIza[0-9A-Za-z_\-]{35}\b/g, confidence: 0.95 },
   { label: "Stripe API key", regex: /\b(?:rk|sk|pk)_(?:live|test)_[A-Za-z0-9]{24,48}\b/g, confidence: 0.99 },
   { label: "GitHub token", regex: /\b(?:ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9]{22}_[A-Za-z0-9]{59})\b/g, confidence: 0.99 },
-  { label: "Slack token", regex: /\bxox[baprs]-[A-Za-z0-9]{10,48}\b/g, confidence: 0.99 },
-  { label: "SendGrid key", regex: /\bSG\.[A-Za-z0-9]{22}\b/g, confidence: 0.99 },
+  // Slack tokens are hyphen-separated groups: xoxb-<team>-<bot>-<secret>. The
+  // single-segment form matched only the first group and left the rest of the
+  // credential sitting in plain text next to the mask, which is the opposite of
+  // what this tool is for.
+  { label: "Slack token", regex: /\bxox[baprs](?:-[A-Za-z0-9]{10,48}){1,4}/g, confidence: 0.99 },
+  // SendGrid is SG.<22>.<43>. Matching only the first group left the 43-character
+  // signature visible.
+  { label: "SendGrid key", regex: /\bSG\.[A-Za-z0-9_-]{16,32}\.[A-Za-z0-9_-]{16,64}\b/g, confidence: 0.99 },
   { label: "npm token", regex: /\bnpm_[A-Za-z0-9]{36}\b/g, confidence: 0.99 },
   { label: "Twilio key", regex: /\bSK[0-9a-fA-F]{32}\b/g, confidence: 0.9 },
-  { label: "Databricks token", regex: /\bdapi-[0-9a-fA-F]{32}\b/g, confidence: 0.99 },
+  // Databricks tokens are `dapi` followed by 32 hex characters with no hyphen.
+  // Requiring one meant the pattern never fired and real tokens fell through to
+  // the generic credential-assignment rule at 0.8 confidence.
+  { label: "Databricks token", regex: /\bdapi-?[0-9a-fA-F]{32}\b/g, confidence: 0.99 },
   { label: "AWS secret", regex: /\baws_secret_access_key\s*=\s*['"]?([A-Za-z0-9/+=]{40})['"]?/g, confidence: 0.95 },
   { label: "Azure account key", regex: /\bAccountKey\s*=\s*[A-Za-z0-9+/]{86,88}={0,2}/g, confidence: 0.9 },
   { label: "Private key", regex: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY-----/g, confidence: 0.99 },

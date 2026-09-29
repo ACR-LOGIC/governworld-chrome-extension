@@ -32,7 +32,10 @@ export async function renderPdfPages(
   dpi = 150
 ): Promise<RenderedPage[]> {
   configurePdfWorker();
-  const loadingTask = pdfjsLib.getDocument({ data, isEvalSupported: false, useSystemFonts: true });
+  // `isEvalSupported` is gone in pdf.js 6: the library no longer compiles
+  // anything at runtime, so the flag that used to disable it no longer exists.
+  // Passing it is a type error, and its absence is the stronger guarantee.
+  const loadingTask = pdfjsLib.getDocument({ data, useSystemFonts: true });
   const pdf = await loadingTask.promise;
 
   try {
@@ -66,7 +69,9 @@ export async function renderPdfPages(
       const ctx = canvas.getContext("2d", { willReadFrequently: true });
       if (!ctx) throw new Error("Canvas rendering is unavailable.");
 
-      await page.render({ canvasContext: ctx, viewport, intent: "print" }).promise;
+      // pdf.js 6 requires `canvas` on the render parameters; `canvasContext` is
+      // the legacy form and must not be passed unless the canvas is null.
+      await page.render({ canvas, viewport, intent: "print" }).promise;
 
       let hasTextLayer = false;
       try {
@@ -87,6 +92,9 @@ export async function renderPdfPages(
     }
     return out;
   } finally {
-    void pdf.destroy();
+    // Teardown moved to the loading task in pdf.js 6, and it also tears the
+    // worker down. `PDFDocumentProxy.destroy()` no longer exists, so the old
+    // call left the worker alive for the life of the document.
+    await loadingTask.destroy().catch(() => undefined);
   }
 }

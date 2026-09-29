@@ -26,6 +26,9 @@ const entries = [
   { entry: "src/popup/entry.ts", out: "popup.js", format: "iife" },
   { entry: "src/sidepanel/sidepanel.ts", out: "sidepanel.js", format: "iife" },
   { entry: "src/offscreen/offscreen.ts", out: "offscreen.js", format: "esm" },
+  // Print/PDF view. Its own entry so the print path never pulls the popup's
+  // controller into the page, and so the page has no scan logic at all.
+  { entry: "src/popup/redact.ts", out: "redact.js", format: "iife" },
 ];
 
 for (const { entry, out, format } of entries) {
@@ -46,6 +49,7 @@ copyFileSync(join(root, "src/landing", "index.html"), join(outDir, "landing.html
 copyFileSync(join(root, "src/landing", "landing.js"), join(outDir, "landing.js"));
 copyFileSync(join(root, "src/popup", "privacy.html"), join(outDir, "privacy.html"));
 copyFileSync(join(root, "src/popup", "legal.html"), join(outDir, "legal.html"));
+copyFileSync(join(root, "src/popup", "redact.html"), join(outDir, "redact.html"));
 copyFileSync(join(root, "manifest.json"), join(outDir, "manifest.json"));
 copyFileSync(join(root, "PRIVACY.md"), join(outDir, "PRIVACY.md"));
 copyFileSync(join(root, "PERMISSIONS.md"), join(outDir, "PERMISSIONS.md"));

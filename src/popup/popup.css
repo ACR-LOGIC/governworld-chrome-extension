@@ -988,17 +988,18 @@ body[data-reduced-motion="true"] *::after {
   min-width: 0;
 }
 
+/* The brand mark is the shipped GovernWorld emblem, not a drawn stand-in:
+   icons/icon-128.png is generated from brand/logo-master.png by
+   `npm run icons`. The tile already carries its own navy field and rounded
+   corners, so this container must not add a second background or border or the
+   two stack. */
 .brand-icon {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 36px;
   height: 36px;
   border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, #101c33, #0b1222);
-  border: 1px solid var(--border-strong);
-  color: var(--accent);
   flex: none;
-  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.06), 0 4px 14px -6px rgba(0, 0, 0, 0.8);
+  object-fit: contain;
 }
 
 .brand-text {

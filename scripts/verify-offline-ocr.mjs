@@ -113,13 +113,51 @@ const worker = await createWorker("eng", 1, {
 });
 
 try {
-  const { data } = await worker.recognize(pngPath);
+  // Request the same output the extension requests, and traverse it the same
+  // way. tesseract.js 7 does NOT include `blocks` in the default output, so a
+  // bare recognize() would report success while data.blocks is null — and the
+  // document pipeline would silently redact nothing. Asserting the traversal
+  // here is what catches that class of regression; checking data.text alone
+  // does not.
+  const { data } = await worker.recognize(pngPath, undefined, { blocks: true, text: true });
   const normalized = data.text.toUpperCase().replace(/\s+/g, " ").trim();
   console.log(`OCR output: ${JSON.stringify(normalized)}`);
   if (!/HELLO/.test(normalized)) {
     throw new Error(`OCR output did not match expectation: ${JSON.stringify(normalized)}`);
   }
-  console.log("Offline OCR smoke test passed (no network).");
+
+  if (!data.blocks || data.blocks.length === 0) {
+    throw new Error(
+      "recognize() returned no blocks. tesseract.js no longer populates them by default, " +
+        "so the extension must pass { blocks: true } — see src/document-pipeline/ocr.ts."
+    );
+  }
+
+  // Mirror ocrCanvas(): page -> blocks -> paragraphs -> lines -> words.
+  const words = [];
+  let lineCount = 0;
+  for (const block of data.blocks) {
+    for (const paragraph of block.paragraphs ?? []) {
+      for (const line of paragraph.lines ?? []) {
+        lineCount += 1;
+        for (const w of line.words ?? []) words.push(w);
+      }
+    }
+  }
+  const wordText = words.map((w) => w.text).join("").toUpperCase();
+  console.log(`OCR blocks=${data.blocks.length} lines=${lineCount} words=${words.length} text=${JSON.stringify(wordText)}`);
+  if (words.length === 0) {
+    throw new Error("blocks present but the block/paragraph/line/word traversal yielded no words");
+  }
+  if (!/HELLO/.test(wordText)) {
+    throw new Error(`word traversal lost the text: ${JSON.stringify(wordText)}`);
+  }
+  for (const w of words) {
+    if (typeof w.bbox?.x0 !== "number" || typeof w.bbox?.y0 !== "number") {
+      throw new Error("word is missing a numeric bbox; page coordinates are required to draw redactions");
+    }
+  }
+  console.log("Offline OCR smoke test passed (no network, block traversal verified).");
 } finally {
   await worker.terminate();
 }

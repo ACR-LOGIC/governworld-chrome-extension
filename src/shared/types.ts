@@ -106,6 +106,12 @@ export type PopupMessage =
   | { type: "POPUP_DOC_REDACT"; requestId: string; docId: string; fileKey: string; name: string; mimeType: string; kind: DocKind; boxes: { pageIndex: number; rects: Rect[] }[]; findingIds: string[]; options?: RedactionOptions }
   | { type: "POPUP_DOC_CLEAR"; requestId: string; docId: string }
   | { type: "POPUP_DOC_CANCEL"; requestId: string; docId: string }
+  /**
+   * Opens the read-only print/PDF view for an already-redacted document. The
+   * fileKey names a manifest in the shared store; the page loads the page
+   * bitmaps itself, so no image crosses the message boundary.
+   */
+  | { type: "POPUP_DOC_PRINT"; requestId: string; fileKey: string }
   | {
       /**
        * The popup's actual delivery outcome for an artifact the worker could not
@@ -241,7 +247,19 @@ export type PopupFromWorker =
       pages: DocPageMeta[];
       error?: { code: string; userMessage: string };
     }
-  | { type: "POPUP_DOC_DONE"; requestId: string; outputName: string; outputBytesBase64?: string; outputMimeType?: string }
+  | {
+      type: "POPUP_DOC_DONE";
+      requestId: string;
+      outputName: string;
+      outputBytesBase64?: string;
+      outputMimeType?: string;
+      /**
+       * Set when the redacted pages were staged for the print view. It is a
+       * store key, not page content, so the message stays well inside the
+       * runtime size budget. Absent means the print view is unavailable.
+       */
+      printFileKey?: string;
+    }
   | {
       type: "POPUP_DOC_STATUS";
       requestId: string;
@@ -332,6 +350,7 @@ export const MESSAGE_TYPES = new Set<string>([
   "POPUP_DOC_REDACT",
   "POPUP_DOC_CLEAR",
   "POPUP_DOC_CANCEL",
+  "POPUP_DOC_PRINT",
   "POPUP_DOC_STATUS",
   "POPUP_DOC_DELIVERY_REPORT",
   "SCAN_PAGE",

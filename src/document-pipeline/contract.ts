@@ -12,6 +12,8 @@ import type { RedactionVerification } from "./verify.js";
  * extension contexts ignore them.
  */
 
+import type { RedactedDocRef } from "../shared/docStore.js";
+
 export const OFFSCREEN_CHANNEL = "doc-pipeline";
 
 /** Hard cap on pages processed per document (mirrors impl defaults). */
@@ -74,6 +76,12 @@ export interface OffscreenRedactRequest {
   boxes: { pageIndex: number; rects: Rect[] }[];
   padding: number;
   options?: RedactionOptions;
+  /**
+   * Key used to namespace the staged redacted pages for the print view. Derived
+   * from the document's own file key so a second redaction of the same file
+   * replaces its print pages rather than accumulating stale ones.
+   */
+  fileKey?: string;
 }
 
 export type OffscreenRequest = OffscreenPreviewRequest | OffscreenRedactRequest;
@@ -107,6 +115,13 @@ export interface OffscreenRedactResponse {
   redactedCount: number;
   /** Evidence that the redaction actually landed in the produced pixels. */
   verification: RedactionVerification;
+  /**
+   * Store-backed handle for the print view. Carries geometry and store keys only
+   * — no page content — so it stays well inside the runtime message limit.
+   * Absent when staging failed, which is not an error: the download is still
+   * correct, only the print affordance is unavailable.
+   */
+  printRef?: RedactedDocRef | null;
 }
 
 export interface OffscreenRedactError {

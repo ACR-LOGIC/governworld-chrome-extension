@@ -1,0 +1,130 @@
+<!-- Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GovernWorld Redaction — Print &amp; PDF</title>
+    <link rel="stylesheet" href="popup.css" />
+    <style>
+      /* Print layout.
+         Each redacted page is a fixed-size sheet matching the source page's own
+         dimensions, so what prints is the page as it was, not a re-flow. Chrome's
+         print pipeline honours @page size when `size` is declared per sheet, which
+         is why the size is set inline from the stored page geometry rather than
+         guessed here. */
+      @page {
+        margin: 0;
+      }
+
+      .sheet {
+        break-after: page;
+        page-break-after: always;
+        overflow: hidden;
+        background: #fff;
+        display: block;
+      }
+
+      .sheet:last-of-type {
+        break-after: auto;
+        page-break-after: auto;
+      }
+
+      .sheet img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      @media print {
+        .printbar,
+        .printnote {
+          display: none !important;
+        }
+        body {
+          background: #fff;
+        }
+      }
+
+      @media screen {
+        body {
+          background: var(--bg);
+        }
+        .printbar {
+          position: sticky;
+          top: 0;
+          z-index: 10;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 16px;
+          background: var(--bg-elevated);
+          border-bottom: 1px solid var(--border);
+        }
+        .printbar__title {
+          font-size: 14px;
+          font-weight: 600;
+          margin-right: auto;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .printnote {
+          margin: 0 auto;
+          padding: 8px 16px;
+          max-width: 70ch;
+          font-size: 12px;
+          line-height: 1.5;
+          color: var(--text-muted);
+          text-align: center;
+        }
+        .sheets {
+          padding: 16px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 16px;
+          /* A page can be wider than the window; scroll rather than distort it. */
+          overflow-x: auto;
+        }
+        .sheet {
+          box-shadow: 0 8px 30px -12px rgba(0, 0, 0, 0.8);
+          /*
+            The sheet carries the source page's physical size in mm. It must not
+            be a flex item that can shrink or grow: with `align-items: center`
+            and a percentage-sized child, fit-content resolution is circular and
+            the browser collapses the sheet to a fraction of its real size. Pin
+            it with `flex: none` and let the image fill it.
+          */
+          flex: none;
+        }
+        .sheet img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="printbar">
+      <span class="printbar__title" id="print-title">Redacted document</span>
+      <span class="pill" id="print-count" hidden></span>
+      <button type="button" class="btn btn--sm" id="print-btn" disabled>Print…</button>
+      <button type="button" class="btn btn--primary btn--sm" id="pdf-btn" disabled>Save as PDF</button>
+    </div>
+
+    <p class="printnote" id="print-note">
+      These are the pages after redaction was applied and verified on this device.
+      Check them yourself before you print or share them.
+    </p>
+
+    <div class="sheets" id="sheets" role="region" aria-label="Redacted pages"></div>
+    <p class="printnote" id="print-status" role="status" aria-live="polite"></p>
+
+    <script src="redact.js"></script>
+  </body>
+</html>

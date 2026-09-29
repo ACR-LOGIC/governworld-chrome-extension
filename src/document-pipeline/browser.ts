@@ -161,6 +161,7 @@ export class BrowserDocumentPipeline implements DocumentPipeline {
       boxes,
       padding: effectiveOptions?.padding ?? input.padding,
       options: effectiveOptions,
+      fileKey: input.previewKeyPrefix,
     });
     assertOk(response, "redact");
     if (response.op !== "redact") throw new Error("Unexpected offscreen response.");
@@ -175,6 +176,7 @@ export class BrowserDocumentPipeline implements DocumentPipeline {
         categories: input.categories,
       },
       verification: response.verification,
+      printRef: response.printRef ?? null,
     };
   }
 }

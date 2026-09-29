@@ -9,7 +9,14 @@ import { loadDocxPages } from "./docx.js";
 import { findingsFromOcrPages } from "./core.js";
 import { applyBoxes, canvasToPngBytes, pagesToPdf } from "./render.js";
 import { pagePixelVerification, verifyCanvasRegions, verifyEncodedPng, type RedactionVerification, type RegionCoverage } from "./verify.js";
-import { previewKey as previewStoreKey, putDocBytes } from "../shared/docStore.js";
+import {
+  previewKey as previewStoreKey,
+  putDocBytes,
+  redactedKey,
+  redactedManifestKey,
+  type RedactedDocRef,
+  type RedactedPageRef,
+} from "../shared/docStore.js";
 
 /**
  * Document pipeline implementation. Runs inside the offscreen document where
@@ -60,6 +67,8 @@ export interface RedactOutput {
   outputName: string;
   redactedCount: number;
   verification: RedactionVerification;
+  /** Store-backed handle for the print/PDF view, or null if staging failed. */
+  printRef?: RedactedDocRef | null;
 }
 
 async function loadPages(
@@ -104,12 +113,60 @@ export async function runDocumentPreview(input: PreviewInput): Promise<DocumentP
   return [...grouped.values()];
 }
 
+/**
+ * Write the redacted page bitmaps and a manifest into the shared document store,
+ * keyed by fileKey, so redact.html can render and print them later.
+ *
+ * Runs after applyBoxes + verifyCanvasRegions, so what is staged is exactly what
+ * was verified. A failure here is non-fatal: the flattened output is already
+ * produced, and a print view is an extra affordance, not part of the redaction
+ * guarantee.
+ */
+async function stageRedactedPages(
+  pages: (RenderedPage | ImagePage)[],
+  name: string,
+  redactedCount: number,
+  fileKey: string
+): Promise<RedactedDocRef | null> {
+  try {
+    const refs: RedactedPageRef[] = [];
+    for (const page of pages) {
+      const png = await canvasToPngBytes(page.canvas);
+      const key = redactedKey(fileKey, page.index);
+      await putDocBytes(key, png.buffer as ArrayBuffer);
+      refs.push({
+        pageIndex: page.index,
+        key,
+        widthPx: page.canvas.width,
+        heightPx: page.canvas.height,
+        widthPt: page.widthPt,
+        heightPt: page.heightPt,
+      });
+    }
+    if (refs.length === 0) return null;
+    const manifest: RedactedDocRef = {
+      fileKey,
+      key: redactedManifestKey(fileKey),
+      name,
+      pages: refs,
+      redactedCount,
+      createdAt: Date.now(),
+    };
+    await putDocBytes(manifest.key, new TextEncoder().encode(JSON.stringify(manifest)).buffer as ArrayBuffer);
+    return manifest;
+  } catch {
+    // Never let the print path turn a completed redaction into a failure.
+    return null;
+  }
+}
+
 export async function runDocumentRedact(
   input: PipelineInput,
   boxes: { pageIndex: number; rects: Rect[] }[],
   maxPages: number,
   padding = DEFAULT_PADDING,
-  options?: RedactionOptions
+  options?: RedactionOptions,
+  fileKey = "print"
 ): Promise<RedactOutput> {
   const { pages, flattenToPdf } = await loadPages(input, maxPages);
   const boxMap = new Map<number, Rect[]>();
@@ -130,6 +187,12 @@ export async function runDocumentRedact(
   }
   const redactedCount = boxes.reduce((n, b) => n + b.rects.length, 0);
 
+  // Stage the redacted pages for the print view. These are the verified pixels,
+  // not the source document, so the print view is a pure renderer and cannot
+  // itself fail to redact. Written by key rather than inlined: a base64 page
+  // image would exceed the runtime message limit.
+  const printRef = await stageRedactedPages(pages, input.name, redactedCount, fileKey);
+
   if (flattenToPdf) {
     const pngs = await Promise.all(
       pages.map(async (p) => ({ pngBytes: await canvasToPngBytes(p.canvas), widthPt: p.widthPt, heightPt: p.heightPt }))
@@ -141,7 +204,8 @@ export async function runDocumentRedact(
       outputMimeType: "application/pdf",
       outputName: `${base}-redacted.pdf`,
       redactedCount,
-      verification: pagePixelVerification(totals)
+      verification: pagePixelVerification(totals),
+      printRef,
     };
   }
 
@@ -151,5 +215,12 @@ export async function runDocumentRedact(
   // checked directly. That is the strongest claim available: these are the exact
   // bytes the browser will write to disk.
   const verification = await verifyEncodedPng(outputBytes, boxMap.get(pages[0].index) ?? [], padding, options);
-  return { outputBytes, outputMimeType: "image/png", outputName: `${base}-redacted.png`, redactedCount, verification };
+  return {
+    outputBytes,
+    outputMimeType: "image/png",
+    outputName: `${base}-redacted.png`,
+    redactedCount,
+    verification,
+    printRef,
+  };
 }

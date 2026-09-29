@@ -10,7 +10,7 @@
   <main id="app" class="app" role="main">
     <header class="app-header">
       <div class="brand">
-        <span class="brand-icon" aria-hidden="true">◈</span>
+        <img class="brand-icon" src="icons/icon-128.png" alt="" width="36" height="36" />
         <div class="brand-text">
           <h1 data-i18n="brand_title">GovernWorld</h1>
           <span class="brand-subtitle" data-i18n="brand_subtitle">Privacy Intelligence</span>
@@ -182,9 +182,23 @@
         <button id="doc-cancel-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="doc_cancel">Cancel</button>
       </div>
 
-      <div id="doc-status" class="summary" hidden role="status" aria-live="polite">
-        <p id="doc-status-text" class="summary__note"></p>
-      </div>
+        <div id="doc-status" class="summary" hidden role="status" aria-live="polite">
+          <p id="doc-status-text" class="summary__note"></p>
+        </div>
+
+        <!--
+          Print / PDF view for the redacted output. Appears only after a
+          redaction that produced pixel-verified pages, and opens a read-only
+          render of those pages. It never re-redacts anything: the boxes were
+          already painted and verified on this device, so what prints is exactly
+          what was checked.
+        -->
+        <div id="doc-print-bar" class="form-row" hidden>
+          <button type="button" class="btn btn--ghost btn--sm" id="doc-print-btn" data-i18n="doc_print_btn">
+            Print / Save as PDF…
+          </button>
+        </div>
+
 
       <div class="dropzone-section">
         <div id="doc-dropzone" class="dropzone" role="region" aria-label="Document upload" tabindex="0">

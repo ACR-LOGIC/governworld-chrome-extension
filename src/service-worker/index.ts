@@ -97,10 +97,37 @@ function sessionKey(tabId: number): string {
   return `${SESSION_KEY_PREFIX}${tabId}`;
 }
 
+/**
+ * Runtime guard for a value read back out of chrome.storage.session.
+ *
+ * Storage is a trust boundary: any extension page can write to it, and the
+ * value may be absent, truncated, or written by an older version of the
+ * extension. Returning it unvalidated would let a malformed session drive the
+ * scan flow, so an unrecognisable value is treated as "no session" and the
+ * caller starts fresh.
+ */
+function isSessionState(value: unknown): value is SessionState {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Partial<SessionState>;
+  return (
+    typeof v.sessionId === "string" &&
+    (v.mode === "local" || v.mode === "cloud") &&
+    Array.isArray(v.findings) &&
+    typeof v.stats === "object" &&
+    v.stats !== null &&
+    typeof v.stats.visibleChars === "number" &&
+    typeof v.stats.truncated === "boolean" &&
+    typeof v.scannedAt === "number" &&
+    typeof v.scanning === "boolean"
+  );
+}
+
 async function readSession(tabId: number): Promise<SessionState | null> {
-  const raw = await chrome.storage.session.get(sessionKey(tabId));
-  const value = raw[sessionKey(tabId)];
-  return value ?? null;
+  const key = sessionKey(tabId);
+  const raw: unknown = await chrome.storage.session.get(key);
+  if (typeof raw !== "object" || raw === null) return null;
+  const value = (raw as Record<string, unknown>)[key];
+  return isSessionState(value) ? value : null;
 }
 
 async function writeSession(tabId: number, state: SessionState): Promise<void> {
@@ -492,7 +519,7 @@ async function handlePopupDocRedact(
   options?: RedactionOptions
 ): Promise<void> {
   try {
-    const { outputName, outputBytes, outputMimeType, verification, redactedRegions } = await redactDocument(
+    const { outputName, outputBytes, outputMimeType, verification, redactedRegions, printRef } = await redactDocument(
       docId,
       fileKey,
       name,
@@ -555,7 +582,7 @@ async function handlePopupDocRedact(
       // "ok" unconditionally would still be wrong, but this path genuinely
       // succeeded.
       void recordAudit({ ts: new Date().toISOString(), action: "doc_redacted", docHash, outcome: "ok" });
-      notifyPopup({ type: "POPUP_DOC_DONE", requestId, outputName, outputMimeType });
+      notifyPopup({ type: "POPUP_DOC_DONE", requestId, outputName, outputMimeType, printFileKey: printRef?.fileKey });
     } else {
       // The worker cannot know whether the popup's fallback download reached the
       // user, so it must not decide the audit outcome. Wait for the report.
@@ -566,6 +593,7 @@ async function handlePopupDocRedact(
         outputName,
         outputBytesBase64: bytesToBase64(outputBytes),
         outputMimeType,
+        printFileKey: printRef?.fileKey,
       });
     }
   } catch (error) {
@@ -1520,6 +1548,23 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
         // Closes the audit loop for a fallback delivery the worker handed off.
         await settleDeliveryAudit(msg.requestId, msg.delivered);
         break;
+      case "POPUP_DOC_PRINT": {
+        // Opens the read-only print/PDF view in a normal tab. It is an extension
+        // page, so it is same-origin with the store holding the redacted pages.
+        try {
+          await chrome.tabs.create({
+            url: chrome.runtime.getURL(`redact.html?key=${encodeURIComponent(msg.fileKey)}`),
+          });
+        } catch (error) {
+          notifyPopup({
+            type: "POPUP_DOC_ERROR",
+            requestId: msg.requestId,
+            code: "DOC_ERROR",
+            userMessage: error instanceof Error ? error.message : "The print view could not be opened.",
+          });
+        }
+        break;
+      }
       case "POPUP_EXPORT_AUDIT": {
         try {
           const exported = await exportSignedAuditLog();

@@ -41,6 +41,11 @@ you cover them up:
 - **Redact documents locally.** Open a PDF, image, or Word document, review the
   detected values on each page, and download a **new flattened copy** with the
   values covered in black. The original file is never modified or uploaded.
+- **Print or save to PDF.** After a redaction, open a print-ready view of the
+  redacted pages and print them, or choose "Save as PDF" in Chrome's own print
+  dialog. The view shows the pages exactly as they were verified on this device,
+  at the original page size, and it cannot redact anything itself — a box that
+  failed to be applied can never print as a clean page.
 - **Signed audit log.** Every scan, mask, document, and preset change is
   recorded as metadata-only, tamper-evident, ECDSA-signed audit entries.
 

@@ -4,6 +4,7 @@ import type { CustomPattern } from "../shared/customPatterns.js";
 import { maskContext, maskValue } from "../content/detect.js";
 import { detect } from "../content/detect.js";
 import type { OcrPageResult, OcrToken } from "./ocr.js";
+import { tokenSpans as computeTokenSpans, type TokenSpan } from "./offsets.js";
 
 /**
  * Pure document-analysis logic shared by preview and redact paths. Runs inside
@@ -15,24 +16,18 @@ import type { OcrPageResult, OcrToken } from "./ocr.js";
 const TOKEN_GAP_PX = 10;
 const CONTEXT_WINDOW = 40;
 
-export interface TokenSpan {
-  start: number;
-  end: number;
-  token: OcrToken;
-}
+export type { TokenSpan };
 
-/** Reconstruct char offsets exactly as ocr.ts joins tokens into fullText. */
-export function tokenSpans(tokens: OcrToken[]): TokenSpan[] {
-  let pos = 0;
-  const spans: TokenSpan[] = [];
-  for (let i = 0; i < tokens.length; i++) {
-    const sep = i > 0 ? (tokens[i].lineIndex !== tokens[i - 1].lineIndex ? "\n" : " ") : "";
-    const start = pos + sep.length;
-    const end = start + tokens[i].text.length;
-    pos = end;
-    spans.push({ start, end, token: tokens[i] });
-  }
-  return spans;
+/**
+ * Char offsets of each token within the page's fullText.
+ *
+ * Delegates to the shared implementation in offsets.ts, which is the same
+ * function ocr.ts uses to build fullText. It used to be a second copy of that
+ * rule here, kept in sync only by a comment; when the two drifted, redaction
+ * boxes were drawn over content that was never detected.
+ */
+export function tokenSpans(tokens: OcrToken[]): TokenSpan<OcrToken>[] {
+  return computeTokenSpans(tokens);
 }
 
 function rectsIntersect(a: Rect, b: Rect): boolean {
@@ -62,8 +57,8 @@ function unionRect(rects: Rect[]): Rect {
  * Merge matched token boxes into one or more rects, splitting on line changes
  * so a multi-line match yields separate redaction boxes.
  */
-function rectsForSpans(spans: TokenSpan[]): Rect[] {
-  const groups: TokenSpan[][] = [];
+function rectsForSpans(spans: TokenSpan<OcrToken>[]): Rect[] {
+  const groups: TokenSpan<OcrToken>[][] = [];
   for (const span of spans) {
     const last = groups[groups.length - 1];
     if (last && span.token.lineIndex === last[0].token.lineIndex) {

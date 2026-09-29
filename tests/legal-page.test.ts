@@ -116,14 +116,23 @@ describe("legal.html (Terms & Conditions)", () => {
     expect(legal).not.toMatch(/<script(?![^>]*\bsrc=)/i);
     expect(legal).not.toMatch(/\beval\s*\(/);
     expect(legal).not.toMatch(/new Function\s*\(/);
-    // Only relative links and https/mailto externals; no images, CSS, or frames
-    // fetched from the network.
-    expect(legal).not.toMatch(/<img\b/i);
+    // No stylesheet link and no frames: the page is self-contained so it renders
+    // identically packaged, hosted, or printed.
     expect(legal).not.toMatch(/<link\b/i);
     expect(legal).not.toMatch(/<iframe\b/i);
+    // Images are allowed, but only as packaged paths. The brand mark is
+    // icons/icon-128.png, which is part of the extension; a remote or
+    // protocol-relative image would be a network fetch and a CSP concern.
+    const imgs = [...legal.matchAll(/<img\b[^>]*>/gi)].map((m) => m[0]);
+    for (const tag of imgs) {
+      const src = /\bsrc="([^"]*)"/i.exec(tag)?.[1] ?? "";
+      expect(src, `image src must be a packaged relative path: ${tag}`).toMatch(/^[a-z0-9._/-]+$/i);
+      expect(src).not.toMatch(/^(\/\/|https?:)/i);
+    }
+    // Any absolute URL anywhere must be https and must not be protocol-relative.
     const remote = legal.match(/(?:src|href)="(https?:)?\/\/[^"]+"/g) ?? [];
     for (const attr of remote) {
-      expect(attr).not.toMatch(/="\/\//); // protocol-relative would bypass the CSP origin check
+      expect(attr, `protocol-relative URL would bypass the CSP origin check: ${attr}`).not.toMatch(/^="/);
     }
   });
 

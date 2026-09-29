@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import { createWorker, type Worker } from "tesseract.js";
+import { assembleOcrText } from "./offsets.js";
 
 /**
  * Local OCR via Tesseract. Worker/core/lang assets are resolved to bundled
@@ -126,32 +127,47 @@ export async function ocrCanvas(
 ): Promise<OcrPageResult> {
   const worker = await getWorker(lang);
   const source = canvas instanceof OffscreenCanvas ? await canvas.convertToBlob() : await canvasToBlob(canvas);
-  const result = await worker.recognize(source);
+  // tesseract.js 7 restructured the result tree to
+  // page -> blocks -> paragraphs -> lines -> words, and `blocks` is NOT part of
+  // the default output. Without this request `data.blocks` is null and
+  // recognition returns zero tokens while still reporting success — the
+  // document pipeline would quietly redact nothing.
+  const result = await worker.recognize(source, undefined, { blocks: true, text: true });
   const data = result.data;
   const tokens: OcrToken[] = [];
-  for (let lineIdx = 0; lineIdx < (data.lines?.length ?? 0); lineIdx++) {
-    for (const w of data.lines[lineIdx].words) {
-      tokens.push({
-        text: w.text,
-        confidence: w.confidence,
-        lineIndex: lineIdx,
-        bbox: {
-          x: w.bbox.x0,
-          y: w.bbox.y0,
-          width: w.bbox.x1 - w.bbox.x0,
-          height: w.bbox.y1 - w.bbox.y0,
-        },
-      });
+  // A flat line index across the whole page keeps the token stream comparable
+  // with the pre-v7 shape, where every line of the page was in one list.
+  let lineIndex = 0;
+  for (const block of data.blocks ?? []) {
+    for (const paragraph of block.paragraphs ?? []) {
+      for (const line of paragraph.lines ?? []) {
+        for (const w of line.words ?? []) {
+          tokens.push({
+            text: w.text,
+            confidence: w.confidence,
+            lineIndex,
+            bbox: {
+              x: w.bbox.x0,
+              y: w.bbox.y0,
+              width: w.bbox.x1 - w.bbox.x0,
+              height: w.bbox.y1 - w.bbox.y0,
+            },
+          });
+        }
+        lineIndex += 1;
+      }
     }
   }
-  const fullText = tokens
-    .map((t, i) => (i > 0 && t.lineIndex !== tokens[i - 1].lineIndex ? "\n" : i > 0 ? " " : "") + t.text)
-    .join("");
+  const fullText = assembleOcrText(tokens);
   return {
     pageIndex,
     widthPx: canvas.width,
     heightPx: canvas.height,
     tokens,
+    // Must be the token-derived text, not Tesseract's own `data.text`: detection
+    // runs over this string and core.ts maps the resulting offsets back to page
+    // rectangles with the same function. Tesseract's text uses different
+    // spacing, so returning it here silently misplaces every redaction box.
     fullText,
   };
 }

@@ -3,6 +3,7 @@ import type { DocumentPage } from "../document-pipeline/adapter.js";
 import { BrowserDocumentPipeline } from "../document-pipeline/browser.js";
 import { MAX_DOC_PAGES } from "../document-pipeline/contract.js";
 import type { RedactionVerification } from "../document-pipeline/verify.js";
+import type { RedactedDocRef } from "../shared/docStore.js";
 import type { DocKind, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
 import { loadSettings, meetsThreshold } from "../shared/settings.js";
 import { loadCustomPatterns } from "../shared/customPatterns.js";
@@ -181,7 +182,7 @@ export async function redactDocument(
   boxes: { pageIndex: number; rects: Rect[] }[],
   findingIds: string[],
   options?: RedactionOptions
-): Promise<{ outputName: string; outputBytes: Uint8Array; outputMimeType: string; verification: RedactionVerification; redactedRegions: number }> {
+): Promise<{ outputName: string; outputBytes: Uint8Array; outputMimeType: string; verification: RedactionVerification; redactedRegions: number; printRef: RedactedDocRef | null }> {
   const session = sessions.get(docId);
   if (!session || session.fileKey !== fileKey || session.kind !== kind || session.name !== name) {
     throw new Error("This document is no longer loaded. Please re-open it.");
@@ -236,6 +237,7 @@ export async function redactDocument(
     outputBytes: result.outputBytes,
     outputMimeType: result.outputMimeType,
     verification: result.verification,
-    redactedRegions: targetBoxes.reduce((n, b) => n + b.rects.length, 0)
+    redactedRegions: targetBoxes.reduce((n, b) => n + b.rects.length, 0),
+    printRef: result.printRef ?? null
   };
 }

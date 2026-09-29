@@ -1,224 +1,185 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
-// Generates the extension icon set (16/32/48/128) as PNGs with zero image
-// dependencies. Supersampled SDF design: deep-navy gradient tile, cyan shield
-// with a scan-line, and a solid white redaction bar. Run: node scripts/make-icons.mjs
-import { deflateSync } from "node:zlib";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+//
+// Generates the extension icon set (16/32/48/128) plus a 512px emblem from the
+// GovernWorld logo master. Run:
+//
+//   node scripts/make-icons.mjs <path-to-master.png>
+//
+// With no argument it uses the copy committed at brand/logo-master.png, so the
+// icons are reproducible from the repository alone.
+//
+// Why this is a raster pipeline rather than the old SDF drawing: the shipped
+// artwork is the brand's logo, and a hand-drawn approximation of it is not the
+// brand. Still no image dependency — decode/encode are pure Node plus zlib
+// (scripts/lib/png.mjs).
+//
+// Geometry is measured from the master, not guessed. The emblem (globe, shield
+// with the GW monogram and padlock, and the orbital rings) occupies
+// y 131..838 and x 182..1081 in the 1254x1254 master, and the GOVERNORLD
+// wordmark starts at y 849. The emblem is 899x707 — wider than tall — so a
+// square crop that kept the whole emblem would drag in the top of the
+// wordmark. Instead the emblem is composited whole, centred, onto a rounded
+// tile in the brand's own deep navy, which is what the surrounding UI uses.
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { decodePng, encodePng, resamplePremultiplied } from "./lib/png.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const outDir = join(root, "icons");
+const iconDir = join(root, "icons");
+const committed = join(root, "brand", "logo-master.png");
+const masterPath = process.argv[2] ?? committed;
 
-const CRC_TABLE = (() => {
-  const table = new Uint32Array(256);
-  for (let n = 0; n < 256; n++) {
-    let c = n;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    table[n] = c >>> 0;
-  }
-  return table;
-})();
-
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (const byte of buf) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
+if (!readFileSync) throw new Error("unreachable");
+let master;
+try {
+  master = readFileSync(masterPath);
+} catch {
+  console.error(`logo master not found: ${masterPath}`);
+  console.error("pass the master explicitly, e.g. node scripts/make-icons.mjs C:/path/to/logo.png");
+  process.exit(1);
 }
 
-function chunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(body));
-  return Buffer.concat([len, body, crc]);
+const src = decodePng(master);
+const { width: MW, height: MH, channels: MC, data: MD } = src;
+console.log(`master: ${masterPath}`);
+console.log(`        ${MW}x${MH}, colourType=${src.colorType}`);
+
+// Emblem bounds in master coordinates, verified by scripts/logo-measure.mjs.
+const EMBLEM = { x0: 182, y0: 131, x1: 1081, y1: 838 };
+const emW = EMBLEM.x1 - EMBLEM.x0;
+const emH = EMBLEM.y1 - EMBLEM.y0;
+
+// Fraction of the tile the emblem spans. Leaves a clear margin so the mark does
+// not touch the tile edge, which matters at 16px.
+const FILL = 0.88;
+
+// Brand tile. The master's own field is near-black; the UI uses a deep navy, so
+// the tile matches the UI rather than introducing a second black.
+const TILE_TOP = [0x0e, 0x1a, 0x30];
+const TILE_BOTTOM = [0x07, 0x0d, 0x1a];
+
+/** Smoothstep from 0 to 1 between edge0 and edge1. */
+function smoothstep(edge0, edge1, x) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
 }
 
-function encodePng(width, height, rgba) {
-  const sig = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(width, 0);
-  ihdr.writeUInt32BE(height, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 6; // color type RGBA
-  const raw = Buffer.alloc(height * (width * 4 + 1));
-  for (let y = 0; y < height; y++) {
-    raw[y * (width * 4 + 1)] = 0; // filter: none
-    rgba.copy(raw, y * (width * 4 + 1) + 1, y * width * 4, (y + 1) * width * 4);
-  }
-  return Buffer.concat([sig, chunk("IHDR", ihdr), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
-}
-
-// ---- design (SDF, supersampled at SS for crisp edges) ----
-const BASE = 128;
-const SS = 4; // supersample factor
-
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-
-/** Signed distance to a rounded rectangle centered at (cx,cy). Negative = inside. */
-function sdRoundedRect(x, y, cx, cy, hw, hh, r) {
-  const dx = Math.abs(x - cx) - (hw - r);
-  const dy = Math.abs(y - cy) - (hh - r);
-  const ax = Math.max(dx, 0);
-  const ay = Math.max(dy, 0);
-  return Math.hypot(ax, ay) + Math.min(Math.max(dx, dy), 0) - r;
-}
-
-/** Signed distance to a shield path (vertical axis of symmetry through cx). */
-function sdShield(x, y, cx, top, hw, tip, hh) {
-  const sx = Math.abs(x - cx);
-  const cy = tip + hh;
-  // Left/right edges slope from (hw,top) to (0,tip).
-  const edgeX = sx <= (hw * (y - top)) / (tip - top) ? sx : 1e9;
-  // Bounding: above top or below tip is outside.
-  if (y < top || y > tip) return 1e9;
-  return edgeX;
-}
-
-function lerp(a, b, t) {
-  return a + (b - a) * t;
-}
-
-/** Render one supersampled sub-pixel. Returns [r,g,b,a]. */
-function sample(x, y) {
-  // 1. Background tile: rounded square with vertical gradient + faint top glow.
-  const tile = sdRoundedRect(x, y, BASE / 2, BASE / 2, BASE / 2 - 1, BASE / 2 - 1, 30);
-  let a = 0;
-  let r = 0, g = 0, b = 0;
-
-  if (tile <= 0) {
-    const t = y / BASE;
-    // deep navy vertical gradient
-    let cr = lerp(0x14, 0x09, t);
-    let cg = lerp(0x2b, 0x15, t);
-    let cb = lerp(0x48, 0x28, t);
-    // subtle top inner highlight
-    const glow = clamp(1 - y / 42, 0, 1) * 0.18;
-    cr += glow * 60;
-    cg += glow * 90;
-    cb += glow * 120;
-    a = 1;
-    r = cr;
-    g = cg;
-    b = cb;
-  } else {
-    return [0, 0, 0, 0];
-  }
-
-  // 2. Shield body (fill + cyan stroke).
-  const SHIELD_CX = BASE / 2;
-  const SHIELD_TOP = 22;
-  const SHIELD_TIP = 104;
-  const SHIELD_HW = 30;
-  const SHIELD_STROKE = 5;
-
-  const edgeHalfW = (SHIELD_HW * (y - SHIELD_TOP)) / (SHIELD_TIP - SHIELD_TOP);
-  const insideShield = y >= SHIELD_TOP && y <= SHIELD_TIP && Math.abs(x - SHIELD_CX) <= edgeHalfW;
-  const edgeDist = Math.abs(Math.abs(x - SHIELD_CX) - edgeHalfW);
-
-  if (insideShield) {
-    // Fill: slightly lighter navy than the tile.
-    const fill = [0x15, 0x32, 0x52];
-    // Smooth fill under the stroke band.
-    if (edgeDist > SHIELD_STROKE) {
-      r = lerp(r, fill[0], 0.85);
-      g = lerp(g, fill[1], 0.85);
-      b = lerp(b, fill[2], 0.85);
-    } else {
-      // Cyan stroke band.
-      const s = clamp((SHIELD_STROKE - edgeDist) / SHIELD_STROKE, 0, 1);
-      const cyCol = [0x22, 0xd3, 0xee];
-      r = lerp(r, cyCol[0], s);
-      g = lerp(g, cyCol[1], s);
-      b = lerp(b, cyCol[2], s);
-    }
-  }
-
-  // 3. Scan line across the shield top.
-  const SCAN_Y = 36;
-  const SCAN_H = 3;
-  const scanEdge = Math.abs(y - SCAN_Y) - SCAN_H / 2;
-  const scanInX = Math.abs(x - SHIELD_CX) <= (SHIELD_HW * (SCAN_Y - SHIELD_TOP)) / (SHIELD_TIP - SHIELD_TOP) - 2;
-  if (scanInX && scanEdge <= 0) {
-    const s = 1;
-    r = lerp(r, 0x22, s);
-    g = lerp(g, 0xd3, s);
-    b = lerp(b, 0xee, s);
-  }
-
-  // 4. White redaction bar (rounded) through the middle.
-  const bar = sdRoundedRect(x, y, SHIELD_CX, 66, 24, 7, 4);
-  if (bar <= 0) {
-    const aa = clamp(-bar, 0, 1);
-    r = lerp(r, 255, aa);
-    g = lerp(g, 255, aa);
-    b = lerp(b, 255, aa);
-  }
-
-  // 5. Small cyan "overridden" notch dot below the bar (evidence accent).
-  const dot = Math.hypot(x - SHIELD_CX, y - 86) - 3;
-  if (dot <= 0 && Math.abs(x - SHIELD_CX) <= edgeHalfW) {
-    const aa = clamp(-dot, 0, 1);
-    r = lerp(r, 0x22, aa);
-    g = lerp(g, 0xd3, aa);
-    b = lerp(b, 0xee, aa);
-  }
-
-  return [r, g, b, a * 255];
-}
-
-function renderBase() {
-  const W = BASE * SS;
-  const px = new Float64Array(W * W * 4);
-  for (let y = 0; y < W; y++) {
-    for (let x = 0; x < W; x++) {
-      const i = (y * W + x) * 4;
-      const [r, g, b, a] = sample((x + 0.5) / SS, (y + 0.5) / SS);
-      px[i] = r;
-      px[i + 1] = g;
-      px[i + 2] = b;
-      px[i + 3] = a;
-    }
-  }
-  return px;
-}
-
-function downscale(px, size) {
-  const out = Buffer.alloc(size * size * 4);
-  const factor = (BASE * SS) / size;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      let r = 0, g = 0, b = 0, a = 0;
-      const x0 = Math.floor(x * factor);
-      const y0 = Math.floor(y * factor);
-      const x1 = Math.min(BASE * SS, Math.ceil((x + 1) * factor));
-      const y1 = Math.min(BASE * SS, Math.ceil((y + 1) * factor));
-      let count = 0;
-      for (let sy = y0; sy < y1; sy++) {
-        for (let sx = x0; sx < x1; sx++) {
-          const i = (sy * (BASE * SS) + sx) * 4;
-          r += px[i];
-          g += px[i + 1];
-          b += px[i + 2];
-          a += px[i + 3];
-          count++;
-        }
-      }
-      const o = (y * size + x) * 4;
-      out[o] = Math.round(r / count);
-      out[o + 1] = Math.round(g / count);
-      out[o + 2] = Math.round(b / count);
-      out[o + 3] = Math.round(a / count);
+/**
+ * Sample the master into *premultiplied* RGBA, cropping to the emblem and
+ * keying out the master's near-black field.
+ *
+ * Without the key, the emblem carries its own dark rectangle and the tile
+ * gradient shows only as a border around it. The mark is emissive artwork on a
+ * near-black ground, so luminance separates cleanly: the field sits at roughly
+ * 0..30 and the artwork starts around 40. A hard threshold would leave a jagged
+ * edge, so this ramps over that band.
+ *
+ * Colour is stored premultiplied and resampled with resamplePremultiplied. The
+ * obvious alternative — storing straight alpha and dividing the colour back out
+ * by it — rescales the master's faint field glow into a visible pale rectangle,
+ * because that field is near-black noise at a low alpha.
+ */
+function cropEmblemPremultiplied() {
+  const out = Buffer.alloc(emW * emH * 4);
+  for (let y = 0; y < emH; y++) {
+    for (let x = 0; x < emW; x++) {
+      const si = ((y + EMBLEM.y0) * MW + (x + EMBLEM.x0)) * MC;
+      const di = (y * emW + x) * 4;
+      const r = MD[si];
+      const g = MD[si + 1];
+      const b = MD[si + 2];
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      const a = smoothstep(2, 40, lum);
+      out[di] = Math.round(r * a);
+      out[di + 1] = Math.round(g * a);
+      out[di + 2] = Math.round(b * a);
+      out[di + 3] = Math.round(a * 255);
     }
   }
   return out;
 }
 
-mkdirSync(outDir, { recursive: true });
-const base = renderBase();
-for (const size of [16, 32, 48, 128]) {
-  const png = encodePng(size, size, downscale(base, size));
-  writeFileSync(join(outDir, `icon-${size}.png`), png);
-  console.log(`wrote icons/icon-${size}.png (${png.length} bytes)`);
+/** Composite the emblem onto a rounded navy tile at `size`. */
+function renderTile(size) {
+  const SS = 3; // supersample, so the rounded corners stay clean at 16px
+  const W = size * SS;
+  const emblem = cropEmblemPremultiplied();
+
+  // Fit the emblem to the tile by width, then centre it vertically.
+  const targetW = W * FILL;
+  const targetH = targetW * (emH / emW);
+  const scaledW = Math.max(1, Math.round(targetW));
+  const scaledH = Math.max(1, Math.round(targetH));
+  const emblemScaled = resamplePremultiplied(emblem, emW, emH, scaledW, scaledH);
+  const offX = Math.round((W - scaledW) / 2);
+  const offY = Math.round((W - scaledH) / 2);
+
+  // Rounded-square radius, matching the --radius-sm language of the UI.
+  const radius = W * 0.22;
+
+  const out = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let r = 0, g = 0, b = 0, a = 0;
+      for (let sy = 0; sy < SS; sy++) {
+        for (let sx = 0; sx < SS; sx++) {
+          const px = x * SS + sx + 0.5;
+          const py = y * SS + sy + 0.5;
+
+          // Tile coverage with a 1px feather for antialiasing.
+          const dx = Math.max(radius - px, px - (W - radius), 0);
+          const dy = Math.max(radius - py, py - (W - radius), 0);
+          const outside = Math.hypot(dx, dy) - radius;
+          const tileA = Math.max(0, Math.min(1, 0.5 - outside));
+          if (tileA <= 0) continue;
+
+          const t = py / W;
+          let tr = TILE_TOP[0] + (TILE_BOTTOM[0] - TILE_TOP[0]) * t;
+          let tg = TILE_TOP[1] + (TILE_BOTTOM[1] - TILE_TOP[1]) * t;
+          let tb = TILE_TOP[2] + (TILE_BOTTOM[2] - TILE_TOP[2]) * t;
+
+          // Emblem over tile, source-over. Both terms stay in 0..255:
+          // emblemScaled already holds premultiplied colour (r * a), so it is
+          // added directly rather than divided back out.
+          const ex = px - offX;
+          const ey = py - offY;
+          if (ex >= 0 && ey >= 0 && ex < scaledW && ey < scaledH) {
+            const ei = (Math.floor(ey) * scaledW + Math.floor(ex)) * 4;
+            const ea = emblemScaled[ei + 3] / 255;
+            if (ea > 0) {
+              tr = tr * (1 - ea) + emblemScaled[ei];
+              tg = tg * (1 - ea) + emblemScaled[ei + 1];
+              tb = tb * (1 - ea) + emblemScaled[ei + 2];
+            }
+          }
+
+          r += tr * tileA;
+          g += tg * tileA;
+          b += tb * tileA;
+          a += tileA;
+        }
+      }
+      const n = SS * SS;
+      const o = (y * size + x) * 4;
+      if (a > 0) {
+        out[o] = Math.min(255, Math.round(r / a));
+        out[o + 1] = Math.min(255, Math.round(g / a));
+        out[o + 2] = Math.min(255, Math.round(b / a));
+      }
+      out[o + 3] = Math.round((a / n) * 255);
+    }
+  }
+  return out;
 }
+
+mkdirSync(iconDir, { recursive: true });
+// Only the four sizes the manifest declares. The UI brand mark uses the 128px
+// file at 32-44 CSS px, so a larger render would be an unreferenced binary in
+// the repository.
+for (const size of [16, 32, 48, 128]) {
+  const png = encodePng(size, size, renderTile(size));
+  writeFileSync(join(iconDir, `icon-${size}.png`), png);
+  console.log(`wrote icons/icon-${size}.png (${size}x${size}, ${png.length} bytes)`);
+}
+console.log(`emblem source region: x ${EMBLEM.x0}..${EMBLEM.x1}  y ${EMBLEM.y0}..${EMBLEM.y1} (${emW}x${emH})`);

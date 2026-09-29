@@ -1187,6 +1187,11 @@ export async function initPopup(): Promise<void> {
   const docConfirmDialog = document.getElementById("doc-confirm-dialog") as HTMLDialogElement | null;
   const docCancel = document.getElementById("doc-cancel") as HTMLButtonElement | null;
   const docConfirm = document.getElementById("doc-confirm") as HTMLButtonElement | null;
+  const printBar = document.getElementById("doc-print-bar") as HTMLElement | null;
+  const docPrintBtn = document.getElementById("doc-print-btn") as HTMLButtonElement | null;
+
+  /** Store key of the last verified redaction, if one is still staged. */
+  let lastPrintFileKey: string | null = null;
 
   let lastState: PopupState | null = null;
 
@@ -1405,6 +1410,15 @@ export async function initPopup(): Promise<void> {
   });
 
   docCancel?.addEventListener("click", () => docConfirmDialog?.close());
+
+  // Opens the read-only print view in a tab. The button is only revealed after a
+  // redaction reported a staged print handle, so there is always a document to
+  // show; the guard here covers the case where the staged pages were since
+  // cleared from the store.
+  docPrintBtn?.addEventListener("click", () => {
+    if (!lastPrintFileKey) return;
+    void sendMessage({ type: "POPUP_DOC_PRINT", requestId: requestId(), fileKey: lastPrintFileKey });
+  });
 
   docConfirm?.addEventListener("click", async () => {
     docConfirmDialog?.close();
@@ -2339,6 +2353,19 @@ export async function initPopup(): Promise<void> {
         }
       } else {
         setDocStatus(`Saved ${message.outputName}. The original file was not changed.`, false);
+      }
+
+      // Offer the print view only when the worker actually staged verified
+      // pages. Absent printFileKey means staging failed; the download above is
+      // still correct, so the redaction is not treated as a failure.
+      if (printBar) {
+        if (message.printFileKey) {
+          lastPrintFileKey = message.printFileKey;
+          printBar.hidden = false;
+        } else {
+          printBar.hidden = true;
+          lastPrintFileKey = null;
+        }
       }
       clearDocUi();
       return;

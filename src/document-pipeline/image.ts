@@ -16,6 +16,19 @@ export interface ImagePage {
 
 const MAX_IMAGE_PIXELS = 24_000_000; // ~ 5.5k x 4.3k
 
+/**
+ * Pixels are converted to points at 96 DPI, the CSS reference resolution, so a
+ * 1240x1754 image becomes a 9.3x13.2 inch sheet.
+ *
+ * These used to be 0, which is not a valid page size anywhere downstream: the
+ * print view sizes its sheet from these numbers, and it rejected every image
+ * document as malformed. An image has no intrinsic PDF point geometry, so one
+ * has to be chosen, and 96 DPI is the one that matches how the browser itself
+ * treats image pixels as a physical size.
+ */
+const IMAGE_DPI = 96;
+const PX_TO_PT = 72 / IMAGE_DPI;
+
 export async function loadImagePage(bytes: ArrayBuffer): Promise<ImagePage> {
   const blob = new Blob([bytes]);
   const bitmap = await createImageBitmap(blob);
@@ -32,8 +45,8 @@ export async function loadImagePage(bytes: ArrayBuffer): Promise<ImagePage> {
       canvas,
       widthPx: canvas.width,
       heightPx: canvas.height,
-      widthPt: 0,
-      heightPt: 0,
+      widthPt: canvas.width * PX_TO_PT,
+      heightPt: canvas.height * PX_TO_PT,
       hasTextLayer: false,
     };
   } finally {

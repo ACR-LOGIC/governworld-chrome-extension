@@ -31,6 +31,87 @@ export function isPreviewKey(value: unknown): value is string {
   return typeof value === "string" && PREVIEW_KEY_RE.test(value);
 }
 
+/**
+ * Redacted output pages, staged for the print/PDF view.
+ *
+ * These are the pixels AFTER redaction has been painted and pixel-verified, so
+ * the print view never has to redact anything itself. A preview that redacted on
+ * render could not be verified, and a failed redaction would then reach the
+ * printer as a clean-looking page.
+ */
+export const REDACTED_KEY_RE = /^[A-Za-z0-9_-]{1,64}::redacted::\d{1,4}$/;
+
+export function redactedKey(fileKey: string, pageIndex: number): string {
+  return `${fileKey}::redacted::${pageIndex}`;
+}
+
+export function isRedactedKey(value: unknown): value is string {
+  return typeof value === "string" && REDACTED_KEY_RE.test(value);
+}
+
+/** One staged page of redacted output. */
+export interface RedactedPageRef {
+  pageIndex: number;
+  /** Store key for the PNG bytes; never inline the image in a message. */
+  key: string;
+  widthPx: number;
+  heightPx: number;
+  /** Page size in points, used to size the printed sheet. */
+  widthPt: number;
+  heightPt: number;
+}
+
+/**
+ * Descriptor written once per redaction run so the print view can enumerate the
+ * staged pages without the worker having to keep them in memory. It carries
+ * geometry and store keys only — no page content.
+ */
+export interface RedactedDocRef {
+  fileKey: string;
+  /** Store key for this manifest. */
+  key: string;
+  name: string;
+  pages: RedactedPageRef[];
+  redactedCount: number;
+  createdAt: number;
+}
+
+export const REDACTED_MANIFEST_KEY_RE = /^[A-Za-z0-9_-]{1,64}::redacted-manifest$/;
+
+export function redactedManifestKey(fileKey: string): string {
+  return `${fileKey}::redacted-manifest`;
+}
+
+export function isRedactedManifestKey(value: unknown): value is string {
+  return typeof value === "string" && REDACTED_MANIFEST_KEY_RE.test(value);
+}
+
+/**
+ * Narrow an untrusted value read from the store to a manifest. A print view that
+ * trusted stored geometry would lay out from whatever it found, so anything
+ * unexpected is rejected and the view reports that there is nothing to print.
+ */
+export function isRedactedDocRef(value: unknown): value is RedactedDocRef {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Partial<RedactedDocRef>;
+  if (typeof v.fileKey !== "string" || !REDACTED_MANIFEST_KEY_RE.test(`${v.fileKey}::redacted-manifest`)) return false;
+  if (typeof v.key !== "string" || !REDACTED_MANIFEST_KEY_RE.test(v.key)) return false;
+  if (typeof v.name !== "string" || v.name.length === 0 || v.name.length > 200) return false;
+  if (typeof v.redactedCount !== "number" || !Number.isFinite(v.redactedCount)) return false;
+  if (typeof v.createdAt !== "number" || !Number.isFinite(v.createdAt)) return false;
+  if (!Array.isArray(v.pages) || v.pages.length === 0 || v.pages.length > 500) return false;
+  for (const p of v.pages) {
+    if (typeof p !== "object" || p === null) return false;
+    const q = p as Partial<RedactedPageRef>;
+    if (typeof q.pageIndex !== "number" || !Number.isInteger(q.pageIndex) || q.pageIndex < 0) return false;
+    if (typeof q.key !== "string" || !REDACTED_KEY_RE.test(q.key)) return false;
+    for (const n of [q.widthPx, q.heightPx, q.widthPt, q.heightPt]) {
+      if (typeof n !== "number" || !Number.isFinite(n) || n <= 0) return false;
+    }
+  }
+  return true;
+}
+
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 export function openDocDb(): Promise<IDBDatabase> {

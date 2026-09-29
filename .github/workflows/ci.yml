@@ -16,7 +16,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Node 20 reached end-of-life on 2026-04-30, so it is no longer a
+          # supported build runtime. pdfjs-dist 6 also requires >=22.13. Node 24 is
+          # Active LTS and is supported until 2028-04-30.
+          node-version: 24
           cache: 'npm'
 
       - name: Install dependencies

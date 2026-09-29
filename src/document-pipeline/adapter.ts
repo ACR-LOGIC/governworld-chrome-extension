@@ -2,6 +2,7 @@
 import type { DocKind, Finding, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
 import type { CustomPattern } from "../shared/customPatterns.js";
 import type { RedactionVerification } from "./verify.js";
+import type { RedactedDocRef } from "../shared/docStore.js";
 
 /**
  * Document redaction pipeline seam (spec step 6).
@@ -73,6 +74,12 @@ export interface RedactedDocumentResult {
   * must not report success on the strength of `outputBytes` alone.
    */
   verification: RedactionVerification;
+  /**
+   * Store-backed handle to the redacted pages for the print/PDF view, or null
+   * when staging failed. Absent is not an error: the flattened download is
+   * already produced and verified; only the print affordance is missing.
+   */
+  printRef?: RedactedDocRef | null;
 }
 
 export interface DocumentPipeline {

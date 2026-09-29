@@ -74,7 +74,7 @@ try {
   }
 
   // Both legal documents must ship and be linked from the popup.
-  for (const page of ["privacy.html", "legal.html"]) {
+  for (const page of ["privacy.html", "legal.html", "redact.html"]) {
     if (existsSync(join(work, page))) ok(`legal page packaged: ${page}`);
     else fail.push(`${page} missing from zip`);
   }
@@ -106,7 +106,7 @@ try {
   const id = new URL(worker.url()).host;
   console.log(`\n  extension id: ${id} (loaded from the extracted zip)`);
 
-  const pages = ["popup.html", "sidepanel.html", "landing.html", "privacy.html", "legal.html"];
+  const pages = ["popup.html", "sidepanel.html", "landing.html", "privacy.html", "legal.html", "redact.html"];
   const pageErrors = [];
   for (const name of pages) {
     const p = await context.newPage();

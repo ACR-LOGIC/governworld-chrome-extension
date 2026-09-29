@@ -63,7 +63,8 @@ port.onMessage.addListener((raw: unknown) => {
         raw.boxes,
         MAX_DOC_PAGES,
         raw.padding,
-        raw.options
+        raw.options,
+        raw.fileKey
       );
       port.postMessage({
         channel: OFFSCREEN_CHANNEL,
@@ -75,6 +76,7 @@ port.onMessage.addListener((raw: unknown) => {
         outputName: out.outputName,
         redactedCount: out.redactedCount,
         verification: out.verification,
+        printRef: out.printRef ?? null,
       });
     } catch (error) {
       const e = toError(error);

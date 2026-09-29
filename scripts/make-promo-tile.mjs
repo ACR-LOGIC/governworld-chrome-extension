@@ -43,6 +43,16 @@ function pngSize(file) {
 }
 
 const t = tokens();
+// The real GovernWorld emblem, generated from brand/logo-master.png. Rendering
+// a hand-drawn stand-in here would make the store artwork show a different logo
+// from the product.
+const emblem = join(root, "icons", "icon-128.png");
+if (!existsSync(emblem)) {
+  console.error("icons/icon-128.png missing - run `npm run icons` first.");
+  process.exit(1);
+}
+const emblemB64 = readFileSync(emblem).toString("base64");
+
 const page = `<!doctype html><html><head><meta charset="utf-8"><style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: ${W}px; height: ${H}px; overflow: hidden; }
@@ -53,27 +63,24 @@ const page = `<!doctype html><html><head><meta charset="utf-8"><style>
     padding: 22px 24px;
     display: flex; flex-direction: column; justify-content: space-between;
   }
-  .mark { width: 34px; height: 34px; }
-  h1 { font-size: 21px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; }
+  .row { display: flex; align-items: center; gap: 14px; }
+  .mark { width: 62px; height: 62px; border-radius: 14px; flex: none; }
+  h1 { font-size: 23px; font-weight: 700; line-height: 1.1; letter-spacing: -0.01em; }
   .sub { margin-top: 5px; font-size: 11.5px; line-height: 1.4; color: ${t.muted}; }
   .foot { display: flex; align-items: center; gap: 7px;
           font-size: 9.5px; letter-spacing: 0.09em; text-transform: uppercase; color: ${t.accent}; }
   .dot { width: 6px; height: 6px; border-radius: 50%; background: ${t.accent}; }
-  .rule { height: 1px; background: linear-gradient(90deg, ${t.accent}, transparent); margin: 10px 0 0; }
+  .rule { height: 1px; background: linear-gradient(90deg, ${t.accent}, transparent); margin: 0 0 12px; }
 </style></head><body>
   <div>
-    <svg class="mark" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-      <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="${t.accent}"/><stop offset="1" stop-color="#0ea5e9"/>
-      </linearGradient></defs>
-      <path d="M24 4 L41 10 V23 C41 35 34 42 24 46 C14 42 7 35 7 23 V10 Z"
-            fill="none" stroke="url(#g)" stroke-width="2.6"/>
-      <rect x="16" y="22" width="16" height="4.4" rx="2.2" fill="#e6edf7"/>
-      <circle cx="24" cy="31" r="1.9" fill="#34d399"/>
-    </svg>
     <div class="rule"></div>
-    <h1>GovernWorld Redaction</h1>
-    <p class="sub">Detect and redact sensitive values in pages and documents — locally, on your device.</p>
+    <div class="row">
+      <img class="mark" src="data:image/png;base64,${emblemB64}" alt="" />
+      <div>
+        <h1>GovernWorld Redaction</h1>
+        <p class="sub">Detect and redact sensitive values in pages and documents &mdash; locally, on your device.</p>
+      </div>
+    </div>
   </div>
   <div class="foot"><span class="dot"></span>100% on-device</div>
 </body></html>`;

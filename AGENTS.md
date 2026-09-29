@@ -4,10 +4,11 @@
 
 ```bash
 npm run typecheck   # tsc --noEmit
-npm test            # vitest run — 45 files / 741 tests
+npm test            # vitest run — 49 files / 824 tests
 npm run build       # esbuild → dist/
 npx vitest run tests/dist-manifest.test.ts tests/offline-assets.test.ts
 npm run sync:sidepanel  # regenerate src/sidepanel/{sidepanel.html,sidepanel.css} from src/popup/
+npm run icons      # regenerate icons/ from brand/logo-master.png
 npm run capture:ui  # Playwright UI walkthrough → screenshots + video (needs a display)
 ```
 
@@ -26,7 +27,12 @@ npm run capture:ui  # Playwright UI walkthrough → screenshots + video (needs a
 - The build **fails closed** without `vendor/tessdata/eng.traineddata.gz` — it is vendored on purpose. Never delete it.
 - pdf.js worker, tesseract worker/core/wasm, and tessdata are copied into `dist/assets/` and loaded via `chrome.runtime.getURL`. The document pipeline must never fetch OCR/PDF assets from the network.
 - `dist/` is gitignored; `tests/dist-manifest.test.ts` skips without it.
-- Icons are generated deterministically — regenerate with `node scripts/make-icons.mjs`, never hand-edit `icons/`.
+- Icons are generated deterministically from `brand/logo-master.png` by `node scripts/make-icons.mjs`; never hand-edit `icons/`. The emblem is composited whole onto a rounded navy tile — a square crop cannot keep the orbital rings without clipping them, because the emblem is 899x707 and the wordmark starts 11px below it. `scripts/logo-measure.mjs` reprints the measured geometry if the master is ever replaced.
+- The brand mark everywhere else is `icons/icon-128.png` referenced from markup, not an inline SVG. A drawn stand-in is a second, different logo.
+- **OCR text and token offsets share one implementation.** `src/document-pipeline/offsets.ts` owns both `assembleOcrText` (what detection runs over) and `tokenSpans` (how a match maps back to page rectangles). This rule used to be written out twice, in `ocr.ts` and `core.ts`, kept in sync only by a comment. When tesseract.js 7 was upgraded, `ocr.ts` started returning Tesseract's own `data.text` — different spacing — and every unit test passed while redaction boxes were drawn over content that was never detected. Only the pixel-level photo E2E caught it. Never reintroduce a second copy of the separator rule. Enforced by `tests/ocr-token-offsets.test.ts`.
+- **tesseract.js does not return blocks by default.** `recognize()` must be called with `{ blocks: true, text: true }` and the result walked as `blocks -> paragraphs -> lines -> words`. Without the option, `data.blocks` is null, recognition "succeeds", and the pipeline reports zero tokens — a silent failure that typechecking cannot catch. `npm run test:offline-ocr` asserts the traversal, and it is proven to fail when the option is removed.
+- **The print/PDF view redacts nothing.** Pipeline: action click → service worker injects and extracts the DOM → session payload (metadata + masked previews only) → offscreen render/OCR/detect → boxes painted and pixel-verified → redacted pages staged in the shared store → `redact.html` renders them → `window.print()` (printer, or Chrome's own "Save as PDF"). `redact.html` is a pure renderer on purpose: a redaction applied at print time could not be verified, and a failed one would reach the printer looking clean. It uses `window.print()` deliberately — `chrome.printing` is enterprise-policy-gated and `chrome.debugger` would add a permission to a tool that exists to protect sensitive data. Pages travel by store key, never in a message. Enforced by `tests/print-pipeline.test.ts` and `npm run verify:print`.
+- Document pages carry a real point size. `loadImagePage` converts pixels at 96 DPI; it used to return `widthPt: 0`, which is not a valid page size and made the print view reject every image document.
 
 ## Architecture
 

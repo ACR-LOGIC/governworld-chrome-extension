@@ -384,6 +384,13 @@ export function validateMessage(raw: unknown): ValidationResult {
         },
       };
     }
+    case "POPUP_DOC_PRINT": {
+      // Opens the read-only print/PDF view for an already-redacted document.
+      // The key identifies a manifest in the shared store; the page fetches the
+      // page bitmaps itself, so no image ever crosses this message boundary.
+      if (!isFileKey(raw.fileKey)) return { ok: false, error: "Invalid fileKey" };
+      return { ok: true, message: { type, requestId, fileKey: raw.fileKey } };
+    }
     case "POPUP_DOC_DELIVERY_REPORT": {
       if (typeof raw.delivered !== "boolean") return { ok: false, error: "Invalid delivered" };
       return { ok: true, message: { type, requestId, delivered: raw.delivered } };
@@ -472,7 +479,11 @@ export function validateMessage(raw: unknown): ValidationResult {
       if (!isName(raw.outputName)) return { ok: false, error: "Invalid outputName" };
       if (raw.outputBytesBase64 !== undefined && typeof raw.outputBytesBase64 !== "string") return { ok: false, error: "Invalid outputBytesBase64" };
       if (raw.outputMimeType !== undefined && typeof raw.outputMimeType !== "string") return { ok: false, error: "Invalid outputMimeType" };
-      return { ok: true, message: { type, requestId, outputName: raw.outputName, ...(raw.outputBytesBase64 ? { outputBytesBase64: raw.outputBytesBase64 as string } : {}), ...(raw.outputMimeType ? { outputMimeType: raw.outputMimeType as string } : {}) } };
+      // Tells the UI a print view is available. The handle is a store key, not
+      // page content, so it stays inside the message size budget.
+      const printFileKey = raw.printFileKey;
+      if (printFileKey !== undefined && !isFileKey(printFileKey)) return { ok: false, error: "Invalid printFileKey" };
+      return { ok: true, message: { type, requestId, outputName: raw.outputName, ...(raw.outputBytesBase64 ? { outputBytesBase64: raw.outputBytesBase64 as string } : {}), ...(raw.outputMimeType ? { outputMimeType: raw.outputMimeType as string } : {}), ...(printFileKey ? { printFileKey } : {}) } };
     }
     case "POPUP_DOC_ERROR": {
       if (typeof raw.code !== "string" || !raw.code) return { ok: false, error: "Invalid error code" };
