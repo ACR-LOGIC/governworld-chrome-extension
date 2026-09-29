@@ -25,6 +25,11 @@ jobs:
       - name: TypeScript Typecheck
         run: npm run typecheck
 
+      # Fails on popup/sidepanel drift. The sidepanel is generated from the popup,
+      # so a popup-only edit is the exact failure mode this catches.
+      - name: Verify Sidepanel Is In Sync
+        run: npm run sync:sidepanel:check
+
       - name: Run Test Suite
         run: npm test
 

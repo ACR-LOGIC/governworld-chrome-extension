@@ -45,6 +45,7 @@ copyFileSync(join(root, "src/sidepanel", "sidepanel.css"), join(outDir, "sidepan
 copyFileSync(join(root, "src/landing", "index.html"), join(outDir, "landing.html"));
 copyFileSync(join(root, "src/landing", "landing.js"), join(outDir, "landing.js"));
 copyFileSync(join(root, "src/popup", "privacy.html"), join(outDir, "privacy.html"));
+copyFileSync(join(root, "src/popup", "legal.html"), join(outDir, "legal.html"));
 copyFileSync(join(root, "manifest.json"), join(outDir, "manifest.json"));
 copyFileSync(join(root, "PRIVACY.md"), join(outDir, "PRIVACY.md"));
 copyFileSync(join(root, "PERMISSIONS.md"), join(outDir, "PERMISSIONS.md"));

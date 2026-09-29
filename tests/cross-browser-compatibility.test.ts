@@ -63,6 +63,7 @@ describe("Cross-Browser Compatibility Gates (Chrome, Firefox, Edge, Safari, Brav
       const pages = [
         "src/popup/index.html",
         "src/popup/privacy.html",
+        "src/popup/legal.html",
         "src/sidepanel/sidepanel.html",
         "src/offscreen/offscreen.html",
         "src/landing/index.html",

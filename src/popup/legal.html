@@ -1,0 +1,783 @@
+<!-- Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GovernWorld - Terms &amp; Conditions</title>
+    <style>
+      :root {
+        --bg: #0a0f1a;
+        --bg-elevated: #101827;
+        --bg-inset: #0d1424;
+        --border: #1e2a3d;
+        --border-strong: #2d3d55;
+        --text: #e2e8f0;
+        --text-muted: #94a3b8;
+        --text-faint: #64748b;
+        --accent: #22d3ee;
+        --accent-strong: #0ea5e9;
+        --accent-soft: rgba(34, 211, 238, 0.10);
+        --ok: #34d399;
+        --warning: #fbbf24;
+        --danger: #f87171;
+        --mono: "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+        --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+        --radius: 10px;
+        --radius-sm: 8px;
+        --content-width: 760px;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        font-size: 14px;
+        line-height: 1.65;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ---- Top header bar ---- */
+      .top-bar {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: var(--bg-elevated);
+        border-bottom: 1px solid var(--border);
+        padding: 12px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .top-bar__brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .top-bar__mark {
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: linear-gradient(180deg, #101c33, #0b1222);
+        border: 1px solid var(--border-strong);
+        box-shadow: inset 0 0 0 1px rgba(34,211,238,0.06), 0 4px 14px -6px rgba(0,0,0,0.8);
+        flex: none;
+      }
+
+      .top-bar__mark svg {
+        width: 18px;
+        height: 18px;
+        display: block;
+      }
+
+      .top-bar__title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      .top-bar__sub {
+        font-size: 11px;
+        color: var(--text-muted);
+        letter-spacing: 0.04em;
+      }
+
+      .top-bar__meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-family: var(--mono);
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--ok);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 3px 9px;
+        white-space: nowrap;
+      }
+
+      .pill__dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--ok);
+        flex: none;
+      }
+
+      /* ---- Page shell ---- */
+      .page {
+        max-width: var(--content-width);
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+
+      /* ---- Hero ---- */
+      .hero {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .hero__eyebrow {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 10px;
+      }
+
+      .hero__title {
+        margin: 0 0 12px;
+        font-size: 30px;
+        line-height: 1.2;
+        font-weight: 700;
+        color: var(--text);
+      }
+
+      .hero__dates {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        font-size: 12px;
+        color: var(--text-muted);
+      }
+
+      .hero__date-item strong {
+        color: var(--text);
+      }
+
+      /* ---- Table of contents ---- */
+      .toc {
+        background: var(--bg-inset);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px 18px;
+      }
+
+      .toc__title {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+      }
+
+      .toc__list {
+        margin: 0;
+        padding-left: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 13px;
+      }
+
+      .toc__list a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      .toc__list a:hover {
+        text-decoration: underline;
+      }
+
+      /* ---- Sections ---- */
+      .section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .section__num {
+        font-family: var(--mono);
+        font-size: 11px;
+        letter-spacing: 0.1em;
+        color: var(--accent);
+      }
+
+      .section__title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      .section__body {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        color: var(--text-muted);
+      }
+
+      .section__body strong {
+        color: var(--text);
+      }
+
+      .section__body a {
+        color: var(--accent);
+      }
+
+      .section__body ul,
+      .section__body ol {
+        margin: 0;
+        padding-left: 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      code {
+        font-family: var(--mono);
+        font-size: 12px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 1px 5px;
+        color: var(--accent);
+      }
+
+      /* ---- Callouts ---- */
+      .notice,
+      .highlight {
+        border-radius: var(--radius-sm);
+        padding: 12px 14px;
+        font-size: 13px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .notice {
+        background: var(--bg-inset);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+      }
+
+      .highlight {
+        background: var(--accent-soft);
+        border: 1px solid rgba(34, 211, 238, 0.28);
+        color: var(--text);
+      }
+
+      .highlight--local {
+        background: rgba(52, 211, 153, 0.08);
+        border-color: rgba(52, 211, 153, 0.28);
+      }
+
+      .highlight--ok {
+        background: rgba(52, 211, 153, 0.08);
+        border-color: rgba(52, 211, 153, 0.28);
+      }
+
+      .highlight--warn {
+        background: rgba(251, 191, 36, 0.08);
+        border-color: rgba(251, 191, 36, 0.3);
+        color: var(--text);
+      }
+
+      .highlight strong {
+        color: var(--text);
+      }
+
+      /* ---- Footer ---- */
+      .footer {
+        border-top: 1px solid var(--border);
+        padding-top: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .footer__contact {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        font-size: 12px;
+      }
+
+      .footer__contact a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      .footer__contact a:hover {
+        text-decoration: underline;
+      }
+
+      .footer__copy {
+        margin: 0;
+        font-size: 12px;
+        color: var(--text-faint);
+      }
+
+      @media (max-width: 560px) {
+        .page { padding: 24px 16px 48px; }
+        .hero__title { font-size: 24px; }
+      }
+    </style>
+  </head>
+  <body>
+
+    <header class="top-bar" role="banner">
+      <div class="top-bar__brand">
+        <div class="top-bar__mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="gwshield-legal" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#22d3ee" />
+                <stop offset="1" stop-color="#0ea5e9" />
+              </linearGradient>
+            </defs>
+            <path d="M24 4 L41 10 V23 C41 35 34 42 24 46 C14 42 7 35 7 23 V10 Z" fill="none" stroke="url(#gwshield-legal)" stroke-width="2.6" />
+            <path d="M24 11 L35 14.6 V23 C35 31 30.6 36.4 24 39 C17.4 36.4 13 31 13 23 V14.6 Z" fill="none" stroke="#22d3ee" stroke-width="1.6" opacity="0.85" />
+            <rect x="16" y="24" width="16" height="4.4" rx="2.2" fill="#e6edf7" />
+            <circle cx="24" cy="32.4" r="1.8" fill="#34d399" />
+          </svg>
+        </div>
+        <div>
+          <div class="top-bar__title">GovernWorld</div>
+          <div class="top-bar__sub">Terms &amp; Conditions</div>
+        </div>
+      </div>
+      <div class="top-bar__meta">
+        <span class="pill">
+          <span class="pill__dot" aria-hidden="true"></span>
+          Free &amp; local
+        </span>
+      </div>
+    </header>
+
+    <main class="page" id="main">
+
+      <div class="hero">
+        <div class="hero__eyebrow">ACR LOGIC · GovernWorld Chrome Extension</div>
+        <h1 class="hero__title">Terms &amp; Conditions</h1>
+        <div class="hero__dates">
+          <span class="hero__date-item"><strong>Effective:</strong> September 29, 2026</span>
+          <span class="hero__date-item"><strong>Version:</strong> 1.0.0</span>
+          <span class="hero__date-item"><strong>Price:</strong> Free</span>
+        </div>
+      </div>
+
+      <div class="notice" role="note">
+        <strong>Please read this before you rely on GovernWorld for anything.</strong>
+        <span>
+          GovernWorld is a <strong>free</strong> tool that helps you find and cover sensitive values. It is an
+          assistant, not a lawyer, auditor, or compliance officer, and it is not a substitute for your own
+          review. Several of the terms below limit what we can be responsible for, and you accept those limits
+          by installing or using the Extension.
+        </span>
+      </div>
+
+      <nav class="toc" aria-label="Table of contents">
+        <div class="toc__title">Contents</div>
+        <ol class="toc__list">
+          <li><a href="#s1">Acceptance of these Terms</a></li>
+          <li><a href="#s2">The Extension is provided free of charge</a></li>
+          <li><a href="#s3">No warranty — it is provided "as is"</a></li>
+          <li><a href="#s4">You are responsible for what you release</a></li>
+          <li><a href="#s5">You must check every result yourself</a></li>
+          <li><a href="#s6">Compliance with the law is your responsibility</a></li>
+          <li><a href="#s7">Your data stays on your device</a></li>
+          <li><a href="#s8">Acceptable use</a></li>
+          <li><a href="#s9">No liability</a></li>
+          <li><a href="#s10">Privacy</a></li>
+          <li><a href="#s11">Open-source components and licence</a></li>
+          <li><a href="#s12">Changes to these Terms</a></li>
+          <li><a href="#s13">Contact</a></li>
+        </ol>
+      </nav>
+
+      <section class="section" id="s1">
+        <div class="section__num">01</div>
+        <h2 class="section__title" id="s1-title">Acceptance of these Terms</h2>
+        <div class="section__body">
+          <p>
+            These Terms &amp; Conditions ("Terms") form a binding agreement between you and
+            <strong>ACR LOGIC</strong> ("ACR LOGIC," "GovernWorld," "we," "us," or "our") and govern your use of
+            the GovernWorld Chrome Extension (the <strong>"Extension"</strong>). By installing, enabling, or using
+            the Extension you accept these Terms. If you do not accept them, do not use the Extension, and
+            uninstall it.
+          </p>
+          <p>
+            If you use the Extension on behalf of an employer, healthcare organization, law firm, or other
+            organization (an <strong>"Organization"</strong>), you confirm you are authorized to do so, and you
+            accept these Terms on your own behalf and on behalf of that Organization.
+          </p>
+          <p>
+            You must be legally capable of entering into this agreement. If you are below the age at which you
+            can consent to a contract in your jurisdiction, do not use the Extension.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="s2">
+        <div class="section__num">02</div>
+        <h2 class="section__title" id="s2-title">The Extension is provided free of charge</h2>
+        <div class="section__body">
+          <div class="highlight highlight--local">
+            <strong>There is no paid tier, no seat licence, and no metering.</strong>
+            <span>
+              Every feature described in the Extension is available at no cost. We do not sell access, and we do
+              not gate detection or redaction behind a subscription. If a future version ever introduces a paid
+              option, the local detection and redaction functionality you rely on today will not be withdrawn
+              from the free version as a condition of that change.
+            </span>
+          </div>
+          <p>
+            Optional financial support exists on a voluntary basis (for example a "Buy Me a Coffee" link in
+            Settings). Paying nothing does not reduce any feature, and paying something confers no additional
+            rights, no priority support, and no influence over the project's direction. Support is a
+            contribution, not a purchase, and never a requirement.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="s3">
+        <div class="section__num">03</div>
+        <h2 class="section__title" id="s3-title">No warranty — the Extension is provided "as is"</h2>
+        <div class="section__body">
+          <p>
+            The Extension is provided <strong>"as is"</strong> and <strong>"as available"</strong>, without
+            warranty of any kind, whether express or implied, including but not limited to implied warranties
+            of merchantability, fitness for a particular purpose, accuracy, non-infringement, and uninterrupted
+            or error-free operation. We make no warranty that the Extension will detect every sensitive value,
+            that it will never produce a false positive or false negative, or that any output is suitable for
+            your intended purpose.
+          </p>
+          <p>
+            Detection and redaction are inherently probabilistic. Patterns change, documents are formatted in
+            ways no pattern anticipates, and some sensitive values are indistinguishable from ordinary text.
+            <strong>Coverage is never complete.</strong> A clean result does not mean a document is free of
+            sensitive data.
+          </p>
+          <div class="highlight highlight--warn">
+            <strong>
+              The Extension does not promise to detect everything, and passing its own tests does not change
+              that.
+            </strong>
+            <span>
+              The detection logic is covered by a test suite that passes, and we intend it to keep passing.
+              <strong>A 100% pass rate in testing is not a promise of 100% detection in use.</strong> Tests run
+              against known inputs and known formats; real documents, scanned pages, handwriting, screenshots,
+              and unconventional layouts are not what the tests were written against. Test results measure the
+              detection logic against the cases we thought to cover. They do not measure coverage of the cases
+              we did not, and they say nothing at all about whether a value was missed in a document you
+              actually have in front of you.
+            </span>
+            <span>
+              No test result, coverage figure, or accuracy claim — ours or anyone's — is a representation that
+              the Extension will find every sensitive value in your content.
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="s4">
+        <div class="section__num">04</div>
+        <h2 class="section__title" id="s4-title">You are solely responsible for what you release</h2>
+        <div class="section__body">
+          <div class="highlight highlight--warn">
+            <strong>Read this section carefully.</strong>
+            <span>
+              The Extension helps you prepare material for release. <strong>Releasing it is your decision and
+              your risk.</strong> ACR LOGIC cannot review, approve, or take responsibility for the content you
+              choose to publish, send, upload, file, print, or otherwise distribute.
+            </span>
+          </div>
+          <p>You accept full and sole responsibility for any document or content you release, including where you:</p>
+          <ul>
+            <li>
+              publish PII (personally identifiable information), <strong>PHI</strong> (protected health
+              information), payment-card data, credentials, secrets, or regulated data;
+            </li>
+            <li>
+              release material that, in the wrong hands, could identify a person, expose a diagnosis, allow
+              impersonation or fraud, or violate a confidentiality obligation;
+            </li>
+            <li>
+              rely on the Extension having removed or masked a value it did not detect, or on a value you
+              overlooked while reviewing the results;
+            </li>
+            <li>
+              use the output as the basis of a disclosure, report, submission, or communication to a regulator,
+              court, employer, insurer, patient, or member of the public.
+            </li>
+          </ul>
+          <p>
+            <strong>ACR LOGIC is not responsible for any release of PII, PHI, or other sensitive or regulated
+            information that you publish, transmit, or distribute using the Extension or its output</strong>, and
+            is not liable for any resulting harm, claim, fine, penalty, litigation cost, or loss — whether
+            direct or indirect, and whether or not you reviewed the Extension's findings.
+          </p>
+          <p>
+            Nothing in these Terms transfers to you any obligation that you already owe under your professional,
+            ethical, contractual, or legal duties, nor does using the Extension discharge any of them.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="s5">
+        <div class="section__num">05</div>
+        <h2 class="section__title" id="s5-title">You must check every result yourself</h2>
+        <div class="section__body">
+          <p>
+            <strong>
+              You are required to check the Extension's work for yourself, and you are solely responsible for
+              what you release. If you choose to use the Extension, verifying everything it does is your
+              responsibility, not ours.
+            </strong>
+            Treating the Extension's output as correct without checking it is not a use we authorise, and it
+            is not a use these Terms support you in. At minimum:
+          </p>
+          <ul>
+            <li>read every finding it reports, and confirm each one is genuinely sensitive before masking it;</li>
+            <li>
+              check the areas it did <em>not</em> flag — free-text notes, images, screenshots, attachments,
+              headers and footers, handwriting, and unconventional layouts;
+            </li>
+            <li>
+              confirm the redacted copy opens correctly and that the values you intended to remove are
+              actually unrecoverable from it;
+            </li>
+            <li>
+              apply your own judgement about anything ambiguous, and escalate to a qualified professional where
+              the stakes require it.
+            </li>
+          </ul>
+          <p>
+            The Extension deliberately shows you a masked preview rather than the raw value, so that it can help
+            you without handling your secrets in the clear. That is a privacy feature, but it also means
+            <strong>you cannot fully verify a value from the Extension alone.</strong> Where a decision matters,
+            open the source yourself.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="s6">
+        <div class="section__num">06</div>
+        <h2 class="section__title" id="s6-title">Compliance with the law is your responsibility</h2>
+        <div class="section__body">
+          <p>
+            Privacy, medical-record, financial-services, and records-management law varies by country, state,
+            sector, and Organization, and it changes. The compliance presets in the Extension (for example
+            HIPAA, PCI DSS, GDPR, UK GDPR / NHS, PIPEDA, India's DPDP Act, Australia's Privacy Act, and Brazil's
+            LGPD) are <strong>starting points for your own configuration, not a compliance guarantee</strong>.
+            Selecting a preset does not make a workflow compliant.
+          </p>
+          <p>
+            <strong>You are solely responsible for determining whether your use of the Extension complies with
+            the law that applies to you</strong> — including HIPAA, HITECH, the GDPR and UK GDPR, the CCPA and
+            other US state privacy laws, sector-specific rules, your professional body's ethical code, your
+            employment contract, and your Organization's policies — and for obtaining any consent, authorisation,
+            or notice that those laws require. We do not provide legal advice and cannot determine what applies
+            to you.
+          </p>
+          <p>
+            <strong>You accept that any breach of law, regulation, licence, professional duty, or contract that
+            results from your use of the Extension is yours alone,</strong> and you will not hold ACR LOGIC
+            responsible or liable for it. These Terms are not a shield against your own obligations and are not
+            a basis for you to claim that you met them.
+          </p>
+          <p>
+            If you are required to demonstrate a control to an auditor, regulator, or third party, produce your
+            own evidence. Do not represent the presence of this Extension as evidence that a control is
+            satisfied.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="s7">
+        <div class="section__num">07</div>
+        <h2 class="section__title" id="s7-title">Your data stays on your device</h2>
+        <div class="section__body">
+          <div class="highlight highlight--ok">
+            <strong>All detection and redaction happens locally, inside your browser.</strong>
+            <span>
+              GovernWorld ships with no host permissions and no remote endpoint for content. Your page text,
+              documents, and images are processed on your own machine and are not transmitted to us or to any
+              third party. No AI model, and no third-party service, receives your content in order for the
+              Extension to work.
+            </span>
+          </div>
+          <p>
+            This is a deliberate design choice, and it is the reason the Extension is safe to point at a patient
+            record, a client contract, or a credential. Other products in this category work by uploading what
+            you scan to their own servers so that a hosted model can read it; that means your sensitive data is
+            in transit and on someone else's infrastructure, where it can be logged, retained, subpoenaed, or
+            breached. GovernWorld does not do that, which is also why it can work with no network connection
+            and no account.
+          </p>
+          <p>
+            The consequences are worth being explicit about: local detection cannot be silently improved by a
+            server-side model update, some capabilities require manual review that a hosted service would
+            automate, and the Extension is only as good as the patterns and local models it ships with. We
+            accept that trade because the alternative puts your most sensitive material on a network it never
+            needed to touch.
+          </p>
+          <p>
+            Optional account, cloud-analysis, and community-features exist for your convenience. Cloud analysis
+            is <strong>disabled and locked off by default</strong>. Reading the Privacy Policy is the best way
+            to establish exactly what leaves your device, if anything.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="s8">
+        <div class="section__num">08</div>
+        <h2 class="section__title" id="s8-title">Acceptable use</h2>
+        <div class="section__body">
+          <p>You agree not to:</p>
+          <ul>
+            <li>use the Extension in violation of any law, regulation, court order, or third-party right;</li>
+            <li>
+              attempt to re-identify, reconstruct, or recover a value the Extension masked, except as part of
+              your own legitimate review;
+            </li>
+            <li>
+              reverse engineer, decompile, or derive the source of the Extension except to the extent that
+              restriction is prohibited by law, or to contribute improvements back under the project licence;
+            </li>
+            <li>
+              remove, obscure, or falsify the authorship, licence, or credit notices in the Extension or its
+              About page;
+            </li>
+            <li>
+              use the Extension to harass, stalk, dox, or facilitate harm to any person, or to process content
+              you have no right to process.
+            </li>
+          </ul>
+          <p>
+            We may discontinue the Extension or any feature at any time, and may decline to support a use we
+            consider unlawful or harmful.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="s9">
+        <div class="section__num">09</div>
+        <h2 class="section__title" id="s9-title">Limitation of liability</h2>
+        <div class="section__body">
+          <p>
+            <strong>
+              To the maximum extent permitted by applicable law, ACR LOGIC and its contributors are not liable
+              for any indirect, incidental, special, consequential, exemplary, or punitive damages, or for any
+              loss of profits, revenue, data, goodwill, business opportunity, or personal information, arising
+              out of or relating to your use of, or inability to use, the Extension.
+            </strong>
+          </p>
+          <p>
+            You accept that we cannot be responsible for the content you scan or release, for the adequacy of
+            any detection, for your compliance with law, or for any decision you make in reliance on the
+            Extension's output. <strong>You are responsible for verifying every result before you rely on
+            it.</strong>
+          </p>
+          <p>
+            Some jurisdictions do not allow certain exclusions or limitations of liability, in which case the
+            exclusion or limitation applies only to the extent permitted by that jurisdiction, and nothing here
+            excludes liability that cannot lawfully be excluded.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="s10">
+        <div class="section__num">10</div>
+        <h2 class="section__title" id="s10-title">Privacy</h2>
+        <div class="section__body">
+          <p>
+            Our <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a> forms part of
+            these Terms and describes what the Extension stores, what it transmits, and what it deliberately
+            never collects. Read it alongside these Terms.
+          </p>
+          <p>
+            In summary: content is processed locally and is not sent to us; the Extension holds a document only
+            in its own private storage while you review it and deletes it when you clear it; and no raw content
+            is written to logs, telemetry, analytics, or error reporting.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="s11">
+        <div class="section__num">11</div>
+        <h2 class="section__title" id="s11-title">Open-source components and licence</h2>
+        <div class="section__body">
+          <p>
+            GovernWorld is built on the work of others and is released under the
+            <strong>GovernWorld Source-Available Community License</strong>. That licence is a
+            <strong>source-available</strong> licence, not an OSI-approved open-source licence; the third-party
+            components it builds on are open source under their own permissive licences. The About page in the
+            Extension lists every component, what it does, and the licence it is used under.
+          </p>
+          <p>
+            We ask that you do not strip the credits from the About page. They are the reason the people whose
+            work makes this possible are visible, and that attribution costs you nothing.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="s12">
+        <div class="section__num">12</div>
+        <h2 class="section__title" id="s12-title">Changes to these Terms</h2>
+        <div class="section__body">
+          <p>
+            We may revise these Terms as the Extension changes or as the law does. The version and effective
+            date at the top of this page identify the current terms. Continuing to use the Extension after a
+            revision means you accept the revised terms; if you do not accept them, uninstall the Extension and
+            stop using it.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="s13">
+        <div class="section__num">13</div>
+        <h2 class="section__title" id="s13-title">Contact</h2>
+        <div class="section__body">
+          <p>
+            <strong>ACR LOGIC</strong><br>
+            Terms contact: <a href="mailto:legal@acrlogic.com">legal@acrlogic.com</a><br>
+            Privacy contact: <a href="mailto:privacy@acrlogic.com">privacy@acrlogic.com</a><br>
+            Support: <a href="https://github.com/ACR-LOGIC/governworld-extension/issues" target="_blank" rel="noopener noreferrer">github.com/ACR-LOGIC/governworld-extension/issues</a>
+          </p>
+          <p>
+            These Terms are a product decision made by a developer, not legal advice. If any part of them is
+            unenforceable or inadequate for your situation, have a qualified lawyer in your jurisdiction review
+            them before you rely on the Extension for regulated work.
+          </p>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div class="footer__contact">
+          <a href="legal.html">Terms &amp; Conditions</a>
+          <a href="privacy.html">Privacy Policy</a>
+          <a href="https://github.com/ACR-LOGIC/governworld-extension" target="_blank" rel="noopener noreferrer">Source</a>
+          <a href="https://github.com/ACR-LOGIC/governworld-extension/issues" target="_blank" rel="noopener noreferrer">Support</a>
+        </div>
+        <p class="footer__copy">© 2026 ACR LOGIC. GovernWorld Chrome Extension — Terms &amp; Conditions v1.0.0 · Effective September 29, 2026</p>
+      </footer>
+
+    </main>
+  </body>
+</html>

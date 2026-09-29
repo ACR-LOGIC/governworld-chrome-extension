@@ -567,6 +567,164 @@
 
         <div class="settings-page" id="settings-page-about" data-settings-page="about" hidden>
           <h3 data-i18n="about_title">About &amp; Diagnostics</h3>
+
+          <div class="about-block">
+            <h4 class="about-block__title">Why this is free</h4>
+            <p class="footnote">
+              GovernWorld is free because the obvious business model for software like this is the one that
+              would have made it worthless. The standard way to sell "AI redaction" is to host the model on your
+              vendor's servers and upload whatever you scan so their model can read it. That works, and it also
+              means a patient record, a client contract, or a credential passes across a network and lands on
+              infrastructure somebody else can log, retain, subpoena, or breach. The more sensitive the material
+              you need to redact, the worse that trade becomes.
+            </p>
+            <p class="footnote">
+              So the constraint here was the opposite one: if it cannot work without sending your data away, it
+              does not get built. Every detection and redaction path in this extension runs on your own machine,
+              which means there is nothing to meter, no inference to bill, and no user data to monetise. The
+              result is a tool that is free because there is no business model behind it, and no incentive for
+              the incentives that shape this category to run the show.
+            </p>
+          </div>
+
+          <div class="about-block">
+            <h4 class="about-block__title">Who built it</h4>
+            <p class="footnote">
+              GovernWorld is built by <strong>ACR LOGIC</strong>, an independent project led by
+              <strong>Andres Chavez Ramirez</strong>, a developer who works on privacy and security tooling.
+              The motivation was straightforward: the tools that claim to protect sensitive information were
+              the same tools that required it to be uploaded somewhere first. When the work is released rather
+              than sold, it is available to people who cannot justify a vendor contract, and it can be inspected
+              by anyone who does not want to take the claim on faith.
+            </p>
+            <p class="footnote">
+              It is an independent project. It is not affiliated with, endorsed by, or sponsored by any of the
+              open-source projects it builds on, and those projects have no responsibility for it.
+            </p>
+          </div>
+
+          <div class="about-block">
+            <h4 class="about-block__title">Your data never leaves your browser</h4>
+            <p class="footnote">
+              This is the part worth being precise about, because "local" is a claim anyone can make.
+            </p>
+            <ul class="footnote about-list">
+              <li>
+                The extension ships with <strong>no host permissions at all</strong>. It cannot read any site
+                until you explicitly ask it to, and it never asks to run in the background.
+              </li>
+              <li>
+                Detection, OCR, and redaction all execute inside your browser. There is no server that receives
+                your page text, your documents, or your images in order for this extension to work.
+              </li>
+              <li>
+                Optical character recognition uses <strong>Tesseract compiled to WebAssembly</strong>, running
+                locally on your CPU and GPU. It is machine learning, but the model is a file shipped inside the
+                extension and it never leaves your machine.
+              </li>
+              <li>
+                There is no hosted model and no third-party AI service in the detection path. Nothing about your
+                content is sent to anyone for analysis, scoring, improvement, or "quality".
+              </li>
+              <li>
+                A document you open is held only in the extension's own private storage while you review it, and
+                deleted when you clear it, finish redaction, or clear extension data. Raw content is never
+                written to logs, telemetry, analytics, or error reporting.
+              </li>
+            </ul>
+            <p class="footnote">
+              The practical difference: it works with no network connection and no account, and the offline
+              guarantee is structural rather than a policy promise. Cloud analysis exists as an option but is
+              <strong>disabled and locked off by default</strong>. See the Privacy Policy for the full detail.
+            </p>
+          </div>
+
+          <div class="about-block">
+            <h4 class="about-block__title">How it works and how it runs</h4>
+            <p class="footnote">
+              When you press <strong>Scan This Page</strong>, the popup asks the service worker to look at the
+              tab you are on. The worker injects a content script, which walks the page's text nodes and runs
+              the detection patterns against the string values it finds. Findings come back as masks to draw
+              over the page, plus a list in the popup for you to accept or dismiss. The page's own DOM is only
+              ever read; the masks are painted into a shadow-root overlay so nothing on the page is modified.
+            </p>
+            <p class="footnote">
+              For documents the path is longer but the principle is identical. You pick a PDF, Word file, or
+              image; the bytes are held in the extension's private storage; an offscreen document renders each
+              page to a bitmap, runs OCR over the pixels, and maps detected spans back to page coordinates.
+              The rectangles are painted in, the result is flattened so the pixels cannot be undone, and you get
+              a new file. Your original is never modified. Every stage of that happens on your device.
+            </p>
+            <p class="footnote">
+              Detection is deterministic pattern matching across 20 categories, with a configurable per-category
+              confidence threshold and compliance presets to set those thresholds for you. Findings are shown as
+              masked previews so the extension can help you without displaying your secrets in the clear, which
+              is a privacy feature and also a reason to verify anything important against the source.
+            </p>
+          </div>
+
+          <div class="about-block">
+            <h4 class="about-block__title">Built on the work of others</h4>
+            <p class="footnote">
+              GovernWorld would not exist without these projects. They are the reason a browser extension can
+              rasterise a PDF and read text off an image at all, and they deserve the credit.
+            </p>
+            <ul class="credit-list">
+              <li class="credit-item">
+                <span class="credit-name">Mozilla PDF.js</span>
+                <span class="credit-lic">Apache-2.0</span>
+                <span class="credit-role">Renders each PDF page to a bitmap so it can be scanned and redacted.</span>
+              </li>
+              <li class="credit-item">
+                <span class="credit-name">Tesseract</span>
+                <span class="credit-lic">Apache-2.0</span>
+                <span class="credit-role">Optical character recognition, compiled to WebAssembly and run locally, plus the trained language data used for images and scanned pages.</span>
+              </li>
+              <li class="credit-item">
+                <span class="credit-name">tesseract.js</span>
+                <span class="credit-lic">Apache-2.0</span>
+                <span class="credit-role">Runs Tesseract in a Web Worker inside the extension, keeping OCR off the interface thread.</span>
+              </li>
+              <li class="credit-item">
+                <span class="credit-name">pdf-lib</span>
+                <span class="credit-lic">MIT</span>
+                <span class="credit-role">Builds the flattened PDF output with redactions baked into the page content.</span>
+              </li>
+              <li class="credit-item">
+                <span class="credit-name">mammoth</span>
+                <span class="credit-lic">BSD-2-Clause</span>
+                <span class="credit-role">Extracts text from Word <code>.docx</code> files for scanning.</span>
+              </li>
+            </ul>
+            <p class="footnote">
+              The build also relies on <strong>esbuild</strong> (MIT) to bundle, <strong>TypeScript</strong>
+              (Apache-2.0) for type safety, <strong>Vitest</strong> (MIT) for the test suite, and
+              <strong>Playwright</strong> (Apache-2.0) for the browser tests. GovernWorld itself is released
+              under the GovernWorld Source-Available Community License, which is a source-available licence
+              rather than an OSI-approved open-source licence; the components above keep their own permissive
+              licences.
+            </p>
+            <p class="footnote">
+              Please leave these credits in place. They cost nothing and they are the reason the people whose
+              work this is built on are visible.
+            </p>
+          </div>
+
+          <div class="about-block">
+            <h4 class="about-block__title">Before you rely on it</h4>
+            <p class="footnote">
+              GovernWorld is a free assistant, not a compliance guarantee. Detection is probabilistic, and a
+              clean result never means a document is free of sensitive data. Review the output before you
+              publish it, and read the <a id="terms-link" href="#" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</a>,
+              which explain what you remain responsible for.
+            </p>
+            <p class="footnote">
+              The <a id="about-privacy-link" href="#" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+              covers what the extension stores and what it transmits, and is worth reading before you scan
+              anything sensitive.
+            </p>
+          </div>
+
           <div class="diag-grid">
             <div class="diag-item">
               <span class="diag-label" data-i18n="diag_engine">Protection Engine</span>

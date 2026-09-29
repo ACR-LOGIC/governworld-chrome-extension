@@ -42,23 +42,33 @@ export function isInternalExtensionUrl(url?: string): boolean {
   );
 }
 
+/**
+ * A tab GovernWorld can actually act on: an identified, ordinary web page.
+ * Internal extension pages and the extension's own URLs are never eligible.
+ */
+export function isScannableTab(tab: chrome.tabs.Tab | undefined): tab is chrome.tabs.Tab {
+  if (!tab?.id || !tab.url) return false;
+  if (isInternalExtensionUrl(tab.url)) return false;
+  return tab.url.startsWith("http://") || tab.url.startsWith("https://");
+}
+
+/**
+ * Resolve the web page the user is looking at. Only a real web page is ever
+ * returned: the earlier version fell back to the focused tab after filtering
+ * extension URLs out, so one of our own pages could be returned as a scan
+ * target. Callers already treat undefined as "nothing to act on".
+ */
 export async function getActiveWebTab(): Promise<chrome.tabs.Tab | undefined> {
   const [focusedTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (focusedTab?.id && focusedTab.url && !isInternalExtensionUrl(focusedTab.url)) {
+  if (isScannableTab(focusedTab)) {
     return focusedTab;
   }
   const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (currentTab?.id && currentTab.url && !isInternalExtensionUrl(currentTab.url)) {
+  if (isScannableTab(currentTab)) {
     return currentTab;
   }
   const allTabs = await chrome.tabs.query({});
-  return (
-    allTabs.find(
-      (t) => t.active && t.url && (t.url.startsWith("http://") || t.url.startsWith("https://"))
-    ) ||
-    focusedTab ||
-    currentTab
-  );
+  return allTabs.find((t) => t.active && isScannableTab(t));
 }
 
 export async function ensureContentScriptReady(tabId: number): Promise<boolean> {
@@ -1154,6 +1164,21 @@ export async function initPopup(): Promise<void> {
     privacyLink.href = privacyUrl;
     privacyLink.target = "_blank";
     privacyLink.rel = "noopener noreferrer";
+  }
+
+  const termsLink = document.getElementById("terms-link") as HTMLAnchorElement | null;
+  if (termsLink) {
+    const termsUrl = chrome.runtime.getURL("legal.html");
+    termsLink.href = termsUrl;
+    termsLink.target = "_blank";
+    termsLink.rel = "noopener noreferrer";
+  }
+
+  const aboutPrivacyLink = document.getElementById("about-privacy-link") as HTMLAnchorElement | null;
+  if (aboutPrivacyLink) {
+    aboutPrivacyLink.href = chrome.runtime.getURL("privacy.html");
+    aboutPrivacyLink.target = "_blank";
+    aboutPrivacyLink.rel = "noopener noreferrer";
   }
 
   const docFile = document.getElementById("doc-file-input") as HTMLInputElement | null;

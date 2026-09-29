@@ -1560,6 +1560,100 @@ body[data-reduced-motion="true"] *::after {
   color: var(--text);
 }
 
+/* ---------- About page: why free, how it works, credits ---------- */
+.about-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.about-block__title {
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.about-block .footnote {
+  color: var(--text-muted);
+}
+
+.about-block strong {
+  color: var(--text);
+}
+
+.about-block a {
+  color: var(--accent);
+}
+
+.about-block code {
+  font-family: var(--mono);
+  font-size: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 4px;
+  color: var(--accent);
+}
+
+.about-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.credit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.credit-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  padding: 6px 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.credit-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.credit-lic {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--ok);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  align-self: start;
+}
+
+.credit-role {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
 /* ---------- Diagnostics grid ---------- */
 .diag-grid {
   display: grid;

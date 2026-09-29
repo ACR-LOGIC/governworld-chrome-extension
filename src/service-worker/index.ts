@@ -122,28 +122,43 @@ export function isInternalExtensionUrl(url?: string): boolean {
   );
 }
 
+/**
+ * A tab GovernWorld can actually scan: an identified, ordinary web page.
+ * Internal extension pages and the extension's own URLs are never scannable.
+ */
+export function isScannableTab(tab: chrome.tabs.Tab | undefined): tab is chrome.tabs.Tab {
+  if (!tab?.id || !tab.url) return false;
+  if (isInternalExtensionUrl(tab.url)) return false;
+  return tab.url.startsWith("http://") || tab.url.startsWith("https://");
+}
+
+/**
+ * Resolve the web page a scan should target.
+ *
+ * Only a real web page is ever returned. Earlier this fell back to the focused
+ * tab after filtering extension URLs out, which meant an extension page (the
+ * popup, or landing/privacy opened as a tab) could be handed back as a scan
+ * target. Scan sessions are keyed by tab id, so the worker then looked for a
+ * session belonging to the extension and reported "Run a scan first" for a scan
+ * that had in fact succeeded. Returning nothing is the honest answer: there is
+ * no page to scan. Callers already treat undefined as "no session".
+ */
 export async function getActiveTab(): Promise<chrome.tabs.Tab | undefined> {
   // Strategy 1: Active tab in last focused window
   const [focusedTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (focusedTab?.id && focusedTab.url && !isInternalExtensionUrl(focusedTab.url)) {
+  if (isScannableTab(focusedTab)) {
     return focusedTab;
   }
 
   // Strategy 2: Active tab in current window
   const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (currentTab?.id && currentTab.url && !isInternalExtensionUrl(currentTab.url)) {
+  if (isScannableTab(currentTab)) {
     return currentTab;
   }
 
-  // Strategy 3: Find any active HTTP/HTTPS tab
+  // Strategy 3: Any active HTTP/HTTPS tab in any window
   const allTabs = await chrome.tabs.query({});
-  return (
-    allTabs.find(
-      (t) => t.active && t.url && (t.url.startsWith("http://") || t.url.startsWith("https://"))
-    ) ||
-    focusedTab ||
-    currentTab
-  );
+  return allTabs.find((t) => t.active && isScannableTab(t));
 }
 
 function notifyPopup(message: PopupFromWorker): void {

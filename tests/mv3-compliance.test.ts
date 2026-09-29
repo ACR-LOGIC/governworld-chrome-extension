@@ -23,6 +23,7 @@ const extRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const EXTENSION_PAGES = [
   "src/popup/index.html",
   "src/popup/privacy.html",
+  "src/popup/legal.html",
   "src/sidepanel/sidepanel.html",
   "src/offscreen/offscreen.html",
   "src/landing/index.html",
