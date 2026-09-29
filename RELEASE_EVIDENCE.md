@@ -26,7 +26,7 @@ release build. Synthetic-only fixtures; no real PII/PHI in any asset.
 | Extension unit tests (`npm test`) | ✅ 115 passed / 0 failed (11 files) |
 | Production build (`npm run build`) | ✅ Pass |
 | Offline OCR smoke test (`npm run test:offline-ocr`) | ✅ Pass ("HELLO", no network) |
-| Security review sign-off | ⚠️ **APPROVED at commit `b4c8614` only** (fail-closed messaging, consent gating, metadata-only signed audit, report-only attr scan, fail-closed document pipeline, vendored-only build, synthetic-only fixtures). **Re-confirmation required for `644e0f2`**: the detector, OCR language handling, community boundary, and all published claims changed after that approval. Not yet re-reviewed. |
+| Security review sign-off | ⚠️ **APPROVED at commit `b4c8614` only** (fail-closed messaging, consent gating, metadata-only signed audit, report-only attr scan, fail-closed document pipeline, vendored-only build, synthetic-only fixtures). **Re-confirmation required for `7756775`**: the detector, OCR language handling, community boundary, and all published claims changed after that approval. Not yet re-reviewed. |
 | Release-blocker fixes | ✅ DOCX offscreen gate closed (was silently dropped → 180s timeout); SCAN_RESULT bound to pending sessionId; mask-command responses verified; release tooling requires explicit approved commit + clean tree; `gatewayOrigin` validated as https origin (deny-by-default) |
 
 ## Feature additions (2026-08-23, `feat/chrome-extension-release`)
@@ -67,9 +67,9 @@ release build. Synthetic-only fixtures; no real PII/PHI in any asset.
 
 | Field | Value |
 |-------|-------|
-| Commit SHA | `644e0f2` |
-| Store ZIP | `release/governworld-redaction-644e0f2.zip`, SHA-256 `8CCDC8C2E99E34B8DEEFEC65C81CC7AB7AEFAAB1EC83D3191E584A65183D2210` |
-| Mirror tarball | `release/governworld-redaction-644e0f2.tar.gz` (same 28-file payload), SHA-256 `F717C5658EA2359455208A95074642B958E2592763FA1FC656C44DA8FFA3A0E2` |
+| Commit SHA | `7756775` |
+| Store ZIP | `release/governworld-redaction-7756775.zip`, SHA-256 `6F7C97B17BE381A0B3F3EBA3B04D44EBE3597D4E7ABCA050F7228AB356EA5936` |
+| Mirror tarball | `release/governworld-redaction-7756775.tar.gz` (same 28-file payload), SHA-256 `1F4BFA9B143D21C1CAE76CCD127F2AF03BFE1595748C5715246EB6351D6F8F6C` |
 | Checksums | `release/SHA256SUMS` |
 | Artifact size | 14.4 MB (store limit 2 GB) |
 | Lockfile SHA-256 | `CB1A4C62F72D1DFF1E004743BD0747F19596A295000C9C8BFBD6781E286D664E` |
@@ -79,7 +79,7 @@ release build. Synthetic-only fixtures; no real PII/PHI in any asset.
 | `npm audit` | 0 vulnerabilities |
 | Runtime dependencies | pdfjs-dist 6.3.289, tesseract.js 7.0.0, pdf-lib 1.17.1, mammoth 1.13.0 |
 | Build runtime | Node 24 in CI (Node 20 reached EOL 2026-04-30; pdfjs-dist 6 needs >=22.13) |
-| Packaged-artifact verification | `npm run verify:zip release/governworld-redaction-644e0f2.zip` — extracts the zip and loads it in Chromium; 11 manifest references, 4 offline assets, `privacy.html` + `legal.html` + `redact.html` present and linked, all 6 pages CSP-clean, service worker alive |
+| Packaged-artifact verification | `npm run verify:zip release/governworld-redaction-7756775.zip` — extracts the zip and loads it in Chromium; 11 manifest references, 4 offline assets, `privacy.html` + `legal.html` + `redact.html` present and linked, all 6 pages CSP-clean, service worker alive |
 | Print pipeline | `npm run verify:print` — real redaction, then opens `redact.html` and asserts the printed page carries redaction pixels at the source page's physical size |
 | Photo OCR/redaction E2E | `npm run test:photo-e2e` — 8 findings across 7 categories; each expected value 100% dark; the two prose false-positive guards (`Amount Due: $248.00`, notes prose) unchanged |
 | UI walkthrough | `npm run capture:ui` — 26 steps, 0 console errors |
@@ -112,10 +112,10 @@ release build. Synthetic-only fixtures; no real PII/PHI in any asset.
 2. **Final security review sign-off — outstanding for the current artifact.**
    Approved at `b4c8614` (2026-08-22). The detector, OCR language handling,
    community boundary, and every published claim changed after that point, so
-   that approval does not carry over to `644e0f2`. It must be re-confirmed
+   that approval does not carry over to `7756775`. It must be re-confirmed
    against the exact submitted SHA.
 3. ~~Commit approval → generate ZIP from that exact commit → record artifact
-   SHA-256 here.~~ **Done** at `644e0f2`; ZIP + tar.gz + `release/SHA256SUMS`,
+   SHA-256 here.~~ **Done** at `7756775`; ZIP + tar.gz + `release/SHA256SUMS`,
    both carrying an identical 28-file payload, both checksums re-verified
    independently with `Get-FileHash`, and the ZIP proven loadable by
    `npm run verify:zip`.
