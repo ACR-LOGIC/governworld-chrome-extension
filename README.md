@@ -6,6 +6,7 @@
 [![Local-First](https://img.shields.io/badge/Architecture-100%25%20Local--First-brightgreen.svg)](#local-first-architecture--privacy-guarantees)
 [![Cross-Browser](https://img.shields.io/badge/Browsers-Chrome%20%7C%20Edge%20%7C%20Firefox%20%7C%20Safari%20%7C%20Brave-blue.svg)](#browser-compatibility--cross-platform-installation-guide)
 [![Support on Buy Me A Coffee](https://img.shields.io/badge/Support-Buy%20Me%20A%20Coffee-ff813f?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/governworld)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-ea4aaa?logo=github)(https://github.com/sponsors/ACR-LOGIC)
 
 The **GovernWorld Extension** is a fully functional, local-first browser protection tool that brings GovernWorld's high-assurance detection and redaction engine directly into your web browser. It empowers users to detect, mask, and redact sensitive Personally Identifiable Information (PII), Protected Health Information (PHI), financial data, credentials, and custom patterns directly on web pages and in uploaded documents (PDF, DOCX, images) **without any data ever leaving the local device**.
 
