@@ -63,7 +63,58 @@ release build. Synthetic-only fixtures; no real PII/PHI in any asset.
 
 ## Release artifact
 
-### Current (supersedes `dfcf02a`)
+### v0.1.1 (current; supersedes `c273fd0` / v0.1.0)
+
+v0.1.0's document path processed correctly and looked completely inert: a user
+picked a file, waited 6–20 seconds seeing no status, no spinner and no error, and
+lost the document if they looked away. v0.1.1 fixes that and adds a usable route
+for a page that *is* an image. `0.1.0` is left published as-is; the new tag
+supersedes it rather than rewriting a published release.
+
+| Field | Value |
+|-------|-------|
+| Commit SHA | `0315091` |
+| Version | 0.1.1 |
+| Store ZIP | `release/governworld-redaction-0315091.zip`, SHA-256 `7F2DBD1C9A3B3DA8633204AFB63480B7281DD46D88BF6809E17D300937E14450` |
+| Mirror tarball | `release/governworld-redaction-0315091.tar.gz` (same payload), SHA-256 `E4D93403197AB720548F67B13534E38DCAE6C4D6F623A5463B8ADA881A3AFC5B` |
+| Checksums | `release/SHA256SUMS` |
+
+### What changed in v0.1.1
+
+| Area | Fix |
+|------|-----|
+| Document feedback | `#doc-status` shipped with `hidden` and nothing lifted it, so every status *and every error* rendered into a `display:none` element; `setDocStatus` also wrote to the wrapper instead of the `#doc-status-text` paragraph the markup provides. |
+| Progress | `resetDocStages()` hid the progress row and nothing re-showed it during a 6–20s preview; the success path re-showed it, leaving a permanent "Processing document…" spinner and Cancel button on a finished document. |
+| Worker refusals | Document call sites fired and forgot the reply, discarding every `{ ok: false, error }`. A refused request was indistinguishable from a slow one. |
+| Initialisation | `void initPopup()` swallowed a rejection. Init awaits settings before attaching a single listener, so a failure left working markup with no behaviour at all. |
+| Textless pages | A page that *is* an image scans to 0 characters and reported **"Completed securely on-device"** — a clean bill of health for a document full of PII. `visibleChars === 0` now takes a dedicated error branch naming the image case. |
+| Image route | The scan reports `imageCandidates`; the popup offers each one. **Green** = original bytes read at full resolution; **amber** = rendered capture only, which OCRs worse. No host permissions added. |
+| Drawing | The popup is a 360px column, so a page of text renders at ~1/10 size and a box lands on unreadable pixels. `review.html` shows the document at full size with the controls in a side panel. A drawn box id must start with `custom:`, which the worker validates. |
+| Session durability | The session was in-memory only, so closing the popup lost the document. It is persisted and rebuilt from IndexedDB. |
+| Storage | The popup and worker each had their own `openDb`; a blocked `indexedDB.open` fires neither `success` nor `error`, so callers awaited forever. Now one shared, bounded implementation. |
+| Worker lifecycle | One transient purge failure latched `startupCleanupError` and rejected *every* message for the worker's lifetime. A reclaimed offscreen document stalled the full 180s timeout; it now fails fast and retries. |
+| Popup space | Removed the decorative "Protection Active" hero: it asserted protection was running whether or not a scan had ever run. |
+
+| Verification gate | Result |
+|------|--------|
+| `npm run typecheck` | ✅ Pass |
+| `npm test` | ✅ **1112 passed / 0 failed (59 files)** |
+| `npm run build` | ✅ Pass |
+| `npx vitest run tests/dist-manifest.test.ts tests/offline-assets.test.ts` | ✅ 11 passed |
+| `npm run sync:sidepanel:check` | ✅ ok |
+| `npm run test:doc-flow` | ✅ Document Studio end-to-end in real Chromium: pick PDF → progress → 12 findings → spinner stops → survives reload → redact → download → print view |
+| `npm run test:no-text` | ✅ Image-only page does not claim success; a text page still does |
+| `npm run test:image-capture` | ✅ Textless page offers its image; OCR finds 8 findings; redact writes a file |
+| `npm run test:review` | ✅ Draws a real box (8→9 findings), **2,174,960 black pixels painted**, whiteout repaints, select/clear work, download completes |
+| Mutation check | Reverting the `custom:` box-id prefix fails `test:review` with the worker's real error ("The selected findings are no longer available") |
+
+**Security review sign-off for 0.1.1: NOT YET OBTAINED.** The approval recorded
+below covers v0.1.0 (`c273fd0`). These changes alter the document and redaction
+path, so the previous sign-off does not carry over. The reviewer is the author
+and sole maintainer; even once given, assurance level is **first-party** and must
+not be presented as an independent third-party assessment.
+
+### Previous: v0.1.0 (`c273fd0`)
 
 | Field | Value |
 |-------|-------|
@@ -74,7 +125,7 @@ release build. Synthetic-only fixtures; no real PII/PHI in any asset.
 | Artifact size | 14.4 MB (store limit 2 GB) |
 | Lockfile SHA-256 (as committed in git, LF) | `CB1A4C62F72D1DFF1E004743BD0747F19596A295000C9C8BFBD6781E286D664E` | **Careful:** a Windows checkout with `core.autocrlf=true` materialises CRLF line endings, so hashing the *working-tree* file yields `830BC33A7045CE4D1802E2B44FA09C0D9B2BF9824E51A144C8ADF3E7714B50F2` instead. Both are correct for what they measure. Verify against the committed content with `git show HEAD:package-lock.json` rather than hashing the working tree. |
 | Zip root | `manifest.json` at archive root, no wrapping folder |
-| Manifest | v0.1.0, name 21 chars (limit 45), description 117 chars (limit 132) |
+| Manifest | v0.1.0, name 21 chars (limit 45), description 117 chars (limit 132) — superseded by v0.1.1 |
 | Permissions | `activeTab`, `scripting`, `storage`, `downloads`, `offscreen`, `sidePanel`, `contextMenus` + optional `notifications` — no host permissions (re-confirmed in the built `dist/manifest.json`) |
 | `npm audit` | 0 vulnerabilities |
 | Runtime dependencies | pdfjs-dist 6.3.289, tesseract.js 7.0.0, pdf-lib 1.17.1, mammoth 1.13.0 |
@@ -89,6 +140,14 @@ release build. Synthetic-only fixtures; no real PII/PHI in any asset.
 
 The Chrome Web Store listing uploads these images separately from the extension
 zip, so the zip checksum does not cover them. Digests of the committed files:
+
+> **Stale for v0.1.1.** `04-document-studio.png` was captured while the popup
+> still had the decorative "Protection Active" hero, which has since been
+> removed. The other screenshots are unaffected. Regenerate with
+> `npm run capture:store` before resubmitting the listing, then re-run
+> `npm run verify:digests`. The digests below are left as-is deliberately, so a
+> drift here fails CI loudly rather than passing on an image that no longer
+> matches the product.
 
 ```
 A707493D3E702E0A6BE3E2D430C1736299FDB2AE6A6C2AD10C418B594C7ED5B9  release/images/promo-tile-440x280.png
