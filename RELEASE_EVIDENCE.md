@@ -73,7 +73,50 @@ note governs — the older "Done" is scoped to its own block, named explicitly.
 
 ## Release artifact
 
-### Per-browser release (`d89baa2`; version 0.1.1, unreleased)
+### Per-browser release (`0e354d9`; version 0.1.1, unreleased — supersedes the `d89baa2` packaging)
+
+Delta from `d89baa2`: headed-harness channel override (`GW_BROWSER_CHANNEL`),
+dev-mode install guide, Safari handoff staged into packaging. No enforcement,
+detection, policy, or UI-behavior changes — full suite re-run below.
+
+| Field | Value |
+|-------|-------|
+| Commit SHA | `0e354d9` |
+| Version | 0.1.1 |
+| Chromium ZIP | `release/GovernWorld-Chromium-v0.1.1-0e354d9.zip`, SHA-256 `65A1FB4BD6B48B1F00BBFEF2D18BEDE3F77F4004861F620ACB391EF5734F30EA` |
+| Chromium mirror tarball | `release/GovernWorld-Chromium-v0.1.1-0e354d9.tar.gz` (same payload), SHA-256 `276F5ED415AC3D0B1045840ADE687EECD0A70D4D923C3D5C12B2664D7C703CA7` |
+| Firefox ZIP | `release/GovernWorld-Firefox-v0.1.1-0e354d9.zip`, SHA-256 `091F18EF27AB3F7ECC56FB05C86417AAB906F1B71F6C043DED1B475B22589ED6` |
+| Firefox mirror tarball | `release/GovernWorld-Firefox-v0.1.1-0e354d9.tar.gz` (same payload), SHA-256 `7EC9420874DDC1F7523D7123C53865EAEE12C6B5FFD3153A7A8FE7F3C5F8E24F` |
+| Safari handoff ZIP (packaging input, NOT a distributable) | `release/GovernWorld-Safari-handoff-v0.1.1-0e354d9.zip`, SHA-256 `A17B1065F6C586621B248EC53283E53B0939B7E1ED7339DD4B8B07F7490AB3FA` |
+| Safari handoff mirror tarball | `release/GovernWorld-Safari-handoff-v0.1.1-0e354d9.tar.gz` (same payload), SHA-256 `CCC2D7D2233EFAB70A9FA773A2731129D43CE7FE02FB534F4F5EBEE29C722F5E` |
+| Checksums | `release/BROWSER_SHA256SUMS` (produced by `npm run release:browsers 0e354d9`) |
+| Dev-mode install rules | `docs/DEV-MODE-INSTALL.md` (also staged as `INSTALL.txt` inside the Safari handoff) |
+| Firefox identity | `redaction@governworld.acrlogic.com` (locked; asserted in both manifests; re-verified inside the shipped Firefox zip) |
+
+| Verification gate | Result |
+|------|--------|
+| `npm run typecheck` | ✅ Pass |
+| `npm test` | ✅ **1180 passed / 0 failed (65 files)** |
+| `npm run build` + `build:firefox` + `build:safari` | ✅ Pass |
+| Firefox/Safari zip structural check | ✅ Manifest shape, locked gecko id, bundles, tessdata, Safari `INSTALL.txt` all present |
+| `npm run verify:zip` (Chromium artifact) | ⚠️ Partial: all 22 structural checks pass; live-browser stage unrunnable here (see sign-off caveats) |
+| `npm run verify:digests` | ✅ Pass (after recording) |
+| Headed-browser enforcement matrix | ⬜ Pending — recorded in `BROWSER_SUPPORT.md` when executed |
+
+**Security review sign-off for `d89baa2`: OBTAINED 2026-09-30 (first-party).**
+Recorded at the principal's direction ("Sign off d89baa2"). Scope: the
+cross-browser protection work — modes, enterprise policy, Firefox/Safari
+targets, paste-enforcement hardening, and the evidence/docs updates in that
+commit. Assurance level is **first-party** (reviewer is the author) and must
+not be presented as an independent third-party assessment. Known caveats at
+sign-off: headed-browser enforcement runs still pending (no runnable browser
+automation in the review environment — unit + happy-dom suites pass, headed
+matrix outstanding); browser-run QA and store/AMO submission outstanding. The
+`0e354d9` delta above (harness channel override, install docs, handoff
+staging; no enforcement changes) is covered by the same review plus the
+re-run gates in its table.
+
+### Per-browser release (`d89baa2`; version 0.1.1, superseded for packaging by `0e354d9`)
 
 Cross-browser protectionModes, enterprise policy, Firefox/Safari targets, and
 paste-enforcement hardening on top of v0.1.1. Not submitted anywhere; the
