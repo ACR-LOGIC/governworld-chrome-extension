@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { GovernWorldApiClient } from "../src/api/client.js";
-import { validateApiUrl, setApiUrl, getApiUrl } from "../src/api/config.js";
+import { validateApiUrl, setApiUrl, getApiUrl, CURRENT_EXTENSION_VERSION } from "../src/api/config.js";
 
 describe("API Client & Transport Security", () => {
   beforeEach(() => {
@@ -50,7 +50,7 @@ describe("API Client & Transport Security", () => {
     const headers = capturedHeaders as Record<string, string>;
     expect(headers["X-Request-ID"]).toBeDefined();
     expect(headers["X-Request-ID"]).toMatch(/^[a-f0-9-]{36}$/);
-    expect(headers["X-Extension-Version"]).toBe("0.1.0");
+    expect(headers["X-Extension-Version"]).toBe(CURRENT_EXTENSION_VERSION);
     expect(headers["X-Installation-ID"]).toBeDefined();
   });
 

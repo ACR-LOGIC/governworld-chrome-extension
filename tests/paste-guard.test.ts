@@ -371,6 +371,40 @@ describe("Paste Guard - Floating Dialog & Callbacks", () => {
     expect(callbacks.onSanitize).toHaveBeenCalledTimes(1);
   });
 
+  it("renders page-derived finding values as text, never as HTML", () => {
+    // A hostile page controls the bytes that become match values (e.g. an
+    // email domain or a secret's visible head). If those values reached an
+    // HTML parser, a crafted paste could inject markup into the dialog.
+    const doc = createMockDocument();
+    const target = createMockElement("input", { type: "text" });
+    doc.body.appendChild(target);
+
+    const matches = [
+      { category: "email", confidence: 0.9, value: "a@<b>evil.com", start: 0, end: 14 },
+    ] as Parameters<typeof showPasteGuardDialog>[2];
+    const callbacks = {
+      onSanitize: vi.fn(),
+      onRaw: vi.fn(),
+      onCancel: vi.fn(),
+    };
+
+    const handle = showPasteGuardDialog(doc, target, matches, callbacks);
+    const shadow = handle.host.shadowRoot as any;
+    const previews = shadow.querySelectorAll(".gw-finding-preview") as any[];
+    expect(previews.length).toBe(1);
+    // The masked preview keeps the hostile domain but only as literal text.
+    expect(previews[0].textContent).toBe("a***@<b>evil.com");
+
+    const tags: string[] = [];
+    const walk = (node: any): void => {
+      tags.push(node.tagName);
+      for (const child of node.children ?? []) walk(child);
+    };
+    walk(shadow);
+    expect(tags).not.toContain("B");
+    expect(tags).not.toContain("IMG");
+  });
+
   it("triggers onRaw on Paste Unchanged click", () => {
     const doc = createMockDocument();
     const target = createMockElement("input", { type: "text" });

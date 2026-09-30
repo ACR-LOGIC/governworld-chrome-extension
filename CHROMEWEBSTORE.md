@@ -2,7 +2,7 @@
 
 > **Last Updated:** 2026-09-27  
 > **Extension Name:** GovernWorld Redaction  
-> **Extension Version:** 0.1.0  
+> **Extension Version:** 0.1.1  
 > **Target Manifest Version:** Manifest V3  
 > **Status:** Ready for Submission
 

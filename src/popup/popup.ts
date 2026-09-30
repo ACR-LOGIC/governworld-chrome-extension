@@ -242,12 +242,6 @@ export function applyUiLanguage(lang: LanguageCode): void {
       element.textContent = t(lang, key);
     }
   });
-  document.querySelectorAll<HTMLElement>("[data-i18n-html]").forEach((element) => {
-    const key = element.getAttribute("data-i18n-html");
-    if (key) {
-      element.innerHTML = t(lang, key);
-    }
-  });
   document.querySelectorAll<HTMLElement>("[data-i18n-title]").forEach((element) => {
     const key = element.getAttribute("data-i18n-title");
     if (key) {

@@ -710,6 +710,7 @@ export async function fetchCommunityRules(): Promise<CommunityRule[]> {
     const timer = setTimeout(() => controller.abort(), 10_000);
     const res = await fetch("https://community.governworld.acrlogic.com/v1/community/rules", {
       headers: { Accept: "application/json" },
+      credentials: "omit",
       signal: controller.signal,
     });
     clearTimeout(timer);

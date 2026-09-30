@@ -6,7 +6,7 @@
 
 export const DEFAULT_PROD_API_URL = "https://api.governworld.com";
 export const DEFAULT_DEV_API_URL = "http://127.0.0.1:8000";
-export const CURRENT_EXTENSION_VERSION = "0.1.0";
+export const CURRENT_EXTENSION_VERSION = "0.1.1";
 
 const STORAGE_KEY_API_URL = "gw_api_url";
 const STORAGE_KEY_INSTALLATION_ID = "gw_installation_id";

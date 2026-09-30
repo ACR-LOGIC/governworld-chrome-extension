@@ -477,13 +477,22 @@ export function showPasteGuardDialog(
     const displayName = getFindingDisplayName(match.category, match.value);
     const masked = maskValue(match.category, match.value);
 
-    item.innerHTML = `
-      <div class="gw-finding-label">
-        <span>${displayName}</span>
-        <span style="font-size: 10px; color: #94a3b8;">${Math.round(match.confidence * 100)}%</span>
-      </div>
-      <div class="gw-finding-preview">${masked}</div>
-    `;
+    // Page-derived values are rendered as text, never parsed as HTML: a
+    // hostile page could otherwise inject markup into this dialog through a
+    // crafted match value (e.g. an email domain or a secret's head character).
+    const label = doc.createElement("div");
+    label.className = "gw-finding-label";
+    const nameSpan = doc.createElement("span");
+    nameSpan.textContent = displayName;
+    const confSpan = doc.createElement("span");
+    confSpan.style.fontSize = "10px";
+    confSpan.style.color = "#94a3b8";
+    confSpan.textContent = `${Math.round(match.confidence * 100)}%`;
+    label.append(nameSpan, confSpan);
+    const preview = doc.createElement("div");
+    preview.className = "gw-finding-preview";
+    preview.textContent = masked;
+    item.append(label, preview);
     content.appendChild(item);
   }
 

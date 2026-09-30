@@ -174,7 +174,7 @@ describe("fetchCommunityRules", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://community.governworld.acrlogic.com/v1/community/rules");
     // No cookies, auth, or gateway key may ride along with a rule fetch.
-    expect(init.credentials ?? "omit").toBe("omit");
+    expect(init.credentials).toBe("omit");
     expect(JSON.stringify(init.headers ?? {})).not.toMatch(/authorization|cookie|api-key/i);
   });
 });
