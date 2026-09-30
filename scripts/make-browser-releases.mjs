@@ -7,17 +7,17 @@
 // Output (all recorded in release/BROWSER_SHA256SUMS, never fabricated):
 //   release/GovernWorld-Chromium-v<V>-<sha>.zip (+ .tar.gz mirror)
 //   release/GovernWorld-Firefox-v<V>-<sha>.zip  (+ .tar.gz mirror)
+//   release/GovernWorld-Safari-handoff-v<V>-<sha>.zip (+ .tar.gz mirror)
 //   release/BROWSER_SHA256SUMS
 //
-// Safari gets no distributable here: packaging a Safari web extension into a
-// signed app requires a Mac with Xcode or App Store Connect (Apple Developer
-// Program), neither of which is available on this build machine. The
-// dist-safari/ handoff payload is still built (so it cannot rot silently) and
-// its manifest checksum is recorded in RELEASE_EVIDENCE.md, but no zip is
-// presented as a Safari release artifact.
+// The Safari handoff is a packaging *input*, not an installable extension:
+// the payload plus docs/DEV-MODE-INSTALL.md staged as INSTALL.txt, for
+// `xcrun safari-web-extension-packager` or the App Store Connect web
+// packager. The "-handoff" suffix and the sums note say so explicitly, so no
+// row reads as a distributable Safari release.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -90,14 +90,16 @@ function packageTarget(family, distName) {
 packageTarget("Chromium", "dist");
 packageTarget("Firefox", "dist-firefox");
 
-// Safari handoff payload: built above so it cannot rot, checksummed by
-// manifest for evidence, but NOT zipped as a release artifact.
+// Safari handoff: stage the payload plus the install rules, then package it
+// under an explicit -handoff name. Not a distributable; see header comment.
 {
-  const manifest = readFileSync(join(pkgRoot, "dist-safari", "manifest.json"));
+  copyFileSync(
+    join(pkgRoot, "docs", "DEV-MODE-INSTALL.md"),
+    join(pkgRoot, "dist-safari", "INSTALL.txt")
+  );
+  packageTarget("Safari-handoff", "dist-safari");
   sums.push(
-    "",
-    "Safari: no distributable artifact (requires Mac+Xcode or App Store Connect).",
-    `Handoff payload manifest sha256: ${createHash("sha256").update(manifest).digest("hex").toUpperCase()}`
+    "NOTE: Safari-handoff is a packaging input for Apple tooling, not an installable extension."
   );
 }
 
