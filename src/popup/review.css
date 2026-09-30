@@ -1,0 +1,328 @@
+/* Full-screen document review.
+   The popup is a 360px column; this page is the document at full size with the
+   controls beside it, so a drawn box lands on text the user can actually read. */
+
+:root {
+  --bg: #0b1220;
+  --surface: #111c2e;
+  --border: #1e293b;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #22d3ee;
+  --ok: #34d399;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+}
+
+.review {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  height: 100vh;
+}
+
+/* ---------- Stage: the document, at full size ---------- */
+.review__stage {
+  overflow: auto;
+  padding: 24px;
+  background: #070d18;
+}
+
+.review__pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+
+.review__sheet {
+  position: relative;
+  /* Never shrink the page below its natural size: this whole view exists
+     because the popup made the words unreadable. */
+  width: max-content;
+  max-width: none;
+  background: #ffffff;
+  box-shadow: 0 10px 40px -8px rgba(0, 0, 0, 0.7);
+}
+
+.review__pageimg {
+  display: block;
+  /* The preview bitmap is a downscaled render; the canvas overlay above it
+     carries the drawing surface at full resolution. */
+  max-width: none;
+}
+
+.review__overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.review__status {
+  margin: 0;
+  padding: 12px 0;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ---------- Panel: controls ---------- */
+.review__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  overflow-y: auto;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+}
+
+.review__head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.review__title {
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.review__meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.review__notice {
+  padding: 10px;
+  border: 1px solid var(--warning);
+  border-left-width: 3px;
+  border-radius: 6px;
+  background: rgba(251, 191, 36, 0.08);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.review__block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review__blockhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.review__h {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.review__label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.review__hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.review__row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.review__row--end {
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.review__findings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.review__actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.review__status--error {
+  color: var(--danger);
+}
+
+/* ---------- Shared controls, matching the popup ---------- */
+.btn {
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #16233a;
+  color: var(--text);
+  padding: 8px 14px;
+  min-height: 40px;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn--sm {
+  font-size: 12px;
+  padding: 6px 10px;
+  min-height: 34px;
+}
+
+.btn--primary {
+  background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+  border-color: #0ea5e9;
+  color: #04121d;
+  font-weight: 600;
+}
+
+.btn--ghost {
+  background: transparent;
+}
+
+.preset-select,
+input[type="text"] {
+  font-family: var(--sans);
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: #16233a;
+  color: var(--text);
+  padding: 8px 10px;
+  min-height: 40px;
+  width: 100%;
+}
+
+.count-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: rgba(34, 211, 238, 0.12);
+  color: var(--accent);
+}
+
+/* ---------- Findings rows ---------- */
+.finding {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.finding:hover {
+  border-color: var(--accent);
+}
+
+.finding--report-only {
+  opacity: 0.5;
+}
+
+.finding__check {
+  margin: 2px 0 0;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.finding__main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.finding__severity {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.dialog {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  max-width: 380px;
+  padding: 18px;
+}
+
+.dialog::backdrop {
+  background: rgba(3, 7, 18, 0.7);
+}
+
+.footnote {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+  .review {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .review__panel {
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+}

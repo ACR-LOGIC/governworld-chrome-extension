@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Document review - GovernWorld</title>
+    <link rel="stylesheet" href="review.css" />
+  </head>
+  <body>
+    <!--
+    Full-screen document review.
+
+    The popup's studio is a 360px column, so a page of text renders at roughly a
+    tenth of its natural size: the words are unreadable, and drawing a redaction
+    box over something you cannot read is not a usable feature. This page shows
+    the document at full size with the controls in a side panel, and it is a
+    plain extension page with no markup of its own beyond this.
+
+    The bytes never travel in a message. The popup writes the document session
+    into chrome.storage.session and this page reads it, exactly as redact.html
+    reads redacted pages out of the shared store.
+    -->
+    <div class="review">
+      <!-- Left: the document, at full size, scrollable. -->
+      <main class="review__stage" id="stage" aria-label="Document pages">
+        <div class="review__pages" id="pages"></div>
+        <p class="review__status" id="stage-status" role="status" aria-live="polite"></p>
+      </main>
+
+      <!-- Right: every redaction control, in one column. -->
+      <aside class="review__panel" aria-label="Redaction controls">
+        <header class="review__head">
+          <strong class="review__title" id="doc-name">Document</strong>
+          <span class="review__meta" id="doc-pages"></span>
+        </header>
+
+        <div class="review__notice" id="source-notice" hidden></div>
+
+        <section class="review__block">
+          <div class="review__blockhead">
+            <h2 class="review__h" id="findings-label">Findings</h2>
+            <span class="count-badge" id="findings-count">0</span>
+          </div>
+          <div class="review__row">
+            <button type="button" class="btn btn--sm" id="select-all">Select all</button>
+            <button type="button" class="btn btn--sm" id="select-none">Clear all</button>
+          </div>
+          <ul class="findings-list review__findings" id="findings" aria-labelledby="findings-label"></ul>
+        </section>
+
+        <section class="review__block">
+          <h2 class="review__h">Draw your own box</h2>
+          <p class="review__hint" id="draw-hint">Drag across the document to cover anything the scan missed.</p>
+          <div class="review__row">
+            <button type="button" class="btn btn--sm" id="clear-drawn">Clear drawn boxes</button>
+            <button type="button" class="btn btn--sm" id="undo-drawn">Undo last box</button>
+          </div>
+        </section>
+
+        <section class="review__block">
+          <h2 class="review__h">Redaction style</h2>
+          <label class="review__label" for="style">Style</label>
+          <select id="style" class="preset-select">
+            <option value="blackout">Blackout (solid opaque black box)</option>
+            <option value="whiteout">Whiteout (solid opaque white box)</option>
+            <option value="stamp">Text stamp (box with centered label)</option>
+          </select>
+          <div id="stamp-row" hidden>
+            <label class="review__label" for="stamp-text">Stamp text</label>
+            <input id="stamp-text" type="text" value="[REDACTED]" />
+          </div>
+        </section>
+
+        <footer class="review__actions">
+          <p class="review__status" id="action-status" role="status" aria-live="polite"></p>
+          <button type="button" class="btn btn--ghost" id="close">Close</button>
+          <button type="button" class="btn btn--primary" id="redact">Redact &amp; download</button>
+        </footer>
+      </aside>
+    </div>
+
+    <dialog id="confirm" class="dialog" aria-labelledby="confirm-title">
+      <h3 id="confirm-title">Confirm redaction</h3>
+      <p class="footnote">This creates a redacted copy. The original is not changed.</p>
+      <div class="review__row review__row--end">
+        <button type="button" class="btn btn--ghost btn--sm" id="confirm-cancel">Cancel</button>
+        <button type="button" class="btn btn--primary btn--sm" id="confirm-go">Download redacted</button>
+      </div>
+    </dialog>
+
+    <script src="review.js"></script>
+  </body>
+</html>

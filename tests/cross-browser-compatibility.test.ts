@@ -65,6 +65,7 @@ describe("Cross-Browser Compatibility Gates (Chrome, Firefox, Edge, Safari, Brav
         "src/popup/privacy.html",
         "src/popup/legal.html",
         "src/popup/redact.html",
+        "src/popup/review.html",
         "src/sidepanel/sidepanel.html",
         "src/offscreen/offscreen.html",
         "src/landing/index.html",
@@ -112,7 +113,13 @@ describe("Cross-Browser Compatibility Gates (Chrome, Firefox, Edge, Safari, Brav
 
     it("uses standard HTML5 Canvas, IndexedDB, and Web Speech APIs supported in all major engines", () => {
       const popupSrc = readFileSync(join(extRoot, "src/popup/popup.ts"), "utf8");
-      expect(popupSrc).toContain("indexedDB");
+      // The popup no longer calls `indexedDB` itself: staged-document storage
+      // lives in src/shared/docDb.ts, which the popup and the worker share. The
+      // requirement is still "standard IndexedDB only, no vendor shim", so the
+      // assertion follows the code and the popup is still checked for using it.
+      const docDbSrc = readFileSync(join(extRoot, "src/shared/docDb.ts"), "utf8");
+      expect(docDbSrc).toContain("indexedDB");
+      expect(popupSrc).toContain("docDb.js");
       expect(popupSrc).toContain("speechSynthesis");
       expect(popupSrc).toContain("SpeechSynthesisUtterance");
     });

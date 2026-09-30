@@ -43,16 +43,15 @@
 
     <!-- Protection Tab -->
     <section id="tab-protection" class="tab-panel tab-panel--active" role="tabpanel" aria-labelledby="tab-btn-protection">
-      <div class="protection-status">
-        <div class="status-indicator" aria-hidden="true">
-          <div class="status-ring"></div>
-          <span class="status-dot"></span>
-        </div>
-        <h2 class="status-title" data-i18n="protection_active">Protection Active</h2>
-        <p class="status-desc" data-i18n="protection_running">Your protection is running</p>
-      </div>
+  <!--
+  The "Protection Active" hero was removed deliberately. It was a decorative
+  status light that asserted protection was running regardless of whether a
+  scan had ever run, so it occupied the most valuable space in a 360px popup
+  while telling the user nothing they could act on. The per-service rows below
+  state what is actually enabled.
+  -->
 
-      <div class="protection-services">
+  <div class="protection-services">
         <div class="service-row">
           <span class="service-icon" aria-hidden="true">◉</span>
           <span class="service-label" data-i18n="page_protection">Page protection</span>
@@ -94,6 +93,18 @@
       <div id="scan-summary" class="scan-summary" hidden>
         <p id="status" class="status-text"></p>
         <p id="summary-chars" class="footnote"></p>
+
+        <!--
+        Shown only when a page scan found no text to read AND the page carries
+        images large enough to be a scanned document. The button is the only
+        route from "there is nothing here to read" to an actual redaction, and
+        it hands the image to the Document Studio, which already does OCR,
+        review, redaction and download.
+        -->
+        <div id="image-capture" class="image-capture" hidden>
+          <p id="image-capture-hint" class="footnote" data-i18n="image_capture_hint"></p>
+          <div id="image-capture-options" class="image-capture__options" role="group" aria-labelledby="image-capture-hint"></div>
+        </div>
       </div>
 
       <p id="cloud-notice" class="cloud-notice" hidden></p>
@@ -170,10 +181,11 @@
           </div>
           <ul id="doc-findings" class="findings-list" role="list"></ul>
         </div>
-        <div class="doc-actions">
-          <button id="doc-redact-btn" class="btn btn--primary btn--sm" type="button" data-i18n="redact_download_btn">Redact & Download</button>
-          <button id="doc-clear-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="start_over_btn">Start Over</button>
-        </div>
+  <div class="doc-actions">
+    <button id="doc-open-review-btn" class="btn btn--primary btn--sm" type="button" data-i18n="doc_review_btn">Open full-screen review</button>
+    <button id="doc-redact-btn" class="btn btn--sm" type="button" data-i18n="redact_download_btn">Redact &amp; Download</button>
+    <button id="doc-clear-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="start_over_btn">Start Over</button>
+  </div>
       </div>
 
       <div id="doc-progress" class="doc-progress" hidden role="status" aria-live="polite">

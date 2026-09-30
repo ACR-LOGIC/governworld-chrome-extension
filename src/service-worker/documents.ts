@@ -7,6 +7,7 @@ import type { RedactedDocRef } from "../shared/docStore.js";
 import type { DocKind, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
 import { loadSettings, meetsThreshold } from "../shared/settings.js";
 import { loadCustomPatterns } from "../shared/customPatterns.js";
+import { docStoreFile, docReadFile, docDeleteFile, docClearFiles } from "../shared/docDb.js";
 
 /**
  * Document session management for the service worker. File bytes are held in
@@ -20,6 +21,17 @@ const DB_VERSION = 1;
 const STORE = "docfiles";
 const MAX_DOC_BYTES = 20 * 1024 * 1024;
 const LAST_DOC_KEY = "lastDocId";
+/**
+ * Descriptor for the in-flight/last document session, minus the file bytes.
+ *
+ * MV3 tears the service worker down after ~30s idle and the `sessions` map dies
+ * with it, while `lastDocId` in storage.session survives. That combination made
+ * the Document Studio vanish on reopen even though the bytes were still in
+ * IndexedDB, so a user who looked away during the 6-20s preview lost the whole
+ * job. Persisting the descriptor lets the worker rebuild the session from the
+ * stored file instead of asking the user to pick the document again.
+ */
+const LAST_SESSION_KEY = "lastDocSession";
 
 export interface DocSession {
   docId: string;
@@ -35,60 +47,22 @@ export interface DocSession {
 const sessions = new Map<string, DocSession>();
 let lastDocId: string | null = null;
 
-let dbPromise: Promise<IDBDatabase> | null = null;
-
-function openDb(): Promise<IDBDatabase> {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("IndexedDB is unavailable"));
-  });
-  return dbPromise;
-}
-
 export async function storeFile(fileKey: string, bytes: ArrayBuffer): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(bytes, fileKey);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("Could not store the file"));
-  });
+  await docStoreFile(fileKey, bytes);
 }
 
 export async function readFile(fileKey: string): Promise<ArrayBuffer | null> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readonly");
-    const req = tx.objectStore(STORE).get(fileKey);
-    req.onsuccess = () => resolve((req.result as ArrayBuffer | undefined) ?? null);
-    req.onerror = () => reject(req.error ?? new Error("Could not read the file"));
-  });
+  return docReadFile(fileKey);
 }
 
 export async function deleteFile(fileKey: string): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).delete(fileKey);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("Could not delete the file"));
-  });
+  await docDeleteFile(fileKey);
 }
 
 export async function clearAllFiles(): Promise<void> {
-  const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).clear();
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("Could not clear document files"));
-  });
+  await docClearFiles();
   await chrome.storage.session.remove(LAST_DOC_KEY);
+  forgetPersistedSession();
   sessions.clear();
   lastDocId = null;
 }
@@ -104,6 +78,34 @@ function setLastDocId(docId: string | null): void {
   void chrome.storage.session.set({ [LAST_DOC_KEY]: docId }).catch(() => undefined);
 }
 
+interface PersistedSession {
+  docId: string;
+  fileKey: string;
+  name: string;
+  mimeType: string;
+  kind: DocKind;
+  pages: DocumentPage[];
+  categories: FindingCategory[];
+}
+
+/** Record enough to rebuild the session after the worker is recycled. */
+function persistSession(session: DocSession): void {
+  const record: PersistedSession = {
+    docId: session.docId,
+    fileKey: session.fileKey,
+    name: session.name,
+    mimeType: session.mimeType,
+    kind: session.kind,
+    pages: session.pages,
+    categories: session.categories,
+  };
+  void chrome.storage.session.set({ [LAST_SESSION_KEY]: record }).catch(() => undefined);
+}
+
+function forgetPersistedSession(): void {
+  void chrome.storage.session.remove(LAST_SESSION_KEY).catch(() => undefined);
+}
+
 export function getSession(docId: string): DocSession | null {
   return sessions.get(docId) ?? null;
 }
@@ -112,11 +114,51 @@ export function getLastSession(): DocSession | null {
   return lastDocId ? sessions.get(lastDocId) ?? null : null;
 }
 
+/**
+ * Return the last document session, rebuilding it from IndexedDB if the worker
+ * was recycled. Returns null when there is nothing to restore or the file the
+ * descriptor points at is gone.
+ */
+export async function restoreLastSession(): Promise<DocSession | null> {
+  const live = getLastSession();
+  if (live) return live;
+
+  const raw = await chrome.storage.session.get(LAST_SESSION_KEY).catch(() => ({} as Record<string, unknown>));
+  const record = raw[LAST_SESSION_KEY] as PersistedSession | undefined;
+  if (!record || typeof record.docId !== "string" || typeof record.fileKey !== "string" || !Array.isArray(record.pages)) {
+    return null;
+  }
+
+  // The descriptor can outlive its file (cleared, or the browser evicted it).
+  const bytes = await readFile(record.fileKey).catch(() => null);
+  if (!bytes) {
+    forgetPersistedSession();
+    return null;
+  }
+
+  const session: DocSession = {
+    docId: record.docId,
+    fileKey: record.fileKey,
+    name: record.name,
+    mimeType: record.mimeType,
+    kind: record.kind,
+    bytes,
+    pages: record.pages,
+    categories: Array.isArray(record.categories) ? record.categories : uniqueCategories(record.pages),
+  };
+  sessions.set(session.docId, session);
+  setLastDocId(session.docId);
+  return session;
+}
+
 export async function clearSession(docId: string): Promise<void> {
   const session = sessions.get(docId);
   if (session) await deleteFile(session.fileKey);
   sessions.delete(docId);
-  if (lastDocId === docId) setLastDocId(null);
+  if (lastDocId === docId) {
+    setLastDocId(null);
+    forgetPersistedSession();
+  }
 }
 
 const pipeline = new BrowserDocumentPipeline();
@@ -170,6 +212,7 @@ export async function previewDocument(
 
   sessions.set(docId, { docId, fileKey, name, mimeType, kind, bytes, pages, categories: uniqueCategories(pages) });
   setLastDocId(docId);
+  persistSession(sessions.get(docId)!);
   return { docId, pages };
 }
 

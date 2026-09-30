@@ -50,6 +50,15 @@ for (const f of walk("src")) {
   for (const m of text.matchAll(/\.className\s*=\s*["'`]([^"'`]+)["'`]/g)) addTokens(m[1]);
   for (const m of text.matchAll(/\bel\(\s*["'`][a-z0-9-]+["'`]\s*,\s*["'`]([^"'`]+)["'`]/gi)) addTokens(m[1]);
   for (const m of text.matchAll(/setAttribute\(\s*["'`]class["'`]\s*,\s*["'`]([^"'`]+)["'`]/g)) addTokens(m[1]);
+  // A state class chosen at runtime: `const q = cond ? "a--ok" : "a--warn"`.
+  // These are always assigned, so treating them as dead would delete real
+  // styling. The name must look like a BEM part, because the same pattern
+  // matches plain ternaries that have nothing to do with classes.
+  for (const m of text.matchAll(/(?:const|let|var)\s+(\w*[Cc]lass\w*)\s*=\s*[^;\n?]*\?\s*["'`]([\w-]+)["'`]\s*:\s*["'`]([\w-]+)["'`]/g)) {
+    for (const candidate of [m[2], m[3]]) {
+      if (candidate.includes("--") || candidate.includes("__")) addTokens(candidate);
+    }
+  }
 }
 
 // ------------------------------------------------------------------- scanning

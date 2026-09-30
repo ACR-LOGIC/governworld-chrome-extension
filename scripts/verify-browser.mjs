@@ -19,7 +19,7 @@ if (!existsSync(join(ext, "manifest.json"))) {
   throw new Error(`Missing ${join(ext, "manifest.json")}. Run \`npm run build\` first.`);
 }
 
-const EXTENSION_PAGES = ["popup.html", "sidepanel.html", "offscreen.html", "landing.html", "privacy.html", "legal.html", "redact.html"];
+const EXTENSION_PAGES = ["popup.html", "sidepanel.html", "offscreen.html", "landing.html", "privacy.html", "legal.html", "redact.html", "review.html"];
 const CSP_VIOLATION = /Content Security Policy|Refused to (execute|inline|load|apply)/i;
 
 const profile = mkdtempSync(join(tmpdir(), "gw-ext-verify-"));

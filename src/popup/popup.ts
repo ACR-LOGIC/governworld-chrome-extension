@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import { validateMessage } from "../shared/messages.js";
 import { previewObjectUrl } from "../shared/docStore.js";
+import { docStoreFile, docDeleteFile } from "../shared/docDb.js";
 import {
   ALL_CATEGORIES,
   loadSettings,
@@ -31,6 +32,7 @@ import type {
 } from "../shared/types.js";
 import type { CustomPattern, CommunityAccount, CommunityRule } from "../shared/customPatterns.js";
 import type { WizardAnalysis } from "../shared/wizardAnalyzer.js";
+import type { ImageCandidate } from "../shared/messages.js";
 
 export function isInternalExtensionUrl(url?: string): boolean {
   if (!url) return false;
@@ -91,6 +93,15 @@ export async function ensureContentScriptReady(tabId: number): Promise<boolean> 
 
 
 export let currentLang: LanguageCode = "en";
+
+/**
+ * The last scan state seen by the popup.
+ *
+ * Declared here because both `renderState` and the image-capture flow need it:
+ * a capture clears the scan surface, and it has to know which mode was in use
+ * to leave the popup in a valid state rather than inventing one.
+ */
+let lastState: PopupState | null = null;
 
 export const CATEGORY_LABELS: Record<string, string> = {
   email: "Email address",
@@ -175,42 +186,13 @@ function requestId(): string {
 }
 
 const MAX_DOC_BYTES = 20 * 1024 * 1024;
-const DB_NAME = "governworld-redaction";
-const DB_VERSION = 1;
-const STORE = "docfiles";
-let dbPromise: Promise<IDBDatabase> | null = null;
-
-function openDb(): Promise<IDBDatabase> {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("IndexedDB is unavailable"));
-  });
-  return dbPromise;
-}
 
 async function storeFile(fileKey: string, bytes: ArrayBuffer): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).put(bytes, fileKey);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("Could not store the file"));
-  });
+  await docStoreFile(fileKey, bytes);
 }
 
 async function deleteFile(fileKey: string): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, "readwrite");
-    tx.objectStore(STORE).delete(fileKey);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("Could not delete the file"));
-  });
+  await docDeleteFile(fileKey);
 }
 
 /** Web Speech API Speech Synthesis and Screen Reader Live Region for audio announcements */
@@ -494,6 +476,110 @@ function renderFindings(findings: Finding[]): void {
   }
 }
 
+/**
+ * Offer the page's images to the Document Studio when a scan read no text.
+ *
+ * A page that is an image has nothing to scan, and the honest report is
+ * "nothing to read" - but that alone is a dead end, because the document the
+ * user cares about is right there in pixels and OCR already exists. Each image
+ * becomes a button that hands the file to the studio, where the ordinary
+ * review, redaction and download flow applies unchanged.
+ *
+ * The colour states the honest limit: green means the original file will be
+ * read at full resolution, amber means only a rendered capture is possible, so
+ * what is scanned is bounded by the viewport and the current zoom. A user
+ * redactioning a scan needs to know which one they are getting.
+ */
+function renderImageCapture(candidates: ImageCandidate[] | undefined): void {
+  const panel = document.getElementById("image-capture") as HTMLElement | null;
+  const options = document.getElementById("image-capture-options") as HTMLElement | null;
+  if (!panel || !options) return;
+  if (!candidates || candidates.length === 0) {
+    panel.hidden = true;
+    return;
+  }
+  panel.hidden = false;
+  options.textContent = "";
+  for (const candidate of candidates) {
+    // A same-origin image can be read directly. A cross-origin one cannot,
+    // because the extension holds no host permissions, so it falls back to
+    // capturing the page - and the button says so rather than implying the
+    // original is being read.
+    const fullResolution = candidate.sameOrigin;
+    const button = document.createElement("button");
+    button.type = "button";
+    // Assigned rather than templated: the DOM contract test discovers
+    // runtime-created classes by scanning this file for literals, and a
+    // template literal hides the two variants from it.
+    const qualityClass = fullResolution ? "image-capture__btn--ok" : "image-capture__btn--warn";
+    button.className = "image-capture__btn " + qualityClass;
+    button.setAttribute(
+      "aria-label",
+      `${t(currentLang, fullResolution ? "image_capture_full" : "image_capture_screen")}: ${candidate.width}x${candidate.height}`
+    );
+
+    const badge = document.createElement("span");
+    badge.className = "image-capture__badge";
+    badge.textContent = t(currentLang, fullResolution ? "image_capture_full" : "image_capture_screen");
+
+    const size = document.createElement("span");
+    size.className = "image-capture__size";
+    size.textContent = `${candidate.width}x${candidate.height}`;
+
+    button.append(badge, size);
+    if (!fullResolution) {
+      const note = document.createElement("span");
+      note.className = "footnote";
+      note.textContent = t(currentLang, "image_capture_capture_note");
+      button.append(note);
+    }
+    button.addEventListener("click", () => {
+      void startImageCapture(candidate);
+    });
+    options.append(button);
+  }
+}
+
+async function startImageCapture(candidate: ImageCandidate): Promise<void> {
+  // Capture opens the Document Studio, so the panel and any scan results are
+  // cleared first: leaving a "0 findings, scan complete" summary above a
+  // document under review would be exactly the confusing overlap this feature
+  // exists to remove.
+  clearDocUi();
+  setDocStatus(t(currentLang, "doc_processing"), false);
+  showDocProgress();
+  lastState = null;
+  renderState(clearScanStateForCapture());
+  try {
+    await sendDocMessage({
+      type: "POPUP_DOC_CAPTURE_IMAGE",
+      requestId: requestId(),
+      src: candidate.src,
+      name: "page-image.png",
+    });
+  } catch {
+    // sendDocMessage has already surfaced the failure in the status line.
+  }
+}
+
+/** Reset the scan surface so a capture starts from a clean, honest state. */
+function clearScanStateForCapture(): PopupState {
+  return {
+    mode: lastState?.mode ?? "local",
+    scanning: false,
+    findings: [],
+    scanned: false,
+    truncated: false,
+    visibleChars: 0,
+    consentRequired: false,
+  };
+}
+
+/** True when a completed scan read no text, which is the only case that offers capture. */
+function nothingToReadOrAbsent(state: PopupState): boolean {
+  return !state.scanned || state.visibleChars === 0;
+}
+
 function renderState(state: PopupState): void {
   const badge = document.getElementById("mode-badge") as HTMLSpanElement | null;
   const status = document.getElementById("status") as HTMLParagraphElement | null;
@@ -524,14 +610,33 @@ function renderState(state: PopupState): void {
       summaryChars.textContent = "";
     } else if (state.scanned) {
       summaryChars.textContent = t(currentLang, "status_chars_analyzed", { count: state.visibleChars.toLocaleString() });
-      status.textContent = state.truncated
-        ? t(currentLang, "status_partial_results")
-        : t(currentLang, "status_completed_securely");
-      status.classList.remove("status--error");
+      // A scan that examined no text at all must not be reported as a success.
+      // The overwhelmingly common cause is a page that *is* an image - a
+      // letterhead scan, a rendered PDF, a screenshot - where the only text on
+      // the page is inside pixels, so textContent is legitimately empty. Saying
+      // "Completed securely on-device" there reads as a clean bill of health for
+      // a document full of PII, and the user has no way to guess that "0
+      // characters" means "nothing was checked". Point them at OCR instead.
+      const nothingToRead = state.visibleChars === 0;
+      status.textContent = nothingToRead
+        ? t(currentLang, "status_no_text_found")
+        : state.truncated
+          ? t(currentLang, "status_partial_results")
+          : t(currentLang, "status_completed_securely");
+      status.classList.toggle("status--error", nothingToRead);
     } else {
       status.textContent = "";
       status.classList.remove("status--error");
     }
+    // The offer only makes sense when there is genuinely nothing to read and
+    // the page actually has an image worth lifting. A page with real text keeps
+    // its normal results and no capture panel.
+    renderImageCapture(nothingToReadOrAbsent(state) ? state.imageCandidates : undefined);
+  } else {
+    // The summary itself is collapsed (clearing a session, or a capture handing
+    // over to the Document Studio), so the capture panel must go with it rather
+    // than lingering with stale dimensions.
+    renderImageCapture(undefined);
   }
 
   if (resultsSection) {
@@ -552,8 +657,30 @@ function renderState(state: PopupState): void {
   if (cloudRadio && cloudRadio.checked !== (state.mode === "cloud")) cloudRadio.checked = state.mode === "cloud";
 }
 
-async function sendMessage(message: PopupMessage): Promise<void> {
-  await chrome.runtime.sendMessage(message);
+async function sendMessage(message: PopupMessage): Promise<unknown> {
+  return chrome.runtime.sendMessage(message);
+  }
+
+/**
+ * Send a Document Studio message and surface anything the worker refuses.
+ *
+ * The worker answers with `{ ok: false, error }` for a dispatch failure - a
+ * rejected sender, a message that failed validation, or a failed local-storage
+ * purge. Every document call site fired and forgot the reply, so those failures
+ * reached the user as no feedback at all: the popup sat on "Scanning document
+ * on this device." forever with nothing to indicate the request was refused.
+ */
+async function sendDocMessage(message: PopupMessage): Promise<void> {
+  try {
+    const response = (await sendMessage(message)) as { ok?: boolean; error?: unknown } | undefined;
+    if (response && response.ok === false) {
+      hideDocProgress();
+      setDocStatus(typeof response.error === "string" ? response.error : "The document could not be processed.", true);
+    }
+  } catch (error) {
+    hideDocProgress();
+    setDocStatus(error instanceof Error ? error.message : "The document could not be processed.", true);
+  }
 }
 
 function currentSelectedIds(state: PopupState): string[] {
@@ -640,6 +767,13 @@ interface DocUiState {
   mimeType: string;
   kind: DocKind;
   pages: DocPageMeta[];
+  /**
+   * True when the bytes came from a screen capture rather than the original
+   * file, so OCR quality is bounded by the on-screen size. Carried into the
+   * review surface so it can say so instead of implying a full read.
+   */
+  degraded?: boolean;
+  source?: "original" | "capture";
 }
 
 function detectDocKind(file: File, bytes: ArrayBuffer): DocKind {
@@ -666,11 +800,87 @@ let lastDoc: DocUiState | null = null;
 const selectedDocFindingIds = new Set<string>();
 let currentStudioTool: "draw" | "erase" = "draw";
 
+/**
+ * Write a document-studio status line and reveal it.
+ *
+ * The message goes into `#doc-status-text` (the `<p>` the markup provides);
+ * writing it to the `#doc-status` wrapper instead left the paragraph empty.
+ * The wrapper ships with `hidden`, and nothing used to lift it, so every
+ * status and every failure - including "no sensitive values were found" - was
+ * rendered into a display:none element. An empty message hides the block again
+ * so a stale "Scanning document on this device." does not outlive the run.
+ */
 function setDocStatus(message: string, isError: boolean): void {
-  const status = document.getElementById("doc-status") as HTMLParagraphElement | null;
+  const status = document.getElementById("doc-status") as HTMLElement | null;
   if (!status) return;
-  status.textContent = message;
+  const text = document.getElementById("doc-status-text") as HTMLElement | null;
+  if (text) {
+    text.textContent = message;
+  } else {
+    status.textContent = message;
+  }
+  // The child sets its own colour, so the error colour has to reach it too.
   status.classList.toggle("status--error", isError);
+  text?.classList.toggle("status--error", isError);
+  status.hidden = message.length === 0;
+}
+
+/**
+ * Hand the current document to the full-screen review page.
+ *
+ * The session is written to `chrome.storage.session` rather than sent as a
+ * message, for the same reason document bytes never travel in one: the page
+ * metadata for a long document is far larger than a runtime message may be.
+ * The review page reads the store directly, exactly as redact.html reads
+ * redacted pages.
+ */
+async function openFullScreenReview(
+  doc: DocUiState,
+  degraded: boolean,
+  source: "original" | "capture"
+): Promise<void> {
+  const record = {
+    docId: doc.docId,
+    fileKey: doc.fileKey,
+    name: doc.name,
+    mimeType: doc.mimeType,
+    kind: doc.kind,
+    pages: doc.pages,
+    degraded,
+    source,
+  };
+  try {
+    await chrome.storage.session.set({ reviewSession: record });
+  } catch (error) {
+    setDocStatus(
+      error instanceof Error ? error.message : "The document could not be opened for review.",
+      true
+    );
+    return;
+  }
+  const url = chrome.runtime.getURL("review.html");
+  let opened = false;
+  try {
+    await chrome.tabs.create({ url, active: true });
+    opened = true;
+  } catch {
+    opened = false;
+  }
+  if (!opened) {
+    setDocStatus("Review could not be opened in a tab.", true);
+  }
+}
+
+/** Reveal the Document Studio progress row for work that is actually running. */
+function showDocProgress(): void {
+  const progress = document.getElementById("doc-progress") as HTMLDivElement | null;
+  if (progress) progress.hidden = false;
+}
+
+/** Hide the progress row once a run has finished, failed, or been cancelled. */
+function hideDocProgress(): void {
+  const progress = document.getElementById("doc-progress") as HTMLDivElement | null;
+  if (progress) progress.hidden = true;
 }
 
 function renderDocStage(message: Extract<PopupFromWorker, { type: "POPUP_DOC_STATUS" }>): void {
@@ -1184,6 +1394,7 @@ export async function initPopup(): Promise<void> {
 
   const docFile = document.getElementById("doc-file-input") as HTMLInputElement | null;
   const docRedactBtn = document.getElementById("doc-redact-btn") as HTMLButtonElement | null;
+  const docOpenReviewBtn = document.getElementById("doc-open-review-btn") as HTMLButtonElement | null;
   const docClearBtn = document.getElementById("doc-clear-btn") as HTMLButtonElement | null;
   const docConfirmDialog = document.getElementById("doc-confirm-dialog") as HTMLDialogElement | null;
   const docCancel = document.getElementById("doc-cancel") as HTMLButtonElement | null;
@@ -1193,8 +1404,6 @@ export async function initPopup(): Promise<void> {
 
   /** Store key of the last verified redaction, if one is still staged. */
   let lastPrintFileKey: string | null = null;
-
-  let lastState: PopupState | null = null;
 
   scanBtn?.addEventListener("click", async () => {
     const current = await loadSettings();
@@ -1310,8 +1519,13 @@ export async function initPopup(): Promise<void> {
       docFile.value = "";
       resetDocStages();
       setDocStatus("Scanning document on this device…", false);
+      // A preview takes 6-20s: offscreen document boot, then pdf.js or the
+      // image decode, then a 10MB OCR model. resetDocStages() had just hidden
+      // the progress row, and the status line was invisible, so the popup
+      // showed no change at all for the whole wait and read as broken.
+      showDocProgress();
       beginDocSession({ fileKey, name: file.name, mimeType, kind });
-      void sendMessage({ type: "POPUP_DOC_PREVIEW", requestId: requestId(), fileKey, name: file.name, mimeType, kind });
+      void sendDocMessage({ type: "POPUP_DOC_PREVIEW", requestId: requestId(), fileKey, name: file.name, mimeType, kind });
     } catch (error) {
       await deleteFile(fileKey).catch(() => undefined);
       docFile.value = "";
@@ -1430,7 +1644,22 @@ export async function initPopup(): Promise<void> {
   // cleared from the store.
   docPrintBtn?.addEventListener("click", () => {
     if (!lastPrintFileKey) return;
-    void sendMessage({ type: "POPUP_DOC_PRINT", requestId: requestId(), fileKey: lastPrintFileKey });
+    void sendDocMessage({ type: "POPUP_DOC_PRINT", requestId: requestId(), fileKey: lastPrintFileKey });
+  });
+
+  // Opens the full-screen review surface.
+  //
+  // The studio in a 360px popup renders a page of text at roughly a tenth of
+  // its natural size, so drawing a box over it means drawing blind, and the
+  // thumbnail is too small to check the words at all. review.html shows the
+  // document at full size with every control beside it. It is opened from a
+  // click handler, which is the gesture a popup needs to open a tab at all.
+  docOpenReviewBtn?.addEventListener("click", () => {
+    if (!lastDoc || lastDoc.pages.length === 0) {
+      setDocStatus("Preview the document first, then open review.", true);
+      return;
+    }
+    void openFullScreenReview(lastDoc, lastDoc.degraded === true, lastDoc.source === "capture" ? "capture" : "original");
   });
 
   docConfirm?.addEventListener("click", async () => {
@@ -1443,7 +1672,7 @@ export async function initPopup(): Promise<void> {
     const current = await loadSettings();
     const style = (docStyleSelect?.value as RedactionStyle) || current.defaultRedactionStyle || "blackout";
     const stampText = docStampText?.value?.trim() || current.defaultStampText || "[REDACTED]";
-    void sendMessage({
+    void sendDocMessage({
       type: "POPUP_DOC_REDACT",
       requestId: requestId(),
       docId: lastDoc.docId,
@@ -1464,29 +1693,20 @@ export async function initPopup(): Promise<void> {
 
   docClearBtn?.addEventListener("click", () => {
     if (!lastDoc) return;
-    void sendMessage({ type: "POPUP_DOC_CLEAR", requestId: requestId(), docId: lastDoc.docId });
+    void sendDocMessage({ type: "POPUP_DOC_CLEAR", requestId: requestId(), docId: lastDoc.docId });
     clearDocUi();
     setDocStatus("", false);
   });
 
-  const docProgress = document.getElementById("doc-progress") as HTMLDivElement | null;
   const docCancelBtn = document.getElementById("doc-cancel-btn") as HTMLButtonElement | null;
 
   docCancelBtn?.addEventListener("click", () => {
     if (!lastDoc) return;
-    void sendMessage({ type: "POPUP_DOC_CANCEL", requestId: requestId(), docId: lastDoc.docId });
-    if (docProgress) docProgress.hidden = true;
+    void sendDocMessage({ type: "POPUP_DOC_CANCEL", requestId: requestId(), docId: lastDoc.docId });
+    hideDocProgress();
     clearDocUi();
     setDocStatus("Document processing cancelled.", false);
   });
-
-  const showDocProgress = () => {
-    if (docProgress) docProgress.hidden = false;
-  };
-
-  const hideDocProgress = () => {
-    if (docProgress) docProgress.hidden = true;
-  };
 
   const dropzone = document.getElementById("doc-dropzone") as HTMLDivElement | null;
   if (dropzone && docFile) {
@@ -1506,7 +1726,7 @@ export async function initPopup(): Promise<void> {
         setDocStatus("Scanning document on this device…", false);
         showDocProgress();
         beginDocSession({ fileKey, name: file.name, mimeType, kind });
-        void sendMessage({ type: "POPUP_DOC_PREVIEW", requestId: requestId(), fileKey, name: file.name, mimeType, kind });
+        void sendDocMessage({ type: "POPUP_DOC_PREVIEW", requestId: requestId(), fileKey, name: file.name, mimeType, kind });
       } catch (error) {
         await deleteFile(fileKey).catch(() => undefined);
         setDocStatus(error instanceof Error ? error.message : "Could not read this file.", true);
@@ -2283,13 +2503,54 @@ export async function initPopup(): Promise<void> {
       );
       return;
     }
+    if (message.type === "POPUP_DOC_CAPTURE_READY") {
+      // The worker staged the image lifted off the page. Preview it through the
+      // ordinary document path, so OCR, review, redaction, download and print
+      // are exactly the ones an uploaded file gets - there is no second
+      // redaction surface to keep in step with the first.
+      hideDocProgress();
+      beginDocSession({
+        fileKey: message.fileKey,
+        name: message.name,
+        mimeType: message.mimeType,
+        kind: message.kind,
+      });
+      setDocStatus(
+        message.degraded ? t(currentLang, "image_capture_screen") : t(currentLang, "image_capture_full"),
+        false
+      );
+      showDocProgress();
+      void sendDocMessage({
+        type: "POPUP_DOC_PREVIEW",
+        requestId: requestId(),
+        fileKey: message.fileKey,
+        name: message.name,
+        mimeType: message.mimeType,
+        kind: message.kind,
+      });
+      return;
+    }
     if (message.type === "POPUP_DOC_STATE") {
       hideDocProgress();
       // Match on fileKey so the first reply can land on the placeholder session
       // created by beginDocSession(), which has no docId yet. Fall back to docId
       // for a session the worker has already identified.
-      if (!lastDoc) return;
-      if (lastDoc.docId ? message.docId !== lastDoc.docId : message.fileKey !== lastDoc.fileKey) return;
+      //
+      // A null `lastDoc` is not a mismatch: it means the popup was just opened
+      // and the worker is naming the document that is already loaded. Dropping
+      // that message is what left the studio empty after a reload, so adopt it.
+      if (!lastDoc) {
+        lastDoc = {
+          docId: message.docId,
+          fileKey: message.fileKey,
+          name: message.name,
+          mimeType: message.mimeType,
+          kind: message.kind,
+          pages: [],
+        };
+      } else if (lastDoc.docId ? message.docId !== lastDoc.docId : message.fileKey !== lastDoc.fileKey) {
+        return;
+      }
       const doc = lastDoc;
       doc.docId = message.docId;
       doc.name = message.name;
@@ -2299,15 +2560,34 @@ export async function initPopup(): Promise<void> {
       doc.pages = message.pages;
       renderDoc(doc);
       const found = message.pages.reduce((n, p) => n + p.findings.length, 0);
-      renderDocStage({
-        type: "POPUP_DOC_STATUS",
-        requestId: message.requestId,
-        stage: "detected",
-        problem: found === 0 ? "No sensitive values were found in this document." : undefined,
-      });
+      // The preview is finished, so the progress row must stay down. Calling
+      // renderDocStage() unconditionally re-showed it with "Processing
+      // document..." next to a Cancel button, leaving a spinner running forever
+      // on an already-processed document. The studio itself now carries the
+      // result (page count, per-page findings, and the findings badge).
+      hideDocProgress();
+      if (found === 0) {
+        setDocStatus("No sensitive values were found in this document.", true);
+      } else {
+        setDocStatus("", false);
+      }
       return;
     }
     if (message.type === "POPUP_DOC_DONE") {
+      // The redaction is finished, so the progress row must come down. The
+      // worker streams POPUP_DOC_STATUS verification updates, and each one
+      // re-showed that row, leaving a spinner and a Cancel button next to a
+      // document that had already been written. The verification result is the
+      // most trust-relevant line for a redaction tool, so it is carried into
+      // the status instead of being dropped with the row.
+      const verificationNote = (() => {
+        const progressText = (document.getElementById("doc-progress-text")?.textContent || "").trim();
+        hideDocProgress();
+        return /regions?/.test(progressText) ? progressText : "";
+      })();
+      const finishWith = (text: string, isError: boolean): void => {
+        setDocStatus(verificationNote ? `${text} ${verificationNote}.` : text, isError);
+      };
       void (async () => {
         const current = await loadSettings();
         speakAnnouncement(t(current.language, "speech_doc_redacted"), current);
@@ -2358,14 +2638,14 @@ export async function initPopup(): Promise<void> {
           })();
 
           const current = await loadSettings();
-          setDocStatus(t(current.language, "doc_downloaded", { name: message.outputName }), false);
+          finishWith(t(current.language, "doc_downloaded", { name: message.outputName }), false);
         } catch {
           reportDelivery(false);
           const current = await loadSettings();
-          setDocStatus(t(current.language, "doc_save_failed", { name: message.outputName }), true);
+          finishWith(t(current.language, "doc_save_failed", { name: message.outputName }), true);
         }
       } else {
-        setDocStatus(`Saved ${message.outputName}. The original file was not changed.`, false);
+        finishWith(`Saved ${message.outputName}. The original file was not changed.`, false);
       }
 
       // Offer the print view only when the worker actually staged verified
@@ -2388,6 +2668,9 @@ export async function initPopup(): Promise<void> {
       return;
     }
     if (message.type === "POPUP_DOC_ERROR") {
+      // The run is over, so the spinner has to stop; leaving it up would show
+      // "Processing document..." next to an error.
+      hideDocProgress();
       setDocStatus(message.userMessage, true);
       return;
     }

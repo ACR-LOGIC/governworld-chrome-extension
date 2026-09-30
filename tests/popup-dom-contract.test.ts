@@ -46,6 +46,14 @@ function runtimeClasses(): Set<string> {
   for (const m of TS.matchAll(/classList\.(?:add|remove|toggle)\(\s*[`"]([^`"]+)[`"]/g)) add(m[1]);
   // setAttribute("class", "…")
   for (const m of TS.matchAll(/setAttribute\(\s*[`"]class[`"]\s*,\s*[`"]([^`"]+)[`"]/g)) add(m[1]);
+  // A class chosen at runtime: `const quality = cond ? "a--ok" : "a--warn"`.
+  // Without this, a component whose state classes are decided by a condition
+  // looks unstyled (its rules read as dead) even though the branch always
+  // assigns one of them. The name must look like a BEM part, because this
+  // pattern also matches plain ternaries that have nothing to do with classes.
+  for (const m of TS.matchAll(/(?:const|let|var)\s+(\w*[Cc]lass\w*)\s*=\s*[^;\n?]*\?\s*[`"]([\w-]+)[`"]\s*:\s*[`"]([\w-]+)[`"]/g)) {
+    for (const candidate of [m[2], m[3]]) if (candidate.includes("--") || /__/.test(candidate)) add(candidate);
+  }
   return out;
 }
 
@@ -91,8 +99,12 @@ describe("popup / sidepanel DOM contract", () => {
       "finding--report-only",
       "doc-thumb-wrapper",
       "doc-thumb-canvas",
-      "status--error",
-      "badge--cloud",
+    "status--error",
+    "badge--cloud",
+    // Image-capture buttons are built at runtime from the scan's candidate list,
+    // so the ok/warn variants never appear in the static markup.
+    "image-capture__btn--ok",
+    "image-capture__btn--warn",
       "guide-card--highlight",
       "tool-btn--active",
       "tab-btn--active",

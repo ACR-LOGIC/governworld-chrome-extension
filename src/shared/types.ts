@@ -9,6 +9,7 @@ import type { RedactionVerifyMethod } from "../document-pipeline/verify.js";
 
 import type { CustomPattern, CommunityAccount, CommunityRule } from "./customPatterns";
 import type { PatternTestResult, WizardAnalysis } from "./wizardAnalyzer";
+import type { ImageCandidate } from "./messages";
 
 export type FindingCategory =
   | "email"
@@ -105,6 +106,11 @@ export type PopupMessage =
   | { type: "POPUP_DOC_PREVIEW"; requestId: string; fileKey: string; name: string; mimeType: string; kind: DocKind }
   | { type: "POPUP_DOC_REDACT"; requestId: string; docId: string; fileKey: string; name: string; mimeType: string; kind: DocKind; boxes: { pageIndex: number; rects: Rect[] }[]; findingIds: string[]; options?: RedactionOptions }
   | { type: "POPUP_DOC_CLEAR"; requestId: string; docId: string }
+  /**
+   * Lift an image off the active page into the Document Studio. Used when a page
+   * scan finds no text to read, which is what an image-only page looks like.
+   */
+  | { type: "POPUP_DOC_CAPTURE_IMAGE"; requestId: string; src: string; name: string }
   | { type: "POPUP_DOC_CANCEL"; requestId: string; docId: string }
   /**
    * Opens the read-only print/PDF view for an already-redacted document. The
@@ -204,6 +210,13 @@ export interface PopupState {
   scanned: boolean;
   truncated: boolean;
   visibleChars: number;
+  /**
+   * Document-sized images on the page, reported only when a scan read no text.
+   * A page that is an image has nothing else to offer, so the popup turns these
+   * into a route into the Document Studio rather than reporting a false
+   * all-clear.
+   */
+  imageCandidates?: ImageCandidate[];
   error?: { code: string; userMessage: string };
   consentRequired: boolean;
   sessionId?: string;
@@ -276,6 +289,21 @@ export type PopupFromWorker =
       method?: RedactionVerifyMethod;
       /** Present when the stage could not be reached; user-facing text. */
       problem?: string;
+    }
+  /**
+   * The worker staged an image lifted off the page and the popup should now
+   * preview it. `degraded` marks a rendered capture rather than the original
+   * file, where OCR quality is limited by what was on screen.
+   */
+  | {
+      type: "POPUP_DOC_CAPTURE_READY";
+      requestId: string;
+      fileKey: string;
+      name: string;
+      mimeType: string;
+      kind: "image";
+      source: "original" | "capture";
+      degraded: boolean;
     }
   | { type: "POPUP_DOC_ERROR"; requestId: string; code: string; userMessage: string }
   | { type: "POPUP_NOTIFICATIONS_STATE"; requestId: string; granted: boolean }
@@ -369,6 +397,8 @@ export const MESSAGE_TYPES = new Set<string>([
   "POPUP_DOC_ERROR",
   "POPUP_DOC_CLEAR",
   "POPUP_DOC_STATUS",
+  "POPUP_DOC_CAPTURE_IMAGE",
+  "POPUP_DOC_CAPTURE_READY",
   "POPUP_DOC_DELIVERY_REPORT",
   "POPUP_EXPORT_AUDIT",
   "POPUP_AUDIT_EXPORT",

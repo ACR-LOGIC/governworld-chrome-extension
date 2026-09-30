@@ -25,6 +25,7 @@ const EXTENSION_PAGES = [
   "src/popup/privacy.html",
   "src/popup/legal.html",
   "src/popup/redact.html",
+  "src/popup/review.html",
   "src/sidepanel/sidepanel.html",
   "src/offscreen/offscreen.html",
   "src/landing/index.html",

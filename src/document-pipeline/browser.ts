@@ -25,6 +25,20 @@ interface PendingJob {
   timer: ReturnType<typeof setTimeout>;
 }
 
+/**
+ * The browser reclaims offscreen documents when they go idle, which can happen
+ * after `waitForPort()` resolved but before the reply arrives. Chrome documents
+ * that the offscreen document "may be destroyed at any time", so a job must
+ * treat a disconnect as a retryable transport failure rather than waiting out
+ * the full job timeout.
+ */
+class OffscreenGoneError extends Error {
+  constructor() {
+    super("The document processor closed before it finished.");
+    this.name = "OffscreenGoneError";
+  }
+}
+
 const pending = new Map<string, PendingJob>();
 let offscreenPort: chrome.runtime.Port | null = null;
 
@@ -52,6 +66,15 @@ chrome.runtime.onConnect.addListener((port) => {
   });
   port.onDisconnect.addListener(() => {
     if (offscreenPort === port) offscreenPort = null;
+    // Anything still in flight has no route home. The document handles one job
+    // at a time, so a disconnect invalidates every pending job - including one
+    // still waiting for its port, which has no port to compare against yet.
+    // Failing them now lets the caller rebuild instead of stalling.
+    for (const [jobId, job] of [...pending]) {
+      clearTimeout(job.timer);
+      pending.delete(jobId);
+      job.reject(new OffscreenGoneError());
+    }
   });
 });
 
@@ -98,7 +121,7 @@ async function closeOffscreenDocument(): Promise<void> {
   await chrome.offscreen.closeDocument().catch(() => undefined);
 }
 
-function callOffscreen(request: OffscreenRequest): Promise<OffscreenResponse> {
+function postOnce(request: OffscreenRequest): Promise<OffscreenResponse> {
   return new Promise<OffscreenResponse>((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(request.jobId);
@@ -108,6 +131,7 @@ function callOffscreen(request: OffscreenRequest): Promise<OffscreenResponse> {
     void (async () => {
       try {
         const port = await waitForPort();
+        if (!pending.has(request.jobId)) return;
         port.postMessage(request);
       } catch (error) {
         clearTimeout(timer);
@@ -116,6 +140,23 @@ function callOffscreen(request: OffscreenRequest): Promise<OffscreenResponse> {
       }
     })();
   });
+}
+
+/**
+ * Send one job to the offscreen document, retrying once if the document was
+ * reclaimed underneath us. Without the retry, a browser-initiated teardown
+ * turned into a three-minute stall with no message shown to the user.
+ */
+async function callOffscreen(request: OffscreenRequest, attempt = 0): Promise<OffscreenResponse> {
+  try {
+    return await postOnce(request);
+  } catch (error) {
+    if (error instanceof OffscreenGoneError && attempt === 0) {
+      await closeOffscreenDocument().catch(() => undefined);
+      return callOffscreen(request, attempt + 1);
+    }
+    throw error;
+  }
 }
 
 function assertOk(response: OffscreenResponse, _operation: "preview" | "redact"): asserts response is Extract<OffscreenResponse, { ok: true }> {

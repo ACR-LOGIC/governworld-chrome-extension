@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import { extractVisibleText, buildScanText, mapRange, buildRedactedText, maskCombinedRange, selectionCombinedSpan } from "./extract.js";
 import type { RangeLike } from "./extract.js";
+import { isExcludedElement } from "./extract.js";
 import { applySelectionExcludingAttrs, attributeAt, buildAttrScan, collectAttrRecords } from "./attrs.js";
 import type { AttrScan } from "./attrs.js";
 import { detect, maskValue, maskContext, placeholderLabelFor } from "./detect.js";
@@ -274,10 +275,55 @@ if (g.__gwRedactionContentLoaded !== true) {
         requestId,
         sessionId: sessionId as string,
         findings: result,
-        stats: { visibleChars: combined.length, attrChars, truncated: canonical.truncated },
+        stats: {
+          visibleChars: combined.length,
+          attrChars,
+          truncated: canonical.truncated,
+          // When there is no text to scan, the page's images are what the user
+          // almost certainly meant to protect. Reporting them lets the popup
+          // offer OCR over the real file instead of silently finding nothing.
+          ...(combined.length === 0 ? { imageCandidates: collectImageCandidates() } : {}),
+        },
       },
       requestId
     );
+  }
+
+  /**
+   * List the page's images so a textless page can still be protected.
+   *
+   * Only images that actually carry pixels are reported, ranked largest first,
+   * and the list is capped: a gallery page can hold thousands of thumbnails and
+   * none of them are the document. `sameOrigin` marks the images this page is
+   * allowed to read directly, which is what decides whether the original file
+   * can be used or a rendered capture is needed.
+   */
+  function collectImageCandidates(): Array<{ src: string; width: number; height: number; sameOrigin: boolean }> {
+    const found: Array<{ src: string; width: number; height: number; sameOrigin: boolean; pixels: number }> = [];
+    let images: HTMLImageElement[];
+    try {
+      images = Array.from(document.querySelectorAll("img"));
+    } catch {
+      return [];
+    }
+    for (const img of images) {
+      if (isExcludedElement(img)) continue;
+      const width = img.naturalWidth || img.width || 0;
+      const height = img.naturalHeight || img.height || 0;
+      // Below this the image cannot hold readable text; it is an icon.
+      if (width * height < 40_000) continue;
+      const src = img.currentSrc || img.src || "";
+      if (!src) continue;
+      let sameOrigin = false;
+      try {
+        sameOrigin = new URL(src, location.href).origin === location.origin;
+      } catch {
+        continue;
+      }
+      found.push({ src: src.slice(0, 2048), width, height, sameOrigin, pixels: width * height });
+    }
+    found.sort((a, b) => b.pixels - a.pixels);
+    return found.slice(0, 12).map(({ src, width, height, sameOrigin }) => ({ src, width, height, sameOrigin }));
   }
 
   function respond(message: unknown, requestId: string): void {

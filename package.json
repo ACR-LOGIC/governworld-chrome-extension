@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:offline-ocr": "node scripts/verify-offline-ocr.mjs",
     "test:photo-e2e": "node tests/image-photo-e2e.browser.test.mjs",
+    "test:doc-flow": "node scripts/verify-document-flow.mjs",
     "verify:browser": "node scripts/verify-browser.mjs && node tests/image-photo-e2e.browser.test.mjs",
     "capture:ui": "node scripts/capture-ui-session.mjs",
     "release:zip": "node scripts/make-release.mjs",
@@ -24,10 +25,15 @@
     "sync:sidepanel": "node scripts/sync-sidepanel.mjs",
     "sync:sidepanel:check": "node scripts/sync-sidepanel.mjs --check",
     "capture:store": "node scripts/make-store-screenshots.mjs",
-    "verify:zip": "node scripts/verify-release-zip.mjs", "verify:digests": "node scripts/verify-release-digests.mjs", "clean": "node scripts/housekeeping.mjs", "clean:apply": "node scripts/housekeeping.mjs --apply",
+    "verify:zip": "node scripts/verify-release-zip.mjs",
+    "verify:digests": "node scripts/verify-release-digests.mjs",
+    "clean": "node scripts/housekeeping.mjs",
+    "clean:apply": "node scripts/housekeeping.mjs --apply",
     "capture:promo": "node scripts/make-promo-tile.mjs",
     "icons": "node scripts/make-icons.mjs",
-    "verify:print": "node scripts/verify-print-pipeline.mjs"
+    "verify:print": "node scripts/verify-print-pipeline.mjs",
+    "test:no-text": "node scripts/verify-no-text-reporting.mjs",
+    "test:review": "node scripts/verify-review-surface.mjs"
   },
   "dependencies": {
     "mammoth": "^1.13.0",

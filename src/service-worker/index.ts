@@ -1,11 +1,12 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
-import { validateMessage } from "../shared/messages.js";
+import { validateMessage, type ImageCandidate } from "../shared/messages.js";
 import { loadSettings, saveSettings, isCloudAllowed, isAllowedGatewayOrigin, meetsThreshold } from "../shared/settings.js";
 import { recordAudit, exportSignedAuditLog } from "../shared/audit.js";
 import type { Settings } from "../shared/settings.js";
 import type { DocKind, PopupState, ScanMode, WorkerMessage, ExtensionMessage, Finding, PopupFromWorker, Rect, RedactionOptions, ScanSettingsMessage } from "../shared/types.js";
-import { previewDocument, redactDocument, getLastSession, clearSession as clearDocSession, clearAllFiles } from "./documents.js";
+import { previewDocument, redactDocument, restoreLastSession, clearSession as clearDocSession, clearAllFiles, storeFile, deleteFile } from "./documents.js";
 import { analyzeExamples, testPattern } from "../shared/wizardAnalyzer.js";
+import { captureImage, stageCapturedImage, ImageCaptureError } from "./captureImage.js";
 import {
   GovernWorldApiClient,
   getApiUrl,
@@ -77,7 +78,7 @@ interface SessionState {
   sessionId: string;
   mode: ScanMode;
   findings: Finding[];
-  stats: { visibleChars: number; truncated: boolean };
+  stats: { visibleChars: number; truncated: boolean; imageCandidates?: ImageCandidate[] };
   scannedAt: number;
   scanning: boolean;
   /** Stack of previously-applied finding-id sets for undo. Newest last. */
@@ -254,6 +255,9 @@ function buildPopupState(
     scanned: session !== null,
     truncated: session?.stats.truncated ?? false,
     visibleChars: session?.stats.visibleChars ?? 0,
+    // Only meaningful when the scan read nothing: the page's document-sized
+    // images, which the popup offers to send through the Document Studio.
+    imageCandidates: session?.stats.imageCandidates,
     error,
     consentRequired: settings.mode === "cloud" && !isCloudAllowed(settings),
     sessionId: session?.sessionId,
@@ -448,6 +452,11 @@ async function handlePopupDocPreview(
   kind: DocKind,
   requestId: string
 ): Promise<void> {
+  // Do not race the lifecycle purge: it clears the very store this file lives
+  // in, which is how a just-picked file turned into "The selected file is no
+  // longer available." The wait is bounded, because housekeeping must never be
+  // able to block the feature indefinitely.
+  await Promise.race([startupPurge, new Promise((r) => setTimeout(r, PURGE_WAIT_MS))]);
   try {
     const { docId, pages } = await previewDocument(fileKey, name, mimeType, kind);
     notifyPopup({ type: "POPUP_DOC_STATE", requestId, docId, name, fileKey, mimeType, kind, pages });
@@ -463,6 +472,75 @@ async function handlePopupDocPreview(
     notifyPopup({ type: "POPUP_DOC_ERROR", requestId, code: "DOC_ERROR", userMessage });
     void recordAudit({ ts: new Date().toISOString(), action: "doc_previewed", outcome: "error" });
   }
+}
+
+/**
+ * Lift an image off the active page and hand it to the Document Studio.
+ *
+ * A page scan reads text, so an image-only page scans to nothing. Rather than
+ * leaving the user with a false all-clear, the popup offers the page's images
+ * and this stages the chosen one, then previews it through the ordinary
+ * document path - so OCR, review, redaction, download and print all work
+ * exactly as they do for an uploaded file, and there is no second redaction
+ * surface to keep in step with the first.
+ */
+async function handlePopupDocCaptureImage(src: string, name: string, requestId: string): Promise<void> {
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!activeTab || activeTab.id == null || !isScannableTab(activeTab)) {
+    notifyPopup({
+      type: "POPUP_DOC_ERROR",
+      requestId,
+      code: "DOC_ERROR",
+      userMessage: "No active page to capture. Open the image, then try again.",
+    });
+    return;
+  }
+
+  // The same bounded wait the ordinary document path uses, so a capture can
+  // never be deleted by the lifecycle purge that is still settling.
+  await Promise.race([startupPurge, new Promise((r) => setTimeout(r, PURGE_WAIT_MS))]);
+
+  let captured: Awaited<ReturnType<typeof captureImage>>;
+  try {
+    captured = await captureImage(src, activeTab.windowId);
+  } catch (error) {
+    const userMessage = error instanceof ImageCaptureError ? error.userMessage : "This image could not be read from the page.";
+    notifyPopup({ type: "POPUP_DOC_ERROR", requestId, code: "DOC_ERROR", userMessage });
+    void recordAudit({ ts: new Date().toISOString(), action: "doc_previewed", outcome: "error" });
+    return;
+  }
+
+  const fileKey = crypto.randomUUID().replace(/-/g, "");
+  const fileName = name && name !== "page-image.png" ? name : captured.name;
+  try {
+    await stageCapturedImage(captured, fileKey);
+  } catch {
+    notifyPopup({
+      type: "POPUP_DOC_ERROR",
+      requestId,
+      code: "DOC_ERROR",
+      userMessage: "That image could not be prepared on this device.",
+    });
+    return;
+  }
+
+  notifyPopup({
+    type: "POPUP_DOC_CAPTURE_READY",
+    requestId,
+    fileKey,
+    name: fileName,
+    mimeType: captured.mimeType,
+    kind: "image",
+    source: captured.source,
+    degraded: captured.degraded,
+  });
+  void recordAudit({
+    ts: new Date().toISOString(),
+    action: "doc_previewed",
+    counts: {},
+    pages: 0,
+    outcome: "ok",
+  });
 }
 
 /**
@@ -976,11 +1054,41 @@ void chrome.storage.local.remove([ACCOUNT_KEY_CREDENTIAL]);
 // failed with "The selected file is no longer available." The purge is scoped
 // to real lifecycle events, where it belongs.
 let startupCleanupError: unknown;
+
+/**
+ * Resolves when the lifecycle purge has finished.
+ *
+ * The purge used to run fire-and-forget at browser startup while the popup
+ * could already be staging a document, so it could delete a file the user had
+ * just picked. The worker then reported "The selected file is no longer
+ * available. Please re-open it." for a file the user could see in the dialog.
+ * Document work waits on this instead of racing it.
+ */
+let startupPurge: Promise<void> = Promise.resolve();
+
+/** How long a document request will wait for that housekeeping before proceeding. */
+const PURGE_WAIT_MS = 5_000;
+
+/**
+ * Clear the latched failure once the purge has actually succeeded.
+ *
+ * The flag used to be set on the first failure and never reset, so a single
+ * transient IndexedDB hiccup during the browser-startup purge rejected *every*
+ * later message with "Local document storage cleanup failed." for the rest of
+ * the worker's life - the popup could not open a document, run a redaction, or
+ * change a setting, and it showed the user nothing at all. The purge is
+ * best-effort housekeeping, so a later success clears the condition.
+ */
 function purgeStagedFilesOnLifecycle(reason: string): void {
-  void clearAllFiles().catch((error) => {
-    startupCleanupError = error;
-    console.warn(`[governworld] staged-file purge failed on ${reason}:`, error);
-  });
+  startupPurge = (async () => {
+    try {
+      await clearAllFiles();
+      startupCleanupError = undefined;
+    } catch (error) {
+      startupCleanupError = error;
+      console.warn(`[governworld] staged-file purge failed on ${reason}:`, error);
+    }
+  })();
 }
 
 chrome.runtime.onStartup?.addListener(() => {
@@ -1520,7 +1628,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
         break;
       case "POPUP_GET_STATE": {
         notifyPopup({ type: "POPUP_STATE", requestId: msg.requestId, state: await stateForActiveTab() });
-        const docSession = getLastSession();
+        const docSession = await restoreLastSession();
         if (docSession) {
           notifyPopup({ type: "POPUP_DOC_STATE", requestId: msg.requestId, docId: docSession.docId, name: docSession.name, fileKey: docSession.fileKey, mimeType: docSession.mimeType, kind: docSession.kind, pages: docSession.pages });
         }
@@ -1543,6 +1651,9 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
       case "POPUP_DOC_CLEAR":
         await clearDocSession(msg.docId);
         void recordAudit({ ts: new Date().toISOString(), action: "doc_cleared", outcome: "ok" });
+        break;
+      case "POPUP_DOC_CAPTURE_IMAGE":
+        await handlePopupDocCaptureImage(msg.src, msg.name, msg.requestId);
         break;
       case "POPUP_DOC_DELIVERY_REPORT":
         // Closes the audit loop for a fallback delivery the worker handed off.

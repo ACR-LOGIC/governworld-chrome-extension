@@ -43,6 +43,24 @@ function isFileKey(value: unknown): value is string {
   return typeof value === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(value);
 }
 
+/**
+ * Only http(s) and data image URLs may be captured.
+ *
+ * The URL comes from the page, so it is untrusted input. Rejecting every other
+ * scheme keeps a page from steering the worker at `file:`, `chrome:`, or the
+ * extension's own pages, and keeps a `javascript:` payload out of the fetch.
+ */
+function isSafeImageSrc(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 4096) return false;
+  if (value.startsWith("data:image/")) return /^data:image\/(png|jpeg|jpg|webp|gif|bmp);base64,[A-Za-z0-9+/=]+$/.test(value);
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 function isRect(value: unknown): value is { x: number; y: number; width: number; height: number } {
   return (
     isRecord(value) &&
@@ -172,19 +190,48 @@ function normalizeFindingArray(value: unknown): Finding[] | null {
   }));
 }
 
-function normalizeScanStats(value: unknown): { visibleChars: number; attrChars?: number; truncated: boolean; startedAt?: number; finishedAt?: number } | null {
+function normalizeScanStats(value: unknown): { visibleChars: number; attrChars?: number; truncated: boolean; startedAt?: number; finishedAt?: number; imageCandidates?: ImageCandidate[] } | null {
   if (!isRecord(value) || typeof value.visibleChars !== "number" || !Number.isSafeInteger(value.visibleChars) || value.visibleChars < 0) return null;
   if (value.attrChars !== undefined && (typeof value.attrChars !== "number" || !Number.isSafeInteger(value.attrChars) || value.attrChars < 0)) return null;
   if (typeof value.truncated !== "boolean") return null;
   if (value.startedAt !== undefined && (typeof value.startedAt !== "number" || !Number.isFinite(value.startedAt))) return null;
   if (value.finishedAt !== undefined && (typeof value.finishedAt !== "number" || !Number.isFinite(value.finishedAt))) return null;
+  const imageCandidates = value.imageCandidates === undefined ? undefined : normalizeImageCandidates(value.imageCandidates);
+  // A malformed candidate list is dropped rather than failing the whole scan:
+  // the findings are still valid, and losing them over an advisory field would
+  // be a worse outcome than losing the option to OCR the page.
   return {
     visibleChars: value.visibleChars,
     ...(value.attrChars !== undefined ? { attrChars: value.attrChars } : {}),
     truncated: value.truncated,
     ...(value.startedAt !== undefined ? { startedAt: value.startedAt } : {}),
     ...(value.finishedAt !== undefined ? { finishedAt: value.finishedAt } : {}),
+    ...(imageCandidates ? { imageCandidates } : {}),
   };
+}
+
+/** A page image the user could lift into the Document Studio for OCR. */
+export interface ImageCandidate {
+  src: string;
+  width: number;
+  height: number;
+  sameOrigin: boolean;
+}
+
+function normalizeImageCandidates(value: unknown): ImageCandidate[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: ImageCandidate[] = [];
+  for (const entry of value) {
+    if (out.length >= 12) break;
+    if (!isRecord(entry)) continue;
+    if (!isSafeImageSrc(entry.src)) continue;
+    const width = entry.width;
+    const height = entry.height;
+    if (typeof width !== "number" || !Number.isFinite(width) || width <= 0) continue;
+    if (typeof height !== "number" || !Number.isFinite(height) || height <= 0) continue;
+    out.push({ src: entry.src, width: Math.round(width), height: Math.round(height), sameOrigin: entry.sameOrigin === true });
+  }
+  return out.length > 0 ? out : undefined;
 }
 
 function normalizeWizardAnalysis(value: unknown): WizardAnalysis | null {
@@ -252,6 +299,7 @@ function normalizePopupState(value: unknown): PopupState | null {
   const findings = normalizeFindingArray(value.findings);
   if (!findings || typeof value.consentRequired !== "boolean") return null;
   if (value.sessionId !== undefined && (typeof value.sessionId !== "string" || value.sessionId.length > 128)) return null;
+  const imageCandidates = value.imageCandidates === undefined ? undefined : normalizeImageCandidates(value.imageCandidates);
   let error: { code: string; userMessage: string } | undefined;
   if (value.error !== undefined) {
     if (!isRecord(value.error) || typeof value.error.code !== "string" || typeof value.error.userMessage !== "string" || value.error.code.length > 100 || value.error.userMessage.length > 500) return null;
@@ -264,6 +312,7 @@ function normalizePopupState(value: unknown): PopupState | null {
     scanned: value.scanned,
     truncated: value.truncated,
     visibleChars: value.visibleChars,
+    ...(imageCandidates ? { imageCandidates } : {}),
     ...(error ? { error } : {}),
     consentRequired: value.consentRequired,
     ...(value.sessionId !== undefined ? { sessionId: value.sessionId } : {}),
@@ -494,6 +543,15 @@ export function validateMessage(raw: unknown): ValidationResult {
       if (typeof raw.docId !== "string" || !raw.docId) return { ok: false, error: "Invalid docId" };
       return { ok: true, message: { type, requestId, docId: raw.docId } };
     }
+    case "POPUP_DOC_CAPTURE_IMAGE": {
+      // Requests that an image found on the active page be lifted into the
+      // Document Studio so OCR and redaction can run over it. `src` is the
+      // image URL the content script reported; the worker decides whether it
+      // may read the original bytes or must fall back to a rendered capture.
+      if (typeof raw.src !== "string" || !raw.src) return { ok: false, error: "Invalid src" };
+      if (!isSafeImageSrc(raw.src)) return { ok: false, error: "Unsupported image source" };
+      return { ok: true, message: { type, requestId, src: raw.src, name: isName(raw.name) ? raw.name : "page-image.png" } };
+    }
     case "POPUP_EXPORT_AUDIT":
     case "POPUP_UNDO_MASKS":
     case "POPUP_CUSTOM_PATTERNS_GET":
@@ -721,7 +779,29 @@ export function validateMessage(raw: unknown): ValidationResult {
         },
       };
     }
-    case "POPUP_DOC_STATUS": {
+    case "POPUP_DOC_CAPTURE_READY": {
+    // The worker staged an image taken from the page and is telling the popup
+    // to preview it. `degraded` marks a rendered capture, where OCR quality is
+    // limited by what was on screen.
+    if (!isFileKey(raw.fileKey)) return { ok: false, error: "Invalid fileKey" };
+    if (!isName(raw.name)) return { ok: false, error: "Invalid name" };
+    if (raw.kind !== "image") return { ok: false, error: "Invalid kind" };
+    if (raw.source !== "original" && raw.source !== "capture") return { ok: false, error: "Invalid source" };
+    return {
+      ok: true,
+      message: {
+        type,
+        requestId,
+        fileKey: raw.fileKey,
+        name: raw.name,
+        mimeType: typeof raw.mimeType === "string" ? raw.mimeType : "image/png",
+        kind: "image",
+        source: raw.source,
+        degraded: raw.degraded === true,
+      },
+    };
+  }
+  case "POPUP_DOC_STATUS": {
       const stage = raw.stage as DocRedactionStage;
       if (stage !== "detected" && stage !== "redacted" && stage !== "verified") return { ok: false, error: "Invalid stage" };
       const method = raw.method as RedactionVerifyMethod | undefined;

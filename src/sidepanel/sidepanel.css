@@ -1090,61 +1090,6 @@ body[data-reduced-motion="true"] *::after {
   display: flex;
 }
 
-/* ---------- Protection: status hero ---------- */
-.protection-status {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-  padding: 14px 12px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 1px 0 rgba(148, 163, 184, 0.06) inset;
-}
-
-.status-indicator {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-}
-
-.status-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 2px solid rgba(52, 211, 153, 0.35);
-  animation: pulseRing 2.4s infinite ease-in-out;
-}
-
-.status-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--ok);
-  box-shadow: 0 0 10px var(--ok);
-  flex: none;
-}
-
-@keyframes pulseRing {
-  0%, 100% { transform: scale(1); opacity: 0.85; }
-  50% { transform: scale(1.12); opacity: 0.4; }
-}
-
-.status-title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.status-desc {
-  margin: 0;
-  font-size: 11px;
-  color: var(--text-muted);
 }
 
 .status-text {
@@ -1737,10 +1682,112 @@ body[data-reduced-motion="true"] *::after {
   gap: 6px;
 }
 
-body[data-reduced-motion="true"] .status-ring,
-body[data-reduced-motion="true"] .status-dot {
-  animation: none;
+/* The status hero that used to be animated here was removed; the reduced-motion
+   override went with it. Other animated indicators remain opted out below. */
+body[data-reduced-motion="true"] *,
+body[data-reduced-motion="true"] *::before,
+body[data-reduced-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
 }
 
 
 
+
+/* ---------- Image capture: a page that is an image ---------- */
+/*
+   Offered only when a page scan found no text but the page carries a
+   document-sized image. Green means the original file will be read at full
+   resolution; amber means only a rendered capture is possible, so OCR quality
+   depends on what was on screen. The colour is the whole point: the user must
+   be able to see the difference before trusting a redaction of a scan.
+*/
+.image-capture {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2, rgba(148, 163, 184, 0.05));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.image-capture__options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.image-capture__btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-1, transparent);
+  color: var(--text);
+  padding: 8px 10px;
+  min-height: 40px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.image-capture__btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: var(--surface-3, rgba(148, 163, 184, 0.08));
+}
+
+/* Full-resolution source: the original file will be read. */
+.image-capture__btn--ok {
+  border-color: var(--ok);
+  box-shadow: inset 3px 0 0 var(--ok);
+}
+
+/* Rendered capture only: legible, but bounded by the viewport and zoom. */
+.image-capture__btn--warn {
+  border-color: var(--warning);
+  box-shadow: inset 3px 0 0 var(--warning);
+}
+
+.image-capture__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.image-capture__badge {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.image-capture__btn--ok .image-capture__badge {
+  background: rgba(52, 211, 153, 0.16);
+  color: var(--ok);
+}
+
+.image-capture__btn--warn .image-capture__badge {
+  background: rgba(251, 191, 36, 0.16);
+  color: var(--warning);
+}
+
+.image-capture__size {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}

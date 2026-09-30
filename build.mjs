@@ -29,6 +29,9 @@ const entries = [
   // Print/PDF view. Its own entry so the print path never pulls the popup's
   // controller into the page, and so the page has no scan logic at all.
   { entry: "src/popup/redact.ts", out: "redact.js", format: "iife" },
+  // Full-screen document review: the document at natural size, controls beside
+  // it. Separate entry so a review page never loads the popup controller.
+  { entry: "src/popup/review.ts", out: "review.js", format: "iife" },
 ];
 
 for (const { entry, out, format } of entries) {
@@ -47,9 +50,13 @@ copyFileSync(join(root, "src/sidepanel", "sidepanel.html"), join(outDir, "sidepa
 copyFileSync(join(root, "src/sidepanel", "sidepanel.css"), join(outDir, "sidepanel.css"));
 copyFileSync(join(root, "src/landing", "index.html"), join(outDir, "landing.html"));
 copyFileSync(join(root, "src/landing", "landing.js"), join(outDir, "landing.js"));
-copyFileSync(join(root, "src/popup", "privacy.html"), join(outDir, "privacy.html"));
-copyFileSync(join(root, "src/popup", "legal.html"), join(outDir, "legal.html"));
-copyFileSync(join(root, "src/popup", "redact.html"), join(outDir, "redact.html"));
+  copyFileSync(join(root, "src/popup", "privacy.html"), join(outDir, "privacy.html"));
+  copyFileSync(join(root, "src/popup", "legal.html"), join(outDir, "legal.html"));
+  copyFileSync(join(root, "src/popup", "redact.html"), join(outDir, "redact.html"));
+  // Full-screen document review. Its own entry so the review surface never
+  // pulls the popup controller into a page that only reads a document.
+  copyFileSync(join(root, "src/popup", "review.html"), join(outDir, "review.html"));
+  copyFileSync(join(root, "src/popup", "review.css"), join(outDir, "review.css"));
 copyFileSync(join(root, "manifest.json"), join(outDir, "manifest.json"));
 copyFileSync(join(root, "PRIVACY.md"), join(outDir, "PRIVACY.md"));
 copyFileSync(join(root, "PERMISSIONS.md"), join(outDir, "PERMISSIONS.md"));
