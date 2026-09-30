@@ -5,6 +5,7 @@
 //
 //   node scripts/verify-release-zip.mjs release/governworld-redaction-<sha>.zip
 import { chromium } from "@playwright/test";
+import { browserChannelArgs } from "./browser-launch.mjs";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -94,6 +95,7 @@ try {
   const profile = join(work, "profile");
   const context = await chromium.launchPersistentContext(profile, {
     headless: false,
+    ...browserChannelArgs(),
     viewport: { width: 1280, height: 900 },
     args: [
       `--disable-extensions-except=${work}`,

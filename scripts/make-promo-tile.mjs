@@ -12,6 +12,7 @@
 //
 //   npm run capture:promo
 import { chromium } from "@playwright/test";
+import { browserChannelArgs } from "./browser-launch.mjs";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -91,7 +92,7 @@ if (!existsSync(landing)) {
 }
 mkdirSync(OUT_DIR, { recursive: true });
 
-const browser = await chromium.launch({ headless: false });
+const browser = await chromium.launch({ headless: false, ...browserChannelArgs() });
 try {
   const tab = await browser.newPage({ viewport: { width: W, height: H } });
   await tab.setContent(page, { waitUntil: "load" });

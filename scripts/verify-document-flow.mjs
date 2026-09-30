@@ -12,6 +12,7 @@
 //
 // Requires a prior `npm run build`. Runs headed, so it needs a display.
 import { chromium } from "playwright";
+import { browserChannelArgs } from "./browser-launch.mjs";
 import { mkdtempSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -42,6 +43,7 @@ const check = (name, ok, detail = "") => {
 
 const context = await chromium.launchPersistentContext(join(work, "profile"), {
   headless: false,
+  ...browserChannelArgs(),
   acceptDownloads: true,
   args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`, "--no-first-run"],
 });

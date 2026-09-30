@@ -5,6 +5,7 @@
 // The popup studio is 360px wide, so this is the only place drawing can be
 // verified at all: at popup scale a box lands on pixels nobody can read.
 import { chromium } from "playwright";
+import { browserChannelArgs } from "./browser-launch.mjs";
 import { mkdtempSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -26,6 +27,7 @@ const check = (name, ok, detail = "") => {
 const work = mkdtempSync(join(tmpdir(), "gw-review-"));
 const context = await chromium.launchPersistentContext(join(work, "profile"), {
   headless: false,
+  ...browserChannelArgs(),
   acceptDownloads: true,
   args: [`--disable-extensions-except=${join(root, "dist")}`, `--load-extension=${join(root, "dist")}`, "--no-first-run"],
 });

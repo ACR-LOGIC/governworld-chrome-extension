@@ -12,6 +12,7 @@
 //   node scripts/verify-print-pipeline.mjs
 
 import { chromium } from "@playwright/test";
+import { browserChannelArgs } from "./browser-launch.mjs";
 import { createServer } from "node:http";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
@@ -57,6 +58,7 @@ mkdirSync(downloads, { recursive: true });
 
 const context = await chromium.launchPersistentContext(join(work, "profile"), {
   headless: false,
+  ...browserChannelArgs(),
   viewport: { width: 1280, height: 900 },
   acceptDownloads: true,
   args: [

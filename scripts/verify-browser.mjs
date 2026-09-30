@@ -7,6 +7,7 @@
 //
 // Requires a Chromium binary from `npx playwright install chromium`.
 import { chromium } from "@playwright/test";
+import { browserChannelArgs } from "./browser-launch.mjs";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -29,6 +30,7 @@ const fail = (page, detail) => failures.push(`${page}: ${detail}`);
 
 const context = await chromium.launchPersistentContext(profile, {
   headless: false,
+  ...browserChannelArgs(),
   args: [
     `--disable-extensions-except=${ext}`,
     `--load-extension=${ext}`,

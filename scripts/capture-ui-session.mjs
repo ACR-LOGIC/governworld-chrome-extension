@@ -19,6 +19,7 @@
 //  2. POPUP_SCAN targets the browser's active tab, so the fixture page has to be
 //     in front at the moment the message is sent.
 import { chromium } from "@playwright/test";
+import { browserChannelArgs } from "./browser-launch.mjs";
 import { createServer } from "node:http";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
@@ -170,6 +171,7 @@ function watch(page, label) {
 
 const context = await chromium.launchPersistentContext(PROFILE, {
   headless: false,
+  ...browserChannelArgs(),
   viewport: { width: 1280, height: 900 },
   recordVideo: { dir: VIDEO, size: { width: 1280, height: 900 } },
   acceptDownloads: true,

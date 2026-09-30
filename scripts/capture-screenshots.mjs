@@ -16,6 +16,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
+import { browserChannelArgs } from "./browser-launch.mjs";
 
 const root = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = join(root, "..");
@@ -87,6 +88,7 @@ const extPath = shotBuild.replace(/\\/g, "/");
 // extensions; the full Chromium build with --load-extension needs a window.
 const context = await chromium.launchPersistentContext("", {
   headless: false,
+  ...browserChannelArgs(),
   viewport: { width: 1280, height: 800 },
   args: [`--disable-extensions-except=${extPath}`, `--load-extension=${extPath}`],
 });

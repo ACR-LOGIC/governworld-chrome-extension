@@ -21,6 +21,7 @@
 //
 // Run: node scripts/make-photo-fixtures.mjs
 import { chromium } from '@playwright/test';
+import { browserChannelArgs } from './browser-launch.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -154,7 +155,7 @@ async function renderDocument({ background, blocks, noise }) {
   return { png: Buffer.from(result.dataUrl.split(',')[1], 'base64'), measured: result.measured };
 }
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({ ...browserChannelArgs() });
 
 const pii = await renderDocument({
   background: '#f7f5f0',

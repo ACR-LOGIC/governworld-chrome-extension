@@ -17,6 +17,7 @@
 //
 // Output: release/screenshots/*.png
 import { chromium } from "@playwright/test";
+import { browserChannelArgs } from "./browser-launch.mjs";
 import { createServer } from "node:http";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
@@ -94,6 +95,7 @@ async function shoot(page, name, note) {
 const PROFILE = join(WORK, `profile-${Date.now()}`);
 const context = await chromium.launchPersistentContext(PROFILE, {
   headless: false,
+  ...browserChannelArgs(),
   viewport: { width: W, height: H },
   acceptDownloads: true,
   args: [

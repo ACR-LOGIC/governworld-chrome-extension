@@ -4,6 +4,7 @@
 // popup must say so honestly AND offer to send the image to the Document
 // Studio, where the ordinary review/redact/download flow applies unchanged.
 import { chromium } from "playwright";
+import { browserChannelArgs } from "./browser-launch.mjs";
 import { mkdtempSync, readFileSync, cpSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { join, dirname, resolve } from "node:path";
@@ -63,6 +64,7 @@ const check = (name, ok, detail = "") => {
 
 const context = await chromium.launchPersistentContext(join(work, "profile"), {
   headless: false,
+  ...browserChannelArgs(),
   acceptDownloads: true,
   args: [`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`, "--no-first-run"],
 });
