@@ -5,7 +5,7 @@
 //
 //   node scripts/verify-release-zip.mjs release/governworld-redaction-<sha>.zip
 import { chromium } from "@playwright/test";
-import { browserChannelArgs } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -92,7 +92,7 @@ try {
   }
 
   // Load the extracted artifact in a real browser and open every page.
-  const profile = join(work, "profile");
+  const profile = browserProfileDir(join(work, "profile"));
   const context = await chromium.launchPersistentContext(profile, {
     headless: false,
     ...browserChannelArgs(),

@@ -19,7 +19,7 @@
 //  2. POPUP_SCAN targets the browser's active tab, so the fixture page has to be
 //     in front at the moment the message is sent.
 import { chromium } from "@playwright/test";
-import { browserChannelArgs } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
 import { createServer } from "node:http";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
@@ -69,7 +69,7 @@ mkdirSync(SHOTS, { recursive: true });
 mkdirSync(VIDEO, { recursive: true });
 mkdirSync(DOWNLOADS, { recursive: true });
 // Unique profile per run so a locked leftover never blocks a fresh start.
-const PROFILE = join(WORK, `profile-${Date.now()}`);
+const PROFILE = browserProfileDir(join(WORK, `profile-${Date.now()}`));
 
 // ------------------------------------------------- temp manifest for scanning
 // The shipped manifest is least-privilege on purpose: activeTab, no

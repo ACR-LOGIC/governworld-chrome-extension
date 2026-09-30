@@ -17,7 +17,7 @@
 //
 // Output: release/screenshots/*.png
 import { chromium } from "@playwright/test";
-import { browserChannelArgs } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
 import { createServer } from "node:http";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
@@ -92,7 +92,7 @@ async function shoot(page, name, note) {
   console.log(`  [ok] ${name} ${size.w}x${size.h}  ${note}`);
 }
 
-const PROFILE = join(WORK, `profile-${Date.now()}`);
+const PROFILE = browserProfileDir(join(WORK, `profile-${Date.now()}`));
 const context = await chromium.launchPersistentContext(PROFILE, {
   headless: false,
   ...browserChannelArgs(),

@@ -6,7 +6,7 @@
 // health for a document full of PII - which is the single most misleading thing
 // this extension can say to a user.
 import { chromium } from "playwright";
-import { browserChannelArgs } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
 import { mkdtempSync, readFileSync, writeFileSync, cpSync, rmSync, mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { join, dirname, resolve } from "node:path";
@@ -60,7 +60,7 @@ const check = (name, ok, detail = "") => {
   if (!ok) failures.push(name);
 };
 
-const context = await chromium.launchPersistentContext(join(work, "profile"), {
+const context = await chromium.launchPersistentContext(browserProfileDir(join(work, "profile")), {
   headless: false,
   ...browserChannelArgs(),
   args: [`--disable-extensions-except=${extDir}`, `--load-extension=${extDir}`, "--no-first-run"],

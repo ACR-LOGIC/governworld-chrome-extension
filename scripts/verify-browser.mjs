@@ -7,7 +7,7 @@
 //
 // Requires a Chromium binary from `npx playwright install chromium`.
 import { chromium } from "@playwright/test";
-import { browserChannelArgs } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -23,7 +23,7 @@ if (!existsSync(join(ext, "manifest.json"))) {
 const EXTENSION_PAGES = ["popup.html", "sidepanel.html", "offscreen.html", "landing.html", "privacy.html", "legal.html", "redact.html", "review.html"];
 const CSP_VIOLATION = /Content Security Policy|Refused to (execute|inline|load|apply)/i;
 
-const profile = mkdtempSync(join(tmpdir(), "gw-ext-verify-"));
+const profile = browserProfileDir(mkdtempSync(join(tmpdir(), "gw-ext-verify-")));
 const failures = [];
 
 const fail = (page, detail) => failures.push(`${page}: ${detail}`);

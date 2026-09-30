@@ -12,7 +12,7 @@
 //
 // Requires a prior `npm run build`. Runs headed, so it needs a display.
 import { chromium } from "playwright";
-import { browserChannelArgs } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
 import { mkdtempSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -41,7 +41,7 @@ const check = (name, ok, detail = "") => {
   if (!ok) failures.push(name);
 };
 
-const context = await chromium.launchPersistentContext(join(work, "profile"), {
+const context = await chromium.launchPersistentContext(browserProfileDir(join(work, "profile")), {
   headless: false,
   ...browserChannelArgs(),
   acceptDownloads: true,
