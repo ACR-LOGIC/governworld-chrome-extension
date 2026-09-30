@@ -73,7 +73,42 @@ note governs — the older "Done" is scoped to its own block, named explicitly.
 
 ## Release artifact
 
-### v0.1.1 (current; supersedes `c273fd0` / v0.1.0)
+### Per-browser release (`d89baa2`; version 0.1.1, unreleased)
+
+Cross-browser protectionModes, enterprise policy, Firefox/Safari targets, and
+paste-enforcement hardening on top of v0.1.1. Not submitted anywhere; the
+sign-off and browser-run QA below are open items, stated here so no row reads
+as approval.
+
+| Field | Value |
+|-------|-------|
+| Commit SHA | `d89baa2` |
+| Version | 0.1.1 |
+| Chromium ZIP | `release/GovernWorld-Chromium-v0.1.1-d89baa2.zip`, SHA-256 `9BEBAAB1D2036A735D4EC393C6720446DAA556105A14E483462F931C8232A3F7` |
+| Chromium mirror tarball | `release/GovernWorld-Chromium-v0.1.1-d89baa2.tar.gz` (same payload), SHA-256 `B5B72896A83C10C3FA098B844FC9811614B20F486FBAC5B04F1D2E5EA78ACD2A` |
+| Firefox ZIP | `release/GovernWorld-Firefox-v0.1.1-d89baa2.zip`, SHA-256 `EE11CA3232140480CFD5261F30E2859F0B40D29C38A050E9AA26773E6AC1A837` |
+| Firefox mirror tarball | `release/GovernWorld-Firefox-v0.1.1-d89baa2.tar.gz` (same payload), SHA-256 `3EEEAC92D7895005EDB62679220B5D47D9904AFB1F367376DACF7A150B64F5B9` |
+| Checksums | `release/BROWSER_SHA256SUMS` (produced by `npm run release:browsers d89baa2`) |
+| Firefox identity | `redaction@governworld.acrlogic.com` (locked; asserted in both manifests) |
+| Safari | no distributable artifact (requires Mac+Xcode or App Store Connect). Handoff payload manifest SHA-256 `80DC2CF11F95E12B20A3C81F510AC4B3A17D02B7CC64311C5B24C3174F079780` |
+
+| Verification gate | Result |
+|------|--------|
+| `npm run typecheck` | ✅ Pass |
+| `npm test` | ✅ **1180 passed / 0 failed (65 files)** |
+| `npm run build` + `build:firefox` + `build:safari` | ✅ Pass (`dist/`, `dist-firefox/`, `dist-safari/`) |
+| `tests/dist-manifest.test.ts` + `tests/offline-assets.test.ts` + `tests/firefox-package.test.ts` | ✅ 18 passed (incl. managed-schema ship check) |
+| `npm run sync:sidepanel:check`, dead-CSS check | ✅ ok, 0 dead selectors |
+| `npm audit --omit=dev` | ✅ 0 vulnerabilities |
+| `npm run verify:zip` (Chromium artifact) | ⚠️ Partial: all 22 structural checks pass (manifest root, references, offline assets, legal pages, links); the live-browser stage could not run here (no Playwright browser binaries and no display in this environment) |
+| Headed-browser enforcement matrix | ⬜ Pending — unit + happy-dom enforcement suites pass; Chrome/Firefox/Safari runs recorded in `BROWSER_SUPPORT.md` when executed |
+
+**Security review sign-off for `d89baa2`: NOT YET OBTAINED.** First-party
+review only when given (the reviewer is the author); it must not be presented
+as an independent third-party assessment. Browser-run QA and store/AMO
+submission are likewise outstanding.
+
+### v0.1.1 (superseded by `d89baa2` for content; store submission still references `0315091`)
 
 v0.1.0's document path processed correctly and looked completely inert: a user
 picked a file, waited 6–20 seconds seeing no status, no spinner and no error, and
