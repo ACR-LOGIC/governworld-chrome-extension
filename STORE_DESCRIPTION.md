@@ -18,6 +18,10 @@ you cover them up:
 
 - **Scan on demand.** Nothing scans automatically. Open the popup and press
   **Scan this page** to analyze the visible text of the current tab.
+- **Paste protection modes.** Paste Shield guards text you paste into chats,
+  forms, and editors: **Off**, **This tab** (tabs you explicitly authorize —
+  the default, needs no site access), or **Always on** (every site you visit,
+  only after you grant site access at runtime; revoking access stops it).
 - **Local only — enforced.** Scanning, detection, OCR, and redaction all run
   on your device. Your page text and documents never leave your device, and the
   local pipeline has no network path at all. The optional account-linking
@@ -53,11 +57,13 @@ you cover them up:
 
 **Privacy by design.**
 
-- No `*://*` host permissions. No background scanning, keystroke capture, or
+- No install-time host permissions. No background scanning, keystroke capture, or
   network monitoring. The extension asks only for `activeTab`, `scripting`,
-  `storage`, `downloads`, `offscreen`, `sidePanel`, and `contextMenus` (plus an
-  optional, runtime-requested `notifications` permission) — each mapped to a
-  specific, user-triggered feature.
+  `storage`, `downloads`, `offscreen`, `sidePanel`, and `contextMenus` (plus
+  optional, runtime-requested `notifications` and http(s) site access for the
+  always-on paste mode) — each mapped to a specific, user-triggered feature.
+  Always-on page access is granted only if you switch the mode on and approve
+  the browser prompt, and it can be revoked at any time.
 - No raw scanned text, document bytes, or page images are stored, logged, or
   transmitted. Temporary state is cleared when your browser restarts.
 - Optional account linking (a gateway origin + API key you paste) is used only
@@ -92,5 +98,9 @@ scan. The extension does not change behavior based on which website is open.
   when you click it, and the entries can be switched off in settings.
 - `notifications` (optional, requested at runtime) — scan-findings notice only
   after you enable it.
+- `http://*/*`, `https://*/*` (optional host access, requested at runtime) —
+  lets the always-on paste mode guard every site you visit. Requested only
+  when you switch always-on on; the default this-tab mode needs no site
+  access at all.
 
 See `PERMISSIONS.md` for the full justification.

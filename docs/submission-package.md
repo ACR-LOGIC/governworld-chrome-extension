@@ -80,16 +80,18 @@ Worth writing out, because a reviewer decides the listing on this.
 > GovernWorld Redaction does one thing: it finds sensitive values — PII, PHI,
 > financial data, and credentials — in the web page the user is currently
 > viewing or in a document the user explicitly opens, and lets the user cover
-> them. It requests no host permissions, so it has no access to any site until
-> the user acts on that site. It does not modify pages, track browsing, sync
-> data, or communicate with an advertising or analytics network. Everything it
-> detects, it detects locally.
+> them. It requests no install-time host permissions, so a default install has
+> no access to any site until the user acts on that site; the always-on paste
+> mode adds optional, runtime-granted http(s) access only. It does not modify
+> pages, track browsing, sync data, or communicate with an advertising or
+> analytics network. Everything it detects, it detects locally.
 
 ## 6. Permission justifications
 
 Copy from `PERMISSIONS.md`. The manifest requests `activeTab`, `scripting`,
 `storage`, `downloads`, `offscreen`, `sidePanel`, `contextMenus`, plus optional
-`notifications` — and **no host permissions at all**, which is the strongest
+`notifications` and optional http(s) host access for the always-on paste mode —
+and **no install-time host permissions at all**, which is the strongest
 privacy statement the listing can make.
 
 ## 7. Data safety section
@@ -109,7 +111,8 @@ privacy statement the listing can make.
 - [ ] `npm run release:zip <sha>` and `npm run verify:zip <zip>`
 - [ ] `npm run verify:digests` — every recorded digest matches
 - [ ] Zip SHA-256 above matches the file you are about to upload
-- [ ] `dist/manifest.json` declares no `host_permissions`
+- [ ] `dist/manifest.json` declares no `host_permissions`, and
+  `optional_host_permissions` is exactly `http://*/*` + `https://*/*`
 - [ ] Read the Terms, Privacy Policy, and STORE_DESCRIPTION once more as a
       reviewer would
 
@@ -126,9 +129,12 @@ notice. They are not blockers; they are the honest scope of the product.
   `RELEASE_EVIDENCE.md` is first-party, recorded as such.
 - **Community rules are inert.** Both network paths refuse, the UI says so, and
   the pack verifier is tree-shaken out of the shipped bundle.
-- **Paste Shield is on-demand**, not always-on: it is absent from any tab the
-  user has not activated, because the extension requests no host permissions.
+- **Paste Shield defaults to this-tab**, not always-on: it is absent from any
+  tab the user has not activated, because a default install has no site
+  access. Always-on is an explicit opt-in behind a runtime permission grant.
 - **English only for image OCR.** Detection is language-agnostic regex, so
   structured identifiers in other languages are still found.
-- **Chrome and Edge only.** The Firefox manifest is MV2, is not packaged, and
-  cannot run the document pipeline. Safari cannot load a Chrome extension.
+- **Chromium first.** The Firefox package (`npm run build:firefox`) ships page
+  protection; its Document Studio reports an explicit error where the offscreen
+  API is absent. Safari has a handoff payload only — packaging needs Apple
+  tooling (see `BROWSER_SUPPORT.md`).

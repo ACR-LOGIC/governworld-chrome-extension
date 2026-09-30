@@ -4,9 +4,12 @@
 
 ```bash
 npm run typecheck   # tsc --noEmit
-npm test            # vitest run — 59 files / 1097 tests
+npm test            # vitest run — 60+ files / 1100+ tests (do not hard-code the count; it grows)
 npm run build       # esbuild → dist/
+npm run build:firefox  # esbuild → dist-firefox/ (Firefox MV3 manifest, locked gecko id)
+npm run build:safari   # esbuild → dist-safari/ (handoff payload only, NOT a distributable)
 npx vitest run tests/dist-manifest.test.ts tests/offline-assets.test.ts
+npx vitest run tests/firefox-package.test.ts tests/firefox-manifest.test.ts  # needs dist-firefox/
 npm run sync:sidepanel  # regenerate src/sidepanel/{sidepanel.html,sidepanel.css} from src/popup/
 npm run icons      # regenerate icons/ from brand/logo-master.png
 npm run test:doc-flow   # Document Studio end-to-end in real Chromium (needs a display)
@@ -44,13 +47,16 @@ npm run capture:ui  # Playwright UI walkthrough → screenshots + video (needs a
 - `src/service-worker/index.ts` — MV3 ES-module service worker; sole orchestrator. Validates every incoming message (`src/shared/messages.ts`) before acting. Scan sessions live in `chrome.storage.session` (key `scan:<tabId>`).
 - `src/content/content.ts` — IIFE content script, injected only via `activeTab` after explicit user action. Guarded by `globalThis.__gwRedactionContentLoaded`. Page DOM is read-only; masks render in a shadow-root overlay.
 - `src/offscreen/offscreen.ts` — ES-module offscreen document hosting pdf.js + tesseract WASM. Communicates with the service worker via the message contract in `src/document-pipeline/contract.ts` (`OFFSCREEN_CHANNEL`). **Binary payloads must be base64-encoded** — extension messaging is JSON-serialized.
-- `src/shared/` — cross-context code: `messages.ts` (message validation), `settings.ts`, `audit.ts` (ECDSA-signed, fail-closed), `i18n.ts`, `wizardAnalyzer.ts`, `customPatterns.ts`, `types.ts`.
+- `src/shared/` — cross-context code: `messages.ts` (message validation), `settings.ts` (`protectionMode` authority), `enterprisePolicy.ts` (managed-policy resolution, fail-closed), `siteAccess.ts` (always-on honesty), `platform.ts` (runtime capability detection), `audit.ts` (ECDSA-signed, fail-closed), `i18n.ts`, `wizardAnalyzer.ts`, `customPatterns.ts`, `types.ts`.
+- `src/service-worker/siteProtection.ts` — reconciles the persisted always-on content-script registration with the resolved mode on startup, settings/managed change, and permission grant/revoke. Unregisters when unwanted or unviable.
 - `src/api/` — cloud API client. All cloud features are **disabled and locked by default**; do not wire them into user flows without an explicit decision.
 - Detection logic: `src/validators/index.ts` (checksum validators) and `src/content/detect.ts` (regex/category detectors). New patterns require unit tests.
 
 ## Invariants (enforced by tests)
 
-- **Local-first / zero egress:** no raw page text, document bytes, or unmasked values may be transmitted. Never add `host_permissions` (`*://*` or domain wildcards).
+- **Local-first / zero egress:** no raw page text, document bytes, or unmasked values may be transmitted. Never add install-time `host_permissions`. The only page access is optional `http://*/*` + `https://*/*` (runtime-granted for always-on, revocable); never `<all_urls>`, never new schemes.
+- **Protection status honesty:** the banner reports `always-on-active` only with proof (registration possible + grant held), else names the gap. `describeProtectionState` in `src/shared/siteAccess.ts` is the single implementation. Enforced by `tests/protection-modes.test.ts`.
+- **Enterprise locks hold at decision points, not just in the UI:**   mandated categories re-added on save; mode changes are rejected when locked. Enforced by `tests/protection-modes.test.ts`.
 - **Fail-closed audit:** any redaction/policy/document operation must write an ECDSA-signed audit record (`src/shared/audit.ts`).
 - **UI tab contract:** popup (`src/popup/index.html`) and sidepanel (`src/sidepanel/sidepanel.html`) must keep the four tabs `protection`, `logic`, `review`, `settings` with matching `data-tab` / `id="tab-..."` attributes. Settings is a sub-navigation of eight pages (`profile`, `protection`, `detection`, `appearance`, `notifications`, `privacy`, `advanced`, `about`) using `data-settings-page`; the guide cards live on the `about` page, so any `[data-guide]` help link must call `switchSettingsPage("about")` before scrolling. Enforced by `tests/instructions-and-guidance.test.ts`.
 - **Popup/sidepanel ID parity:** every `id` in the popup must exist in the sidepanel (except `gwshield-*` and `open-side-panel-btn`). `src/sidepanel/sidepanel.html` is **generated** from `src/popup/index.html` by `npm run sync:sidepanel` (`scripts/sync-sidepanel.mjs`), which rewrites `popup.css` → `sidepanel.css`, `popup.js` → `sidepanel.js`, and collapses the popup's category-list block to the sidepanel's `<legend>` form. `src/sidepanel/sidepanel.css` is a byte-for-byte copy of `src/popup/popup.css`. **Never hand-edit the sidepanel** — the transform is the contract, and copying the block across by hand silently reintroduces whitespace drift. `npm run sync:sidepanel:check` exits non-zero on drift, so it belongs in CI. Enforced by `tests/frontend-accessibility-and-controls.test.ts` and `tests/popup-dom-contract.test.ts`.
@@ -86,11 +92,18 @@ settled; changing one is a product decision, not a cleanup.
   text is still covered for structured identifiers; only image OCR is affected.
   Adding a language is a vendoring decision, not a code change — see
   `docs/ocr-languages.md`.
-- **Paste Shield stays on-demand.** The extension declares no host permissions
-  and no declarative content scripts, so the guard is absent from any tab the
-  user has not activated. This is the intended privacy trade, documented with
-  its consequences in README. Always-on protection requires an `optional_host_permissions`
-  or `<all_urls>` decision and is out of scope unless explicitly chosen.
+- **Paste Shield modes and the always-on decision (decided).** Modes are
+  `off` / `this-tab` (default) / `always-on` (`src/shared/settings.ts`,
+  resolved with enterprise policy in `src/shared/enterprisePolicy.ts`). This-tab
+  needs nothing beyond `activeTab`; always-on additionally needs BOTH optional
+  http(s) site access granted at runtime AND `scripting.registerContentScripts`
+  (capability-gated in `src/shared/siteAccess.ts`, registered by
+  `src/service-worker/siteProtection.ts`). The banner reports `always-on-active`
+  only with proof, else "waiting for access". Never add install-time host
+  permissions or `<all_urls>` without a new explicit decision.
+- **Firefox identity (decided and locked).** Gecko id
+  `redaction@governworld.acrlogic.com`, asserted in both manifests by
+  `tests/firefox-manifest.test.ts`. Never regenerate it.
 - **Community rules are not yet trusted.** Both community network paths are
   stubbed off in the service worker and return an error. Do not enable either
   without working through `docs/community-trust-model.md`, which specifies
@@ -102,8 +115,11 @@ settled; changing one is a product decision, not a cleanup.
 ## Environment
 
 - Node.js 20+, npm 10+. Targets: Chrome 116+, Firefox 109+.
-- Release packaging: `npm run release:zip <sha>` (`scripts/make-release.mjs`). It
-  takes the commit SHA explicitly and refuses a dirty tree or a HEAD that does
+- Release packaging: `npm run release:zip <sha>` (`scripts/make-release.mjs`) for
+  Chromium, `npm run release:browsers <sha>` (`scripts/make-browser-releases.mjs`)
+  for per-browser artifacts (`GovernWorld-Chromium-…`, `GovernWorld-Firefox-…`,
+  checksums in `release/BROWSER_SHA256SUMS`; Safari gets no distributable).
+  Both take the commit SHA explicitly and refuse a dirty tree or a HEAD that does
   not match, so only reviewed content is ever packaged.
 - **Housekeeping:** `npm run clean` reports superseded release archives and test
   scratch directories; `npm run clean:apply` deletes them. Every packaging

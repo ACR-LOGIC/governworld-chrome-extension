@@ -2,7 +2,13 @@
 import { detect, maskValue, placeholderLabelFor } from "./detect.js";
 import type { RawMatch } from "./detect.js";
 import { DEFAULT_SETTINGS, normalizeSettings } from "../shared/settings.js";
-import type { FindingCategory, Settings } from "../shared/settings.js";
+import type { FindingCategory, ProtectionMode, Settings } from "../shared/settings.js";
+import {
+  NO_ENTERPRISE_POLICY,
+  parseEnterprisePolicy,
+  resolveEffectiveProtection,
+  type EnterprisePolicy,
+} from "../shared/enterprisePolicy.js";
 import type { CustomPattern } from "../shared/customPatterns.js";
 
 /**
@@ -611,12 +617,60 @@ export function isEditableElement(el: unknown): el is HTMLElement {
 
 /**
  * Initialize Paste Guard on a given Document context.
+ *
+ * Enforcement model: listeners run in the capture phase and call
+ * preventDefault() synchronously after local detection, so a BLOCK/SANITIZE
+ * decision lands BEFORE the destination receives the data. There is no
+ * "paste, then clean up" path: once the event is cancelled the bytes never
+ * enter the input.
+ *
+ * Coverage: the host document plus every reachable same-document surface —
+ * open shadow roots and same-origin iframes, including ones created after
+ * init (MutationObserver) and across SPA navigation (the script persists, the
+ * observer keeps watching). Cross-origin iframes are unreachable by design;
+ * that limitation is documented, not silently absorbed.
+ *
+ * Fail-closed: any dialog/handler fault inserts NOTHING. A previous revision
+ * inserted the raw text on error, which turned a UI fault into a data leak.
+ *
  * Returns a teardown function for clean cleanup in tests or page lifecycle.
  */
-export function initPasteGuard(doc: Document = document): () => void {
-  let cachedSettings: Settings = { ...DEFAULT_SETTINGS };
+export interface InitPasteGuardOptions {
+  /** Seed settings (normalized) instead of defaults; storage still overrides. */
+  initialSettings?: Settings;
+}
+
+export function initPasteGuard(doc: Document = document, opts?: InitPasteGuardOptions): () => void {
+  let cachedSettings: Settings = opts?.initialSettings
+    ? normalizeSettings(opts.initialSettings)
+    : { ...DEFAULT_SETTINGS };
   let cachedCustomPatterns: CustomPattern[] = [];
+  let cachedPolicy: EnterprisePolicy = { ...NO_ENTERPRISE_POLICY };
+  let cachedMode: ProtectionMode = cachedSettings.protectionMode;
+  let cachedEnabledCategories: FindingCategory[] = [...cachedSettings.enabledCategories];
   let isHandlingEvent = false;
+  const attachedRoots = new WeakSet<Document | ShadowRoot>();
+  const attachedList: Array<Document | ShadowRoot> = [];
+  let observer: MutationObserver | null = null;
+
+  const recompute = (): void => {
+    const eff = resolveEffectiveProtection(cachedSettings, cachedPolicy);
+    cachedMode = eff.mode;
+    cachedEnabledCategories = eff.enabledCategories;
+  };
+
+  const refreshManaged = async (): Promise<void> => {
+    try {
+      if (typeof chrome !== "undefined" && chrome.storage?.managed) {
+        const raw = await chrome.storage.managed.get(null);
+        cachedPolicy = parseEnterprisePolicy(raw && Object.keys(raw).length > 0 ? raw : null);
+        recompute();
+      }
+    } catch {
+      // Managed storage unreadable: keep the last resolved policy rather than
+      // flapping enforcement on a transient storage fault.
+    }
+  };
 
   // Load settings and custom patterns asynchronously from extension storage if available
   const loadStored = async () => {
@@ -629,10 +683,12 @@ export function initPasteGuard(doc: Document = document): () => void {
         if (Array.isArray(stored.customPatterns)) {
           cachedCustomPatterns = stored.customPatterns;
         }
+        recompute();
       }
     } catch {
       // Fall back to defaults
     }
+    await refreshManaged();
   };
 
   void loadStored();
@@ -642,10 +698,13 @@ export function initPasteGuard(doc: Document = document): () => void {
     if (areaName === "local") {
       if (changes.settings) {
         cachedSettings = normalizeSettings(changes.settings.newValue);
+        recompute();
       }
       if (changes.customPatterns && Array.isArray(changes.customPatterns.newValue)) {
         cachedCustomPatterns = changes.customPatterns.newValue;
       }
+    } else if (areaName === "managed") {
+      void refreshManaged();
     }
   };
 
@@ -658,10 +717,11 @@ export function initPasteGuard(doc: Document = document): () => void {
     target: HTMLElement,
     originalEvent: Event
   ) => {
-    if (!cachedSettings.pasteGuardEnabled) return;
+    // OFF means off: no interception, normal paste proceeds untouched.
+    if (cachedMode === "off") return;
     if (!text || text.trim().length === 0) return;
 
-    const matches = detectPasteFindings(text, cachedSettings.enabledCategories, cachedCustomPatterns);
+    const matches = detectPasteFindings(text, cachedEnabledCategories, cachedCustomPatterns);
     if (matches.length === 0) return;
 
     // Intercept event
@@ -689,8 +749,9 @@ export function initPasteGuard(doc: Document = document): () => void {
         },
       });
     } catch {
+      // Fail closed: a dialog fault must never become a raw-text insertion.
+      // The paste stays cancelled and nothing reaches the destination.
       isHandlingEvent = false;
-      insertTextIntoElement(target, text);
     }
   };
 
@@ -707,7 +768,20 @@ export function initPasteGuard(doc: Document = document): () => void {
 
   const onBeforeInput = (e: InputEvent) => {
     if (isHandlingEvent) return;
-    if (e.inputType !== "insertFromPaste") return;
+    if (e.inputType !== "insertFromPaste" && e.inputType !== "insertFromDrop") return;
+    const target = e.target;
+    if (!isEditableElement(target)) return;
+
+    // Note: most browsers expose no clipboard data on beforeinput; this is a
+    // backstop for engines that do. The paste/drop handlers are authoritative.
+    const text = e.dataTransfer?.getData("text/plain") || e.dataTransfer?.getData("text") || "";
+    if (text) {
+      handlePastedContent(text, target, e);
+    }
+  };
+
+  const onDrop = (e: DragEvent) => {
+    if (isHandlingEvent) return;
     const target = e.target;
     if (!isEditableElement(target)) return;
 
@@ -717,12 +791,95 @@ export function initPasteGuard(doc: Document = document): () => void {
     }
   };
 
-  doc.addEventListener("paste", onPaste as EventListener, true);
-  doc.addEventListener("beforeinput", onBeforeInput as EventListener, true);
+  const attachToRoot = (root: Document | ShadowRoot): void => {
+    if (attachedRoots.has(root)) return;
+    attachedRoots.add(root);
+    attachedList.push(root);
+    root.addEventListener("paste", onPaste as EventListener, true);
+    root.addEventListener("beforeinput", onBeforeInput as EventListener, true);
+    root.addEventListener("drop", onDrop as EventListener, true);
+  };
+
+  const detachFromRoot = (root: Document | ShadowRoot): void => {
+    root.removeEventListener("paste", onPaste as EventListener, true);
+    root.removeEventListener("beforeinput", onBeforeInput as EventListener, true);
+    root.removeEventListener("drop", onDrop as EventListener, true);
+  };
+
+  /** Attach to every reachable same-document surface under a scope. */
+  const scanScope = (scope: Document | Element | ShadowRoot): void => {
+    const elements: ArrayLike<Element> =
+      scope instanceof Document || scope instanceof ShadowRoot
+        ? scope.querySelectorAll("*")
+        : scope.querySelectorAll("*");
+    const visit = (el: Element): void => {
+      const shadow = (el as unknown as { shadowRoot?: unknown }).shadowRoot;
+      if (shadow && typeof (shadow as ShadowRoot).addEventListener === "function") {
+        const root = shadow as ShadowRoot;
+        attachToRoot(root);
+        scanScope(root);
+      }
+      if (el.tagName === "IFRAME") {
+        try {
+          const frameDoc = (el as unknown as { contentDocument?: unknown }).contentDocument;
+          if (frameDoc && typeof (frameDoc as Document).addEventListener === "function") {
+            attachToRoot(frameDoc as Document);
+          }
+        } catch {
+          // Cross-origin iframe: unreachable by platform design. The top-level
+          // document guard still stands; the limitation is documented.
+        }
+      }
+    };
+    if (scope instanceof Element) visit(scope);
+    for (const el of Array.from(elements)) visit(el);
+  };
+
+  attachToRoot(doc);
+  // Best-effort: minimal DOM shims in tests may not implement traversal.
+  try {
+    scanScope(doc);
+  } catch {
+    // Host-document listeners above are the enforcement floor.
+  }
+
+  // Keep covering editors created after init (rich-text editors, SPA views,
+  // dynamically injected inputs) without polling.
+  try {
+    if (typeof MutationObserver !== "undefined" && doc.documentElement) {
+      observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          for (const node of Array.from(mutation.addedNodes)) {
+            if (node && (node as Node).nodeType === 1) {
+              try {
+                scanScope(node as unknown as Element);
+              } catch {
+                // A single unscannable subtree must not break the observer.
+              }
+            }
+          }
+        }
+      });
+      observer.observe(doc.documentElement, { childList: true, subtree: true });
+    }
+  } catch {
+    observer = null;
+  }
 
   return () => {
-    doc.removeEventListener("paste", onPaste as EventListener, true);
-    doc.removeEventListener("beforeinput", onBeforeInput as EventListener, true);
+    try {
+      observer?.disconnect();
+    } catch {
+      // ignore
+    }
+    observer = null;
+    for (const root of attachedList) {
+      try {
+        detachFromRoot(root);
+      } catch {
+        // ignore
+      }
+    }
     if (typeof chrome !== "undefined" && chrome.storage?.onChanged?.removeListener) {
       chrome.storage.onChanged.removeListener(storageListener);
     }

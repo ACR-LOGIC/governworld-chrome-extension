@@ -390,6 +390,14 @@
             <span data-i18n="paste_guard_toggle">Paste Shield</span>
           </label>
           <label class="toggle-row">
+            <input id="always-on-toggle" type="checkbox" role="switch" aria-checked="false" />
+            <span data-i18n="always_on_toggle">Always protect all sites</span>
+          </label>
+          <p class="footnote" data-i18n="always_on_desc">Runs on every site you visit. Needs site access you approve, revocable anytime.</p>
+          <button id="grant-access-btn" class="btn btn--ghost btn--sm" type="button" data-i18n="grant_access_btn">Grant site access</button>
+          <p id="protection-state" class="footnote" role="status" aria-live="polite"></p>
+          <p id="managed-lock-notice" class="footnote" role="status" hidden></p>
+          <label class="toggle-row">
             <input id="context-menus-toggle" type="checkbox" role="switch" aria-checked="false" />
             <span data-i18n="context_menus_toggle">Context Menu Protection</span>
           </label>
@@ -629,8 +637,10 @@
             </p>
             <ul class="footnote about-list">
               <li>
-                The extension ships with <strong>no host permissions at all</strong>. It cannot read any site
+                The extension installs with <strong>no install-time host permissions</strong>. It cannot read any site
                 until you explicitly ask it to, and it never asks to run in the background.
+                The always-on paste mode adds optional site access only if you switch it on
+                and approve the browser prompt — revoking the grant stops it.
               </li>
               <li>
                 Detection, OCR, and redaction all execute inside your browser. There is no server that receives
@@ -819,7 +829,7 @@
             <div id="guide-verification" class="guide-card"><h4 data-i18n="guide-verification">Verification</h4><p class="footnote">Redaction is verified at the pixel level.</p></div>
             <div id="guide-wizard" class="guide-card"><h4 data-i18n="guide-wizard">Wizard</h4><p class="footnote">Create custom detection logic from examples.</p></div>
             <div id="guide-categories" class="guide-card"><h4 data-i18n="guide-categories">Categories</h4><p class="footnote">20 detection categories covering PII, PHI, financial, and more.</p></div>
-            <div id="guide-paste-guard" class="guide-card"><h4 data-i18n="guide-paste-guard">Paste Guard</h4><p class="footnote">Intercepts pastes into AI chats and forms.</p></div>
+            <div id="guide-paste-guard" class="guide-card"><h4 data-i18n="guide-paste-guard">Paste Guard</h4><p class="footnote">Guards pastes into chats, forms, and editors. Off, this tab (default), or always on with approved site access.</p></div>
             <div id="guide-context-menus" class="guide-card"><h4 data-i18n="guide-context-menus">Context Menus</h4><p class="footnote">Right-click to redact, mask, or scan.</p></div>
             <div id="guide-ocr-languages" class="guide-card"><h4 data-i18n="guide-ocr-languages">OCR Languages</h4><p class="footnote">English in this build. Additional languages can be added by bundling their traineddata; nothing is downloaded at runtime.</p></div>
             <div id="guide-redaction-styles" class="guide-card"><h4 data-i18n="guide-redaction-styles">Redaction Styles</h4><p class="footnote">Blackout, whiteout, or text stamp.</p></div>

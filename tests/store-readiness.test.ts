@@ -31,10 +31,14 @@ const hostPermissions = [
 const PERMISSION_DOCS = ["PERMISSIONS.md", "STORE_DESCRIPTION.md", "CHROMEWEBSTORE.md"];
 
 describe("manifest permission declarations", () => {
-  it("requests no host permissions at all", () => {
+  it("requests no automatic host permissions; site access is runtime-only", () => {
+    // Zero-egress posture, updated for always-on: no install-time site
+    // access of any kind. The only page access is optional http(s) origins
+    // the user grants at runtime (and can revoke), so default installs still
+    // touch no website automatically.
     expect(manifest.host_permissions, "dist must keep its zero-egress posture").toBeUndefined();
-    expect(manifest.optional_host_permissions).toBeUndefined();
-    expect(hostPermissions).toEqual([]);
+    expect(manifest.optional_host_permissions?.slice().sort()).toEqual(["http://*/*", "https://*/*"]);
+    expect(hostPermissions.slice().sort()).toEqual(["http://*/*", "https://*/*"]);
   });
 
   it("does not request the blanket permissions a local-first tool should never need", () => {

@@ -6,6 +6,10 @@ import type { RedactionVerification } from "../document-pipeline/verify.js";
 import type { RedactedDocRef } from "../shared/docStore.js";
 import type { DocKind, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
 import { loadSettings, meetsThreshold } from "../shared/settings.js";
+import {
+  DOCUMENT_PIPELINE_UNAVAILABLE_MESSAGE,
+  isDocumentPipelineSupported,
+} from "../shared/platform.js";
 import { loadCustomPatterns } from "../shared/customPatterns.js";
 import { docStoreFile, docReadFile, docDeleteFile, docClearFiles } from "../shared/docDb.js";
 
@@ -175,6 +179,9 @@ export async function previewDocument(
   mimeType: string,
   kind: DocKind
 ): Promise<{ docId: string; pages: DocumentPage[] }> {
+  // The pipeline runs in an offscreen document (Chromium-only). On browsers
+  // without it, say so plainly instead of failing deep in the job queue.
+  if (!isDocumentPipelineSupported()) throw new Error(DOCUMENT_PIPELINE_UNAVAILABLE_MESSAGE);
   const bytes = await readFile(fileKey);
   if (!bytes) throw new Error("The selected file is no longer available. Please re-open it.");
   if (bytes.byteLength > MAX_DOC_BYTES) throw new Error("Document is too large to process on this device.");

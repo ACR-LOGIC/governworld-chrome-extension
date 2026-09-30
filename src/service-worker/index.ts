@@ -35,6 +35,25 @@ import {
   unlinkCommunityAccount,
   saveCommunityAccount,
 } from "../shared/customPatterns.js";
+import { syncSiteProtection } from "./siteProtection.js";
+import { loadEnterprisePolicy, resolveEffectiveProtection } from "../shared/enterprisePolicy.js";
+
+/**
+ * Scan settings with admin-mandated categories merged in. Page scans must not
+ * narrow below the enterprise floor: without this, a locked policy would hold
+ * for pastes but silently miss mandated categories on scans.
+ */
+async function buildEffectiveScanSettingsMessage(settings: Settings): Promise<ScanSettingsMessage> {
+  try {
+    const policy = await loadEnterprisePolicy();
+    return buildScanSettingsMessage(
+      settings,
+      resolveEffectiveProtection(settings, policy).enabledCategories
+    );
+  } catch {
+    return buildScanSettingsMessage(settings);
+  }
+}
 
 /**
  * Extension service worker (MV3). Permission-aware orchestration: owns all
@@ -47,9 +66,12 @@ const SESSION_KEY_PREFIX = "scan:";
 const SCAN_TIMEOUT_MS = 60_000;
 const FETCH_TIMEOUT_MS = 10_000;
 
-function buildScanSettingsMessage(settings: Settings): ScanSettingsMessage {
+function buildScanSettingsMessage(
+  settings: Settings,
+  enabledCategories: ScanSettingsMessage["enabledCategories"] = settings.enabledCategories
+): ScanSettingsMessage {
   return {
-    enabledCategories: settings.enabledCategories,
+    enabledCategories,
     maxVisibleChars: settings.maxVisibleChars,
     maxNodeChars: settings.maxNodeChars,
     maskPlaceholders: settings.maskPlaceholders,
@@ -324,7 +346,7 @@ async function handlePopupScan(mode: ScanMode, requestId: string): Promise<void>
     requestId,
     mode,
     sessionId,
-    settings: buildScanSettingsMessage(settings),
+    settings: await buildEffectiveScanSettingsMessage(settings),
   };
   await sendToTab(tab.id, message);
 }
@@ -1176,9 +1198,32 @@ if (chrome.storage?.onChanged) {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.settings) {
       void syncContextMenus();
+      void syncSiteProtection();
+    } else if (area === "managed") {
+      void syncSiteProtection();
     }
   });
 }
+
+// Site access for always-on is a runtime grant the user can give or revoke at
+// any time (chrome://extensions or the permission prompt). Re-reconcile on
+// both transitions so revoking access genuinely stops coverage and granting
+// it arms a pending always-on request without another settings round-trip.
+if (chrome.permissions?.onAdded) {
+  chrome.permissions.onAdded.addListener(() => {
+    void syncSiteProtection();
+  });
+}
+if (chrome.permissions?.onRemoved) {
+  chrome.permissions.onRemoved.addListener(() => {
+    void syncSiteProtection();
+  });
+}
+
+// Reconcile on every worker start: registrations persist across sessions, so
+// a stale registration from before the user opted out must be removed, and a
+// pending always-on request must be armed, even if no settings event fires.
+void syncSiteProtection();
 
 if (chrome.contextMenus?.onClicked) {
   chrome.contextMenus.onClicked.addListener((info, tab) => {
@@ -1192,12 +1237,13 @@ if (chrome.contextMenus?.onClicked) {
       }
 
       const settings = await loadSettings();
+      const effectiveScanSettings = await buildEffectiveScanSettingsMessage(settings);
       if (info.menuItemId === "redact_selection") {
         const msg: WorkerMessage = {
           type: "CONTEXT_REDACT_SELECTION",
           requestId: crypto.randomUUID(),
           selectionText: info.selectionText,
-          settings: buildScanSettingsMessage(settings),
+          settings: effectiveScanSettings,
         };
         await sendToTab(tabId, msg);
       } else if (info.menuItemId === "mask_selection") {
@@ -1205,7 +1251,7 @@ if (chrome.contextMenus?.onClicked) {
           type: "CONTEXT_MASK_SELECTION",
           requestId: crypto.randomUUID(),
           selectionText: info.selectionText,
-          settings: buildScanSettingsMessage(settings),
+          settings: effectiveScanSettings,
         };
         await sendToTab(tabId, msg);
       }

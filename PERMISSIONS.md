@@ -21,16 +21,17 @@ uses it, and lists permissions the extension deliberately does **not** request.
 | Permission      | Why it is requested | When |
 |-----------------|---------------------|------|
 | `notifications` | Raises a system notification when a scan finds sensitive data — only if the user enables the "Notify me" toggle. Denied requests simply stay off; no functionality depends on it. | Side panel → Notifications toggle |
+| `http://*/*`, `https://*/*` (optional host access) | Lets the always-on paste-protection mode guard pages on every site the user visits. Requested only when the user switches always-on on; denied or revoked access leaves the default this-tab mode fully working. The registration is removed when always-on is off, so revoking genuinely stops coverage. | Protection settings → Always-on toggle |
 
 ## Declared `host_permissions`
 
-**None.** The extension declares **zero host permissions** and **zero automatic site-access permissions**. It operates entirely on-device with zero automatic access to any website.
+**None at install.** The extension declares **zero install-time host permissions** and **zero automatic site-access permissions**. Default installs operate entirely on-device with zero automatic access to any website. Optional http(s) site access exists solely for the user-approved always-on mode (see above).
 
 ## Permissions the extension deliberately does NOT request
 
 | Permission     | Why it is avoided |
 |----------------|-------------------|
-| `<all_urls>` / host permissions | No background or automatic access to web traffic or sites. |
+| Automatic (install-time) host permissions / `<all_urls>` | No background or automatic access to web traffic or sites. Page access for always-on is optional, runtime-granted http(s) only, and revocable. |
 | `tabs`         | Unnecessary; `activeTab` covers the one user-chosen tab without requesting browsing history. |
 | `webRequest`   | The extension must not observe or modify network traffic. |
 | `clipboardRead`| Clipboard writes use the standard `navigator.clipboard.writeText` with no read permission. |

@@ -10,11 +10,23 @@ import {
   PRESET_CATEGORIES,
   PRESET_LABELS,
   type PresetId,
+  type ProtectionMode,
   type Settings,
   type LanguageCode,
   type FontSizeScale,
   type SessionTimeoutOption,
 } from "../shared/settings.js";
+import {
+  loadEnterprisePolicy,
+  resolveEffectiveProtection,
+  type EffectiveProtection,
+} from "../shared/enterprisePolicy.js";
+import {
+  ALWAYS_ON_ORIGINS,
+  describeProtectionState,
+  queryAlwaysOnCapability,
+  type AlwaysOnCapability,
+} from "../shared/siteAccess.js";
 import { recordAudit } from "../shared/audit.js";
 import { BUNDLED_OCR_LANGUAGES } from "../shared/ocrLanguages.js";
 import { t, getCategoryLabel, getPresetLabel } from "../shared/i18n.js";
@@ -316,10 +328,15 @@ export function applyAccessibilitySettings(settings: Settings): void {
   }
 }
 
-export async function renderCategories(settings: { enabledCategories: FindingCategory[]; language?: LanguageCode }): Promise<void> {
+export async function renderCategories(settings: {
+  enabledCategories: FindingCategory[];
+  lockedCategories?: FindingCategory[];
+  language?: LanguageCode;
+}): Promise<void> {
   const list = document.getElementById("category-list") as HTMLFieldSetElement | null;
   if (!list) return;
   const lang = settings.language || currentLang || "en";
+  const locked = new Set<FindingCategory>(settings.lockedCategories ?? []);
   list.replaceChildren();
   for (const category of ALL_CATEGORIES) {
     const label = el("label");
@@ -329,15 +346,28 @@ export async function renderCategories(settings: { enabledCategories: FindingCat
     check.checked = settings.enabledCategories.includes(category);
     check.setAttribute("role", "switch");
     check.setAttribute("aria-checked", check.checked ? "true" : "false");
+    if (locked.has(category)) {
+      // Admin-mandated: visible but not switchable. Enforcement does not rely
+      // on this attribute — the change handler below re-adds locked
+      // categories and the content guard merges them independently.
+      check.disabled = true;
+      check.title = t(lang, "managed_lock_notice");
+    }
     const span = el("span", undefined, getCategoryLabel(lang, category));
     label.append(check, span);
     check.addEventListener("change", async () => {
+      if (check.disabled) {
+        check.checked = true;
+        return;
+      }
       check.setAttribute("aria-checked", check.checked ? "true" : "false");
       const current = await loadSettings();
       const priorPreset = presetForCategories(current.enabledCategories);
       const set = new Set(current.enabledCategories);
       if (check.checked) set.add(category);
       else set.delete(category);
+      // A locked category can never be removed, even programmatically.
+      for (const mandated of (await loadEnterprisePolicy()).enforcedCategories) set.add(mandated);
       const next = ALL_CATEGORIES.filter((c) => set.has(c));
       await saveSettings({ ...current, enabledCategories: next });
       await renderCategories({ enabledCategories: next, language: current.language });
@@ -382,14 +412,17 @@ export async function applyPreset(presetId: PresetId): Promise<void> {
   if (!categories) return;
   const current = await loadSettings();
   const previousPreset = presetForCategories(current.enabledCategories);
-  await saveSettings({ ...current, enabledCategories: categories });
-  await renderCategories({ enabledCategories: categories, language: current.language });
+  // Admin-mandated categories survive preset switches.
+  const enforced = (await loadEnterprisePolicy()).enforcedCategories;
+  const merged = ALL_CATEGORIES.filter((c) => categories.includes(c) || enforced.includes(c));
+  await saveSettings({ ...current, enabledCategories: merged });
+  await renderCategories({ enabledCategories: merged, language: current.language });
   if (previousPreset !== presetId) {
     await recordAudit({
       ts: new Date().toISOString(),
       action: "preset_applied",
       presetId,
-      enabledCategories: categories,
+      enabledCategories: merged,
       outcome: "ok",
     });
   }
@@ -398,8 +431,10 @@ export async function applyPreset(presetId: PresetId): Promise<void> {
 export async function applyCategoryFilter(categories: FindingCategory[]): Promise<void> {
   const current = await loadSettings();
   const valid = ALL_CATEGORIES.filter((c) => categories.includes(c));
-  await saveSettings({ ...current, enabledCategories: valid });
-  await renderCategories({ enabledCategories: valid, language: current.language });
+  const enforced = (await loadEnterprisePolicy()).enforcedCategories;
+  const merged = ALL_CATEGORIES.filter((c) => valid.includes(c) || enforced.includes(c));
+  await saveSettings({ ...current, enabledCategories: merged });
+  await renderCategories({ enabledCategories: merged, language: current.language });
 }
 
 function renderFindings(findings: Finding[]): void {
@@ -1333,12 +1368,100 @@ function initTabs(): void {
   });
 }
 
-function updatePasteShieldBanner(enabled: boolean): void {
+export interface ProtectionStatusSnapshot {
+  settings: Settings;
+  policy: import("../shared/enterprisePolicy.js").EnterprisePolicy;
+  effective: EffectiveProtection;
+  capability: AlwaysOnCapability;
+}
+
+/** Load the full protection picture: user settings, admin policy, site access. */
+export async function loadProtectionStatus(): Promise<ProtectionStatusSnapshot> {
+  const [settings, policy, capability] = await Promise.all([
+    loadSettings(),
+    loadEnterprisePolicy(),
+    queryAlwaysOnCapability(),
+  ]);
+  return { settings, policy, effective: resolveEffectiveProtection(settings, policy), capability };
+}
+
+/** Request optional site access for always-on. False when denied or unavailable. */
+export async function requestSiteAccess(): Promise<boolean> {
+  try {
+    if (typeof chrome === "undefined" || !chrome.permissions?.request) return false;
+    return await chrome.permissions.request({ origins: [...ALWAYS_ON_ORIGINS] });
+  } catch {
+    return false;
+  }
+}
+
+function setModeToggle(el: HTMLInputElement | null, checked: boolean, disabled: boolean): void {
+  if (!el) return;
+  el.checked = checked;
+  el.setAttribute("aria-checked", checked ? "true" : "false");
+  el.disabled = disabled;
+}
+
+/**
+ * Render the honest protection state across the popup and side panel (they
+ * share this controller). The banner names the verified mode: "always on"
+ * appears ONLY with proof (registration possible AND site access granted);
+ * otherwise it names the missing piece. A locked enterprise policy disables
+ * the mode controls so no toggle can override it.
+ */
+export async function refreshProtectionStatus(): Promise<ProtectionStatusSnapshot> {
+  const snapshot = await loadProtectionStatus();
+  const { settings, policy, effective, capability } = snapshot;
+  const lang = settings.language;
+  const state = describeProtectionState(effective.mode, capability);
+
+  const stateKey =
+    state === "off"
+      ? "protection_state_off"
+      : state === "always-on-active"
+        ? "protection_state_always_on"
+        : state === "always-on-waiting-access"
+          ? "protection_state_waiting"
+          : "protection_state_this_tab";
+
   const banner = document.getElementById("scanner-shield-status");
   const label = document.getElementById("scanner-shield-label");
-  if (!banner || !label) return;
-  banner.classList.toggle("shield-banner--inactive", !enabled);
-  label.textContent = enabled ? t(currentLang, "shield_active") : t(currentLang, "shield_disabled");
+  if (label) label.textContent = t(lang, stateKey);
+  if (banner) {
+    banner.classList.toggle("shield-banner--inactive", state === "off" || state === "always-on-waiting-access");
+  }
+
+  const stateLine = document.getElementById("protection-state");
+  if (stateLine) stateLine.textContent = t(lang, stateKey);
+
+  const managedNotice = document.getElementById("managed-lock-notice");
+  if (managedNotice) {
+    managedNotice.hidden = !effective.locked;
+    if (effective.locked) managedNotice.textContent = t(lang, "managed_lock_notice");
+  }
+
+  setModeToggle(
+    document.getElementById("paste-guard-toggle") as HTMLInputElement | null,
+    effective.mode !== "off",
+    effective.locked
+  );
+  setModeToggle(
+    document.getElementById("always-on-toggle") as HTMLInputElement | null,
+    effective.mode === "always-on",
+    effective.locked
+  );
+
+  const grantBtn = document.getElementById("grant-access-btn") as HTMLButtonElement | null;
+  if (grantBtn) {
+    grantBtn.hidden = effective.mode !== "always-on" || capability.siteAccessGranted;
+  }
+
+  await renderCategories({
+    enabledCategories: effective.enabledCategories,
+    lockedCategories: effective.lockedCategories,
+    language: lang,
+  });
+  return snapshot;
 }
 
 /** Shared popup/panel bootstrap. */
@@ -1349,8 +1472,7 @@ export async function initPopup(): Promise<void> {
   currentLang = settings.language;
   applyUiLanguage(settings.language);
   applyAccessibilitySettings(settings);
-  await renderCategories(settings);
-  updatePasteShieldBanner(settings.pasteGuardEnabled);
+  await refreshProtectionStatus();
 
   const scanBtn = document.getElementById("scan-btn") as HTMLButtonElement | null;
   const clearDataBtn = document.getElementById("clear-data-btn") as HTMLButtonElement | null;
@@ -1779,16 +1901,69 @@ export async function initPopup(): Promise<void> {
   }
 
   const pasteGuardToggle = document.getElementById("paste-guard-toggle") as HTMLInputElement | null;
+  const alwaysOnToggle = document.getElementById("always-on-toggle") as HTMLInputElement | null;
+  const grantAccessBtn = document.getElementById("grant-access-btn") as HTMLButtonElement | null;
+
+  /** Persist a user mode change; locked policies reject it before storage. */
+  async function saveUserMode(mode: ProtectionMode): Promise<void> {
+    const policy = await loadEnterprisePolicy();
+    if (policy.managed && !policy.userCanDisable) return;
+    const current = await loadSettings();
+    await saveSettings({ ...current, protectionMode: mode, pasteGuardEnabled: mode !== "off" });
+    await refreshProtectionStatus();
+  }
+
   if (pasteGuardToggle) {
-    pasteGuardToggle.checked = settings.pasteGuardEnabled;
-    pasteGuardToggle.setAttribute("aria-checked", pasteGuardToggle.checked ? "true" : "false");
     pasteGuardToggle.addEventListener("change", async () => {
-      pasteGuardToggle.setAttribute("aria-checked", pasteGuardToggle.checked ? "true" : "false");
-      const current = await loadSettings();
-      await saveSettings({ ...current, pasteGuardEnabled: pasteGuardToggle.checked });
-      updatePasteShieldBanner(pasteGuardToggle.checked);
+      if (pasteGuardToggle.disabled) {
+        await refreshProtectionStatus();
+        return;
+      }
+      if (!pasteGuardToggle.checked) {
+        const alwaysOn = document.getElementById("always-on-toggle") as HTMLInputElement | null;
+        if (alwaysOn) setModeToggle(alwaysOn, false, alwaysOn.disabled);
+        await saveUserMode("off");
+        return;
+      }
+      const wantAlwaysOn =
+        (document.getElementById("always-on-toggle") as HTMLInputElement | null)?.checked === true;
+      if (wantAlwaysOn) {
+        const granted = await requestSiteAccess();
+        await saveUserMode(granted ? "always-on" : "this-tab");
+      } else {
+        await saveUserMode("this-tab");
+      }
     });
   }
+
+  if (alwaysOnToggle) {
+    alwaysOnToggle.addEventListener("change", async () => {
+      if (alwaysOnToggle.disabled) {
+        await refreshProtectionStatus();
+        return;
+      }
+      if (!alwaysOnToggle.checked) {
+        const current = await loadSettings();
+        await saveUserMode(current.protectionMode === "off" ? "off" : "this-tab");
+        return;
+      }
+      // Checked: access first, mode second. A denied prompt leaves this-tab
+      // armed rather than a dead always-on selection.
+      const granted = await requestSiteAccess();
+      if (granted) {
+        await saveUserMode("always-on");
+      } else {
+        await refreshProtectionStatus();
+      }
+    });
+  }
+
+  grantAccessBtn?.addEventListener("click", async () => {
+    await requestSiteAccess();
+    // The worker arms a pending always-on request on the permission-added
+    // event; refresh here so the banner reflects the grant immediately.
+    await refreshProtectionStatus();
+  });
 
   // --- General & Appearance Controls ---
   const langSelect = document.getElementById("lang-select") as HTMLSelectElement | null;
@@ -1993,8 +2168,7 @@ export async function initPopup(): Promise<void> {
     const defaults = await resetSettings();
     applyUiLanguage(defaults.language);
     applyAccessibilitySettings(defaults);
-    await renderCategories({ enabledCategories: defaults.enabledCategories, language: defaults.language });
-    updatePasteShieldBanner(defaults.pasteGuardEnabled);
+    await refreshProtectionStatus();
 
     if (langSelect) langSelect.value = defaults.language;
     if (fontSizeSelect) fontSizeSelect.value = defaults.fontSize;
@@ -2022,10 +2196,8 @@ export async function initPopup(): Promise<void> {
       placeholderToggle.checked = defaults.maskPlaceholders;
       placeholderToggle.setAttribute("aria-checked", "false");
     }
-    if (pasteGuardToggle) {
-      pasteGuardToggle.checked = defaults.pasteGuardEnabled;
-      pasteGuardToggle.setAttribute("aria-checked", "true");
-    }
+    // Mode toggles, banner, categories, and lock notice are synced by the
+    // refreshProtectionStatus() call above.
     if (contextMenusToggle) {
       contextMenusToggle.checked = defaults.contextMenusEnabled;
       contextMenusToggle.setAttribute("aria-checked", "true");

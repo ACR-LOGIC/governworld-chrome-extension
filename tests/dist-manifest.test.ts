@@ -82,6 +82,15 @@ describe.skipIf(!existsSync(manifestPath))("built extension package", () => {
     }
   });
 
+  it("ships the managed-policy schema the manifest declares", () => {
+    const manifest = getManifest() as unknown as { storage?: { managed_schema?: string } };
+    expect(manifest.storage?.managed_schema).toBe("schema/policy.json");
+    expect(
+      existsSync(join(dist, "schema", "policy.json")),
+      "managed_schema target missing from dist/"
+    ).toBe(true);
+  });
+
   it("keeps a CSP that forbids inline and remote script", () => {
     const manifest = getManifest();
     const csp = manifest.content_security_policy.extension_pages;

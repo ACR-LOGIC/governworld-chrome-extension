@@ -7,6 +7,25 @@ export type { FindingCategory, ScanMode, RedactionStyle, LanguageCode };
 export type FontSizeScale = "default" | "medium" | "large" | "xlarge";
 export type SessionTimeoutOption = "never" | "5m" | "15m" | "30m";
 
+/**
+ * Paste-protection coverage mode.
+ *
+ * - "off": no proactive paste interception. Explicit scans/redaction still work.
+ * - "this-tab": intercept pastes in tabs the user explicitly authorized
+ *   (activeTab injection). This is the default and the only mode that needs no
+ *   site access.
+ * - "always-on": content scripts self-install on every visited http(s) page.
+ *   Technically real only after the user grants optional site access; without
+ *   the grant the UI must report "waiting for access", never "active".
+ */
+export type ProtectionMode = "off" | "this-tab" | "always-on";
+
+export const PROTECTION_MODES: ProtectionMode[] = ["off", "this-tab", "always-on"];
+
+export function isProtectionMode(value: unknown): value is ProtectionMode {
+  return value === "off" || value === "this-tab" || value === "always-on";
+}
+
 export const ALL_CATEGORIES: FindingCategory[] = [
   "email",
   "phone",
@@ -154,6 +173,12 @@ export interface Settings {
   maskPlaceholders: boolean;
   /** When true, inspects pasted text on input fields and alerts before sensitive data leaks. */
   pasteGuardEnabled: boolean;
+  /**
+   * Paste-protection coverage. The authority for whether interception runs;
+   * `pasteGuardEnabled` is kept as a synced alias (false exactly when "off")
+   * so stored preferences from older versions keep working.
+   */
+  protectionMode: ProtectionMode;
   /** Max visible characters scanned per page before a graceful stop. */
   maxVisibleChars: number;
   /** Per-node character cap. */
@@ -234,6 +259,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maskPadding: 4,
   maskPlaceholders: false,
   pasteGuardEnabled: true,
+  protectionMode: "this-tab",
   contextMenusEnabled: true,
   maxVisibleChars: 250_000,
   maxNodeChars: 10_000,
@@ -288,7 +314,15 @@ export function normalizeSettings(raw: unknown): Settings {
 
   const maskPadding = typeof raw.maskPadding === "number" && Number.isFinite(raw.maskPadding) && raw.maskPadding >= 0 ? raw.maskPadding : base.maskPadding;
   const maskPlaceholders = raw.maskPlaceholders === true;
-  const pasteGuardEnabled = typeof raw.pasteGuardEnabled === "boolean" ? raw.pasteGuardEnabled : base.pasteGuardEnabled;
+  // protectionMode is authoritative. Older installs stored only the boolean,
+  // so an absent/invalid mode migrates from it: disabled -> "off", else the
+  // default "this-tab". The boolean stays synced as an alias.
+  const protectionMode = isProtectionMode(raw.protectionMode)
+    ? raw.protectionMode
+    : raw.pasteGuardEnabled === false
+      ? "off"
+      : base.protectionMode;
+  const pasteGuardEnabled = protectionMode !== "off";
   const contextMenusEnabled = typeof raw.contextMenusEnabled === "boolean" ? raw.contextMenusEnabled : base.contextMenusEnabled;
   const maxVisibleChars =
     typeof raw.maxVisibleChars === "number" && Number.isFinite(raw.maxVisibleChars) && raw.maxVisibleChars >= 100
@@ -353,6 +387,7 @@ export function normalizeSettings(raw: unknown): Settings {
     maskPadding,
     maskPlaceholders,
     pasteGuardEnabled,
+    protectionMode,
     contextMenusEnabled,
     maxVisibleChars,
     maxNodeChars,

@@ -45,9 +45,10 @@ Every permission declared in `manifest.json` is strictly required for core local
 | `sidePanel` | Required to provide a persistent side panel interface (`Alt+Shift+P`) for document scanning, live wizard rule creation, and in-depth instruction viewing. |
 | `contextMenus` | Required to add three on-demand entries to the browser context menu — "Scan page for sensitive data", "Redact selection to clipboard", and "Mask selected text / element" — so the same user-initiated actions can be started from a right-click. The entries are created only while the setting is enabled and are removed when it is disabled, and each still runs the existing click-to-scan path. |
 | `notifications` *(optional)* | Requested only if the user explicitly opts into a desktop notification when a scan finds sensitive data. |
+| `http://*/*`, `https://*/*` *(optional host access)* | Requested only if the user switches the always-on paste mode on, so it can guard pages on every visited site. The default this-tab mode needs no site access. Revoking the grant stops always-on coverage. |
 
 ### Host Permissions Justification
-- **Zero Host Permissions:** The extension declares no `host_permissions` and does not automatically access or communicate with any remote origin.
+- **Zero install-time host permissions:** The extension declares no `host_permissions` and installs with zero automatic access to any website. The only page access is the optional http(s) grant above, approved at runtime for always-on mode.
 
 ---
 

@@ -6,7 +6,7 @@
   "minimum_chrome_version": "116",
   "browser_specific_settings": {
     "gecko": {
-      "id": "governworld@governworld.local",
+      "id": "redaction@governworld.acrlogic.com",
       "strict_min_version": "109.0"
     }
   },
@@ -21,6 +21,10 @@
   },
   "permissions": ["activeTab", "scripting", "storage", "downloads", "offscreen", "sidePanel", "contextMenus"],
   "optional_permissions": ["notifications"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "storage": {
+    "managed_schema": "schema/policy.json"
+  },
   "commands": {
     "scan-page": {
       "suggested_key": { "default": "Alt+Shift+S", "mac": "Command+Shift+S" },

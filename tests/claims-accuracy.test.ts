@@ -95,15 +95,19 @@ describe("no claim outruns the implementation", () => {
     }
   });
 
-  it("does not advertise a browser the build does not produce", () => {
-    // manifest.firefox.json is MV2 and is not packaged by the build, and Safari
-    // cannot load a Chrome extension. Advertising either as shipped is a claim a
-    // reviewer can falsify in about a minute.
+  it("advertises only browser targets the build produces", () => {
+    // Firefox ships via `npm run build:firefox` and Safari ships a handoff
+    // payload via `npm run build:safari`; advertising either beyond what the
+    // build produces is a claim a reviewer can falsify in about a minute.
     const readme = read("README.md");
     expect(readme).not.toMatch(/badge\/Browsers-[^)]*Firefox/i);
     expect(readme).not.toMatch(/badge\/Browsers-[^)]*Safari/i);
-    expect(readme).toMatch(/Not supported in this build/i);
-    expect(readme).toMatch(/not supported/i);
+    expect(readme).toMatch(/npm run build:firefox/i);
+    expect(readme).toMatch(/npm run build:safari/i);
+    // No distributable Safari artifact may be claimed: packaging needs Apple
+    // tooling that is unavailable here.
+    expect(readme).toMatch(/No distributable Safari artifact is claimed/i);
+    expect(readme).not.toMatch(/GovernWorld-Safari-v[\d.]+\.zip/i);
   });
 
   it("does not hard-code a test count that will drift", () => {
@@ -128,13 +132,15 @@ describe("no claim outruns the implementation", () => {
   });
 
   it("explains when the paste guard is and is not active", () => {
-    // Collapsed first: the prose is hard-wrapped, so "no host\npermissions"
-    // is one sentence to a reader and two unmatched tokens to a regex.
+    // Collapsed first: the prose is hard-wrapped, so "no install-time host
+    // permissions" is one sentence to a reader and unmatched tokens to a regex.
     const readme = read("README.md").replace(/\s+/g, " ");
-    // The honest statement has to name the gap, not just soften the adjective.
-    expect(readme).toMatch(/on-demand, not always-on/i);
-    expect(readme).toMatch(/without touching GovernWorld first/i);
-    expect(readme).toMatch(/no host permissions/i);
+    // The honest statement names the default mode, the always-on price
+    // (approved site access), and revocability — not just a softened adjective.
+    expect(readme).toMatch(/this tab.*default|default.*this tab/i);
+    expect(readme).toMatch(/grant site access/i);
+    expect(readme).toMatch(/revok/i);
+    expect(readme).toMatch(/no install-time host permissions/i);
   });
 
   it("does not call the audit log tamper-evident", () => {

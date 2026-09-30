@@ -92,8 +92,8 @@ GovernWorld is engineered to conform to the **W3C WebExtensions Manifest V3 spec
 | Chrome 116+ | **Shipped and verified** | Manifest V3. The build target; every automated gate runs against it. |
 | Edge 116+ | **Shipped and verified** | Chromium-based; same MV3 build as Chrome. |
 | Brave, Opera, Vivaldi, Arc | Supported, unverified | Chromium-based and load the same unpacked build. Not covered by the automated gates, so treat as untested rather than confirmed. |
-| Firefox 109+ | **Not supported in this build** | `manifest.firefox.json` is an MV2 manifest and is *not* packaged by `npm run build`. It also has no side panel, no offscreen document, and no `scripting` parity, so the document pipeline would not work. Needs its own port and QA pass. |
-| Safari | **Not supported** | Safari cannot load a Chrome extension. The `safari-web-extension-converter` route below is a manual experiment, not a supported target, and no feature parity has been verified. |
+| Firefox 109+ | **Packaged (`npm run build:firefox`)** | Own MV3 manifest (`manifest.firefox.json`), locked add-on id, sidebar panel. Page protection, paste guard, and scanning ship; Document Studio needs an offscreen-capable runtime, so document jobs report an explicit error where it is absent. Browser-run QA pending — see `BROWSER_SUPPORT.md`. |
+| Safari | **Payload only, not distributable from here** | `npm run build:safari` produces the web-extension file set; packaging it into a signed app requires a Mac with Xcode (`xcrun safari-web-extension-packager`) or App Store Connect (Apple Developer Program). No distributable Safari artifact is claimed. |
 ```
 
 ### Build the Package First
@@ -126,17 +126,21 @@ This outputs the packaged extension into the `dist/` directory.
 
 ---
 
-### 3. Mozilla Firefox - not currently buildable
-`manifest.firefox.json` declares an MV2 extension for Firefox 109+ with its own gecko id, but **`npm run build` does not package it** and it has no side panel, no offscreen document, and no `scripting` permission parity. The document pipeline depends on an offscreen document, so it would not work. The steps below describe the intended shape, not a verified path. Firefox is a follow-up with its own port and QA pass.
+### 3. Mozilla Firefox
+`manifest.firefox.json` is the Firefox MV3 manifest (own locked add-on id,
+event-page background, `sidebar_action` panel) packaged by
+`npm run build:firefox` into `dist-firefox/`. Page scanning, paste protection,
+and masks ship; the Document Studio reports an explicit error on runtimes
+without the offscreen API instead of failing silently.
 
 #### Temporary / Developer Installation:
 1. Open Firefox and navigate to `about:debugging#/runtime/this-firefox`.
 2. Click the **Load Temporary Add-on...** button.
-3. Navigate to the `dist/` directory and select `manifest.json`.
+3. Navigate to the `dist-firefox/` directory and select `manifest.json`.
 4. The GovernWorld shield icon will appear in your Firefox toolbar.
 
 #### Persistent Unbranded / Developer Edition Installation:
-- Pack `dist/` into a `.zip` file, rename to `.xpi`, and install via `about:addons` > **Install Add-on From File...**.
+- Pack `dist-firefox/` into a `.zip` file, rename to `.xpi`, and install via `about:addons` > **Install Add-on From File...**.
 
 ---
 
@@ -173,23 +177,32 @@ This outputs the packaged extension into the `dist/` directory.
 
 ---
 
-### 8. Apple Safari (macOS) - not supported
-Safari cannot load a Chrome extension. The converter route below is a manual experiment and has no verified feature parity - the offscreen document and the `window.print()` print flow in particular have no Safari equivalent that this codebase tests. Listed for completeness only.
+### 8. Apple Safari (macOS) — packaging requires Apple tooling
+Safari cannot load a Chrome extension directly. `npm run build:safari`
+produces the web-extension file set in `dist-safari/`; turning it into an
+installable Safari extension requires packaging it as an app — either with
+Xcode on a Mac or through App Store Connect (Apple Developer Program) — which
+is unavailable on this build machine. No distributable Safari artifact is
+claimed; see `BROWSER_SUPPORT.md` for the exact blocker and commands.
 
-Converting requires Apple's Xcode developer tools:
+With Xcode installed, the packaging step is:
 
 1. Ensure Xcode is installed with Command Line Tools:
    ```bash
    xcode-select --install
    ```
-2. Convert the extension using Apple's built-in converter:
+2. Package the built payload (note: the current tool is
+   `safari-web-extension-packager`, the renamed `safari-web-extension-converter`):
    ```bash
-   xcrun safari-web-extension-converter /path/to/governworld-chrome-extension/dist --project-location /path/to/output --app-name "GovernWorld"
+   xcrun safari-web-extension-packager /path/to/governworld-chrome-extension/dist-safari --project-location /path/to/output --app-name "GovernWorld"
    ```
 3. Open the generated Xcode project and click **Run** to build the macOS container app.
 4. In Safari, go to **Settings** > **Advanced** > check **"Show features for web developers"**.
 5. Go to **Develop** menu > check **"Allow Unsigned Extensions"**.
 6. In **Safari Settings** > **Extensions**, enable **GovernWorld**.
+
+A Safari web extension governs supported activity inside Safari only — not
+iMessage, native apps, or the OS.
 
 ---
 
@@ -300,39 +313,48 @@ The **Document Redaction Studio** provides an interactive canvas interface:
 
 ---
 
-## "Paste & Prompt" Shield (on-demand Chat & LLM Guard)
+## "Paste & Prompt" Shield (Chat & input guard)
 
-Guards against pasting credentials or PII into AI chats and web forms:
-- Intercepts paste events on `input`, `textarea`, and `[contenteditable]` elements in **ChatGPT**, **Claude**, **Gemini**, **Slack**, and internal web applications.
+Guards against pasting credentials, PHI, or PII into any browser input —
+AI chats, web forms, SaaS apps, rich-text editors — not a list of AI
+companies. Provider names may appear in the UI to orient you, but enforcement
+keys off editable surfaces, so an unknown AI clone on an unlisted hostname is
+covered exactly like a known one:
+- Intercepts `paste`, `beforeinput`, and drag-and-drop text on `input`,
+  `textarea`, and `[contenteditable]` elements, including editors inside open
+  shadow roots and same-origin iframes.
 - Displays a floating Shadow DOM review modal near the input.
 - Actions: **Sanitize & Paste** (replaces secrets with `[REDACTED]`), **Paste Unchanged**, or **Cancel** (<kbd>Esc</kbd>).
+- Interception happens synchronously before insertion: a blocked or sanitized
+  paste never reaches the destination. A dialog fault inserts nothing.
 
-### When the guard is active — and when it is not
+### Protection modes — what is active, and when
 
-**The guard is on-demand, not always-on.** GovernWorld declares no host
-permissions and no declarative content scripts, so it has no presence in a tab
-until the user acts on it. The content script is injected on demand (via an
-`activeTab` grant from the toolbar action, the context menu, or the keyboard
-shortcut), and it is torn down with the tab session.
+| Mode | Meaning |
+|---|---|
+| Off | No paste interception. Explicit scans and redaction still work. |
+| This tab (default) | Pastes are guarded in tabs you explicitly authorize by opening GovernWorld there. Needs no site access. |
+| Always on | Guarded on every site you visit — only after you grant site access in the browser prompt. Revoking the grant stops coverage. |
 
 The practical consequence, stated plainly:
 
 | Situation | Guard active? |
 |---|---|
-| You open the GovernWorld popup or side panel on a chat site, then paste | Yes |
-| You invoke a GovernWorld keyboard shortcut or context-menu action on the tab, then paste | Yes |
-| You install GovernWorld, open ChatGPT in a new tab, and paste without touching GovernWorld first | **No** |
-| You close or reload a tab and paste again | **No**, until you activate GovernWorld on that tab again |
+| This-tab mode, you opened GovernWorld on the chat site, then paste | Yes |
+| This-tab mode, you invoked a GovernWorld shortcut or context-menu action on the tab, then paste | Yes |
+| This-tab mode, you open a chat site in a new tab and paste without touching GovernWorld first | **No** |
+| Always-on mode with site access granted, any site, new tabs and restarts included | Yes |
+| Always-on selected but site access denied or revoked | **No** — the UI says it is waiting for access, never that it is active |
+| You close or reload a tab (this-tab mode) and paste again | **No**, until you activate GovernWorld on that tab again |
 
-This is a deliberate consequence of the zero-host-permissions design, not an
-oversight: an always-on guard requires standing access to every site the user
-pastes into, which is precisely the access this extension exists to avoid. The
-trade is *you activate protection, then it is active*, rather than *it is active
-everywhere, always*.
-
-If you need always-on protection, a `<all_urls>` content-script declaration is
-the mechanism — and it is a decision about the product's privacy model, not a
-tweak. See [PERMISSIONS.md](PERMISSIONS.md) for what is requested and why.
+This-tab is the default because the extension installs with no install-time
+host permissions: it has no presence in a tab until the user acts on it. The
+content script is injected on demand (via an `activeTab` grant from the
+toolbar action, the context menu, or the keyboard shortcut). Always-on is the
+explicit opt-in for standing access — requested at runtime as optional
+`http://*/*` + `https://*/*` origins (never the `<all_urls>` blanket), and
+revocable at any time. See [PERMISSIONS.md](PERMISSIONS.md) for what is
+requested and why, and `BROWSER_SUPPORT.md` for per-browser coverage.
 
 ---
 

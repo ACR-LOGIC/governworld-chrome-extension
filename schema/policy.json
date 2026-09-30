@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GovernWorld enterprise policy (chrome.storage.managed)",
+  "description": "Administrator policy for managed browsers. Absent entirely for consumer users. A present-but-invalid policy locks the UI and applies maximum protection rather than falling back to user control.",
+  "type": "object",
+  "properties": {
+    "protectionMode": {
+      "title": "Enforced paste-protection coverage",
+      "description": "off: no interception. this-tab: tabs the user explicitly authorizes. always-on: every visited page once site access is granted.",
+      "type": "string",
+      "enum": ["off", "this-tab", "always-on"]
+    },
+    "userCanDisable": {
+      "title": "User may change or disable protection",
+      "description": "When false (default under management), the user cannot change the mode or mandated categories.",
+      "type": "boolean"
+    },
+    "enforcedCategories": {
+      "title": "Mandated detection categories",
+      "description": "Categories the user cannot disable. Merged with (never subtracted from) user-enabled categories.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "email",
+          "phone",
+          "ssn",
+          "dob",
+          "medical_record_number",
+          "member_id",
+          "npi",
+          "dea",
+          "mbi",
+          "address",
+          "payment_card",
+          "secrets",
+          "possible_name",
+          "custom",
+          "canadian_sin",
+          "uk_nhs",
+          "aadhaar",
+          "pan_india",
+          "australian_tfn",
+          "cpf"
+        ]
+      }
+    }
+  },
+  "additionalProperties": false
+}

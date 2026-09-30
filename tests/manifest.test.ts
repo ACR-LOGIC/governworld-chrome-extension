@@ -6,6 +6,7 @@ const manifest = JSON.parse(readFileSync(new URL("../manifest.json", import.meta
   permissions: string[];
   web_accessible_resources?: unknown[];
   host_permissions?: string[];
+  optional_host_permissions?: string[];
 };
 
 describe("extension manifest disclosure contract", () => {
@@ -20,5 +21,16 @@ describe("extension manifest disclosure contract", () => {
 
   it("enforces zero automatic site-access permissions (no host_permissions)", () => {
     expect(manifest.host_permissions).toBeUndefined();
+  });
+
+  it("keeps always-on site access runtime-only, narrow, and revocable", () => {
+    // Always-on protection is technically impossible without page access, so
+    // the minimum grant is optional http(s) origins: nothing at install,
+    // grantable and revocable at runtime, and never the <all_urls> blanket
+    // (which would also cover chrome://, file://, and other schemes).
+    expect(manifest.optional_host_permissions?.slice().sort()).toEqual([
+      "http://*/*",
+      "https://*/*",
+    ]);
   });
 });

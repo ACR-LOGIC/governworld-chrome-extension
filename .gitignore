@@ -3,6 +3,8 @@ node_modules/
 
 # Build outputs
 dist/
+dist-firefox/
+dist-safari/
 build/
 *.zip
 *.crx

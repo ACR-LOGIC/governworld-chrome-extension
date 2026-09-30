@@ -58,6 +58,9 @@ copyFileSync(join(root, "src/landing", "landing.js"), join(outDir, "landing.js")
   copyFileSync(join(root, "src/popup", "review.html"), join(outDir, "review.html"));
   copyFileSync(join(root, "src/popup", "review.css"), join(outDir, "review.css"));
 copyFileSync(join(root, "manifest.json"), join(outDir, "manifest.json"));
+// Enterprise managed-storage schema declared by the manifest above.
+mkdirSync(join(outDir, "schema"), { recursive: true });
+copyFileSync(join(root, "schema", "policy.json"), join(outDir, "schema", "policy.json"));
 copyFileSync(join(root, "PRIVACY.md"), join(outDir, "PRIVACY.md"));
 copyFileSync(join(root, "PERMISSIONS.md"), join(outDir, "PERMISSIONS.md"));
 

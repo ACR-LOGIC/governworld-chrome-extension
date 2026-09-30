@@ -12,6 +12,9 @@
   "funding": "https://buymeacoffee.com/governworld",
   "scripts": {
     "build": "node build.mjs",
+    "build:firefox": "node scripts/build-firefox.mjs",
+    "build:safari": "node scripts/build-safari.mjs",
+    "build:all": "node build.mjs && node scripts/build-firefox.mjs && node scripts/build-safari.mjs",
     "preview": "node scripts/preview-server.mjs",
     "fixtures:photo": "node scripts/make-photo-fixtures.mjs",
     "test": "vitest run",
@@ -21,6 +24,7 @@
     "verify:browser": "node scripts/verify-browser.mjs && node tests/image-photo-e2e.browser.test.mjs",
     "capture:ui": "node scripts/capture-ui-session.mjs",
     "release:zip": "node scripts/make-release.mjs",
+    "release:browsers": "node scripts/make-browser-releases.mjs",
     "typecheck": "tsc --noEmit",
     "sync:sidepanel": "node scripts/sync-sidepanel.mjs",
     "sync:sidepanel:check": "node scripts/sync-sidepanel.mjs --check",
