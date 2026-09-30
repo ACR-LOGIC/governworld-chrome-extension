@@ -5,16 +5,23 @@ below is verified against the built artifact; nothing here needs to be
 re-derived at upload time.
 
 - **Target:** Chrome Web Store, single purpose, listing type "Extension"
-- **Artifact:** `release/governworld-redaction-c273fd0.zip`
-- **Artifact SHA-256:** `67B9D565F01BB763FBD91A313EE53961F0970BFB33E7FD7A3B106B01F53803CD`
-- **Version:** 0.1.0
+- **Artifact:** `release/governworld-redaction-0315091.zip`
+- **Artifact SHA-256:** `7F2DBD1C9A3B3DA8633204AFB63480B7281DD46D88BF6809E17D300937E14450`
+- **Version:** 0.1.1
+- **Published:** https://github.com/ACR-LOGIC/governworld-extension/releases/tag/v0.1.1
+
+> The SHA previously recorded here (`67B9D565…`) never matched the artifact it
+> named — it drifted while the package was repointed across releases. It is now
+> the digest of the file actually being uploaded, and `npm run verify:digests`
+> checks the store assets. Verify the zip itself with:
+> `certutil -hashfile release\governworld-redaction-0315091.zip SHA256`
 - **Digests for every uploaded file:** `npm run verify:digests`
 
 ---
 
 ## 1. Package
 
-Upload `release/governworld-redaction-c273fd0.zip`. That is the file the
+Upload `release/governworld-redaction-0315091.zip`. That is the file the
 dashboard wants — not the tarball, and not `dist/`.
 
 Verified in the zip itself: `manifest_version: 3`, 28 files, `manifest.json` at
@@ -45,6 +52,12 @@ header lines ("Draft listing copy…" and "Review before submission…"). That i
 
 All images are generated from synthetic fixtures by `npm run capture:store` and
 `npm run capture:promo`. No real PII, no browser chrome, no user data.
+
+> **Before resubmitting: regenerate.** `04-document-studio.png` was captured
+> while the popup still had the decorative "Protection Active" banner, which
+> 0.1.1 removes. Run `npm run capture:store`, then `npm run verify:digests`.
+> Consider capturing the new full-screen review page instead or as well — it is
+> now the surface where redaction actually happens.
 
 ## 4. Privacy practices questionnaire
 

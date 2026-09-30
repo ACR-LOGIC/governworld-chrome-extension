@@ -141,20 +141,17 @@ not be presented as an independent third-party assessment.
 The Chrome Web Store listing uploads these images separately from the extension
 zip, so the zip checksum does not cover them. Digests of the committed files:
 
-> **Stale for v0.1.1.** `04-document-studio.png` was captured while the popup
-> still had the decorative "Protection Active" hero, which has since been
-> removed. The other screenshots are unaffected. Regenerate with
-> `npm run capture:store` before resubmitting the listing, then re-run
-> `npm run verify:digests`. The digests below are left as-is deliberately, so a
-> drift here fails CI loudly rather than passing on an image that no longer
-> matches the product.
+> Regenerated for v0.1.1 with `npm run capture:store`. `01`, `02` and `04` all
+> changed: `04-document-studio.png` because the popup no longer carries the
+> decorative "Protection Active" banner, and `01`/`02` because the popup layout
+> shifted when it was removed. `03` and `05` are byte-identical.
 
 ```
 A707493D3E702E0A6BE3E2D430C1736299FDB2AE6A6C2AD10C418B594C7ED5B9  release/images/promo-tile-440x280.png
-C25E77DEE0DB11AE8290C819A942B65395A6E8869421632EAE48A5043BDC109B  release/screenshots/01-protection-idle.png
-7C864FB252B93CCC9260D74387330667BF439F3C431C1242EA37DA8F95F16ADE  release/screenshots/02-findings-masked.png
+38667939A825CC888615AAF47C0678C87E36CF28E55E9211D1042713307F4652  release/screenshots/01-protection-idle.png
+85088D578276BD03B32DB821155EE2FC3DDC484B54A3872A37FA8E6AD8C3504C  release/screenshots/02-findings-masked.png
 38A2BE9D248CF98D51B640FA6C57ADA3EE9C75E62FB62F02DD6B1310E2DD3A1D  release/screenshots/03-page-masks-applied.png
-F6B8F30C9B75AB86D2EA03D1D57F9A1ED96AF15EEEC5951D5419E4E7B2C103EC  release/screenshots/04-document-studio.png
+87038818708C24782DC776B78C1B16AD735A70F829E82CEB208910AE94BC134B  release/screenshots/04-document-studio.png
 0281AF692C57497C768C1B086837A2D7C58B9253DFC7C46394E32D758FD52E67  release/screenshots/05-settings-about.png
 ```
 
