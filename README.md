@@ -61,7 +61,8 @@ The **GovernWorld Extension** is a fully functional, local-first browser protect
    - Drag-and-drop or select PDF, Microsoft Word (`.docx`), and image files (`.png`, `.jpg`, `.webp`).
    - Interactive canvas: click finding boxes to toggle or drag with mouse to draw custom redaction boxes.
    - Multiple Redaction Styles: **Solid Blackout**, **Clean Whiteout**, or **Compliance Text Stamp** (e.g. `[CONFIDENTIAL]`).
-   - OCR via a self-contained pipeline that reads bundled language data offline. This build bundles English only; the language list, the build, and the selector share one source of truth (`src/shared/ocrLanguages.ts`) so an unbundled language can never be offered.
+   - Full-screen review page for reading a page before redacting it, with zoom to 3x native (Ctrl/Cmd + - 0) and drag-to-draw custom boxes.
+   - Reads a digitally-born PDF's own text layer and a `.docx` from the text it was laid out from, instead of running OCR over pixels it already knows. OCR is used only where a page genuinely has no text of its own — a scan, a screenshot, a photo — via a self-contained pipeline that reads bundled language data offline. This build bundles English only; the language list, the build, and the selector share one source of truth (`src/shared/ocrLanguages.ts`) so an unbundled language can never be offered.
 
 4. **Multi-Language UI Internationalization (i18n):**
    - Dynamic interface translation for **English**, **Spanish**, **French**, **German**, **Japanese**, **Portuguese**, and **Simplified Chinese**.

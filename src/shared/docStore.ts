@@ -32,6 +32,28 @@ export function isPreviewKey(value: unknown): value is string {
 }
 
 /**
+ * Real-resolution page images, staged for the full-screen review surface.
+ *
+ * `previewKey` holds a 320x480 thumbnail because the popup studio is a ~360px
+ * column. The review page shows the document large enough to read the words, and
+ * a 320px bitmap stretched to that size is a blurry upscale — the sheet looked
+ * like a fax of the document rather than the document. This key carries the
+ * rendered page at (bounded) native resolution so the review surface shows real
+ * pixels.
+ *
+ * Same rule as the thumbnail: bytes live in the store, never in a message.
+ */
+export const PAGE_IMAGE_KEY_RE = /^[A-Za-z0-9_-]{1,64}::page::\d{1,4}$/;
+
+export function pageImageKey(fileKey: string, pageIndex: number): string {
+  return `${fileKey}::page::${pageIndex}`;
+}
+
+export function isPageImageKey(value: unknown): value is string {
+  return typeof value === "string" && PAGE_IMAGE_KEY_RE.test(value);
+}
+
+/**
  * Redacted output pages, staged for the print/PDF view.
  *
  * These are the pixels AFTER redaction has been painted and pixel-verified, so

@@ -3,6 +3,7 @@
  * Image-page loading for single-image documents. Runs inside the offscreen
  * document (DOM canvas available).
  */
+import type { OcrToken } from "./ocr.js";
 
 export interface ImagePage {
   index: number;
@@ -12,6 +13,11 @@ export interface ImagePage {
   widthPt: number;
   heightPt: number;
   hasTextLayer: boolean;
+  /**
+   * Always null: an image has no embedded text, so OCR is the only way to read
+   * it. The field exists so every page source has the same shape.
+   */
+  tokens: OcrToken[] | null;
 }
 
 const MAX_IMAGE_PIXELS = 24_000_000; // ~ 5.5k x 4.3k
@@ -48,6 +54,7 @@ export async function loadImagePage(bytes: ArrayBuffer): Promise<ImagePage> {
       widthPt: canvas.width * PX_TO_PT,
       heightPt: canvas.height * PX_TO_PT,
       hasTextLayer: false,
+      tokens: null,
     };
   } finally {
     bitmap.close();

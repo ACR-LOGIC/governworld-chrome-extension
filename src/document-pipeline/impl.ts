@@ -3,7 +3,8 @@ import type { DocumentPage, RedactedDocumentResult } from "./adapter.js";
 import type { DocKind, FindingCategory, Rect, RedactionOptions } from "../shared/types.js";
 import type { CustomPattern } from "../shared/customPatterns.js";
 import { renderPdfPages, type RenderedPage } from "./pdf.js";
-import { ocrCanvas, ocrPages } from "./ocr.js";
+import { ocrCanvas, type OcrPageResult, type OcrToken } from "./ocr.js";
+import { assembleOcrText } from "./offsets.js";
 import { loadImagePage, type ImagePage } from "./image.js";
 import { loadDocxPages } from "./docx.js";
 import { findingsFromOcrPages } from "./core.js";
@@ -11,6 +12,7 @@ import { applyBoxes, canvasToPngBytes, pagesToPdf } from "./render.js";
 import { pagePixelVerification, verifyCanvasRegions, verifyEncodedPng, type RedactionVerification, type RegionCoverage } from "./verify.js";
 import {
   previewKey as previewStoreKey,
+  pageImageKey as pageImageStoreKey,
   putDocBytes,
   redactedKey,
   redactedManifestKey,
@@ -33,6 +35,17 @@ export interface PipelineInput {
 
 const THUMB_MAX_WIDTH = 320;
 const THUMB_MAX_HEIGHT = 480;
+/**
+ * Longest edge of the review page image, in pixels.
+ *
+ * This is a real-resolution copy of the rendered page, so it is the expensive
+ * one: IndexedDB has to hold it for the life of the session. A 1240x1754 letter
+ * page at 150 DPI is 1275x1650, which is what the review surface actually shows,
+ * so this bound passes a normal page through untouched and only trims a very
+ * large scan. Anything above it would cost storage without making the page
+ * more readable, because the review page scales to the window.
+ */
+const PAGE_IMAGE_MAX_EDGE = 2000;
 const DEFAULT_PADDING = 4;
 
 async function canvasToThumbnailBytes(canvas: HTMLCanvasElement): Promise<ArrayBuffer> {
@@ -48,6 +61,39 @@ async function canvasToThumbnailBytes(canvas: HTMLCanvasElement): Promise<ArrayB
   return blob.arrayBuffer();
 }
 
+/**
+ * Encode the page at (bounded) native resolution for the review surface.
+ *
+ * The thumbnail is 320px wide because the popup is a narrow column; the review
+ * page shows the document large enough to read, and upscaling a 320px bitmap to
+ * that size is a blurry guess at the words the user is about to decide whether
+ * to redact. This is the real render.
+ *
+ * Returns null instead of throwing when the copy cannot be made. A missing
+ * review image degrades that page to the thumbnail; it must never fail a
+ * preview whose findings are already computed.
+ */
+async function canvasToPageImageBytes(canvas: HTMLCanvasElement): Promise<ArrayBuffer | null> {
+  try {
+    const scale = Math.min(1, PAGE_IMAGE_MAX_EDGE / Math.max(canvas.width, canvas.height));
+    let source = canvas;
+    if (scale < 1) {
+      const scaled = document.createElement("canvas");
+      scaled.width = Math.max(1, Math.floor(canvas.width * scale));
+      scaled.height = Math.max(1, Math.floor(canvas.height * scale));
+      const ctx = scaled.getContext("2d");
+      if (!ctx) return null;
+      ctx.drawImage(canvas, 0, 0, scaled.width, scaled.height);
+      source = scaled;
+    }
+    const blob = await new Promise<Blob | null>((resolve) => source.toBlob(resolve, "image/png"));
+    if (!blob) return null;
+    return await blob.arrayBuffer();
+  } catch {
+    return null;
+  }
+}
+
 export interface PreviewInput extends PipelineInput {
   enabledCategories: FindingCategory[];
   maxPages: number;
@@ -60,6 +106,14 @@ export interface PreviewInput extends PipelineInput {
    */
   previewKeyPrefix: string;
 }
+
+/**
+ * Every page source, unified on the fields the preview path needs.
+ *
+ * The three loaders now all report the text they can read themselves, so the
+ * OCR decision is made once, here, instead of inside each loader.
+ */
+type LoadedPage = (RenderedPage | ImagePage) & { tokens: OcrToken[] | null };
 
 export interface RedactOutput {
   outputBytes: Uint8Array;
@@ -74,7 +128,7 @@ export interface RedactOutput {
 async function loadPages(
   input: PipelineInput,
   maxPages: number
-): Promise<{ pages: (RenderedPage | ImagePage)[]; flattenToPdf: boolean }> {
+): Promise<{ pages: LoadedPage[]; flattenToPdf: boolean }> {
   if (input.kind === "pdf") {
     const rendered = await renderPdfPages(input.bytes, maxPages);
     return { pages: rendered, flattenToPdf: true };
@@ -87,9 +141,36 @@ async function loadPages(
   return { pages: [page], flattenToPdf: false };
 }
 
+/**
+ * Read every page, using the page's own text where it exists.
+ *
+ * A PDF page born digital carries its exact text, and a DOCX page is drawn from
+ * known text at known coordinates, so both hand back tokens directly. Only a
+ * page with no readable text of its own — a scan, a screenshot, a photo — is
+ * sent to OCR, which is the slow path and the one that guesses characters.
+ */
+async function readPages(pages: LoadedPage[], ocrLanguage: string): Promise<OcrPageResult[]> {
+  const out: OcrPageResult[] = [];
+  for (const page of pages) {
+    if (page.tokens && page.tokens.length > 0) {
+      // Same assembler OCR uses, so text and offsets cannot disagree.
+      out.push({
+        pageIndex: page.index,
+        widthPx: page.widthPx,
+        heightPx: page.heightPx,
+        tokens: page.tokens,
+        fullText: assembleOcrText(page.tokens),
+      });
+      continue;
+    }
+    out.push(await ocrCanvas(page.canvas, page.index, ocrLanguage));
+  }
+  return out;
+}
+
 export async function runDocumentPreview(input: PreviewInput): Promise<DocumentPage[]> {
   const { pages } = await loadPages(input, input.maxPages);
-  const ocrResults = await ocrPages(pages.map((p) => p.canvas), input.ocrLanguage ?? "eng");
+  const ocrResults = await readPages(pages, input.ocrLanguage ?? "eng");
   const findings = findingsFromOcrPages(ocrResults, input.enabledCategories, input.customPatterns);
   const grouped = new Map<number, DocumentPage>();
   for (const page of pages) {
@@ -97,11 +178,17 @@ export async function runDocumentPreview(input: PreviewInput): Promise<DocumentP
     // ride along in the reply, which crosses a runtime-message boundary.
     const previewKey = previewStoreKey(input.previewKeyPrefix, page.index);
     await putDocBytes(previewKey, await canvasToThumbnailBytes(page.canvas));
+    // The real-resolution copy for the review page. Best-effort by design: the
+    // review surface falls back to the thumbnail if this is absent.
+    const pageImageKey = pageImageStoreKey(input.previewKeyPrefix, page.index);
+    const pageBytes = await canvasToPageImageBytes(page.canvas);
+    if (pageBytes) await putDocBytes(pageImageKey, pageBytes);
     grouped.set(page.index, {
       index: page.index,
       widthPx: page.widthPx,
       heightPx: page.heightPx,
       previewKey,
+      ...(pageBytes ? { pageImageKey } : {}),
       findings: [],
     });
   }
@@ -123,7 +210,7 @@ export async function runDocumentPreview(input: PreviewInput): Promise<DocumentP
  * guarantee.
  */
 async function stageRedactedPages(
-  pages: (RenderedPage | ImagePage)[],
+  pages: LoadedPage[],
   name: string,
   redactedCount: number,
   fileKey: string

@@ -48,6 +48,20 @@
         </section>
 
         <section class="review__block">
+          <h2 class="review__h">Zoom</h2>
+          <p class="review__hint">
+            Read the page at its real size before deciding. Ctrl/Cmd + and - zoom,
+            Ctrl/Cmd 0 fits the page to the window.
+          </p>
+          <div class="review__row review__row--zoom">
+            <button type="button" class="btn btn--sm" id="zoom-out" aria-label="Zoom out">&minus;</button>
+            <span class="review__zoombadge" id="zoom-label" role="status" aria-live="polite">Fit</span>
+            <button type="button" class="btn btn--sm" id="zoom-in" aria-label="Zoom in">+</button>
+            <button type="button" class="btn btn--sm" id="zoom-fit">Fit</button>
+          </div>
+        </section>
+
+        <section class="review__block">
           <h2 class="review__h">Draw your own box</h2>
           <p class="review__hint" id="draw-hint">Drag across the document to cover anything the scan missed.</p>
           <div class="review__row">

@@ -300,6 +300,14 @@ export interface DocPageMeta {
    * MAX_MESSAGE_BYTES and cause the whole message to be rejected.
    */
   previewKey: string;
+  /**
+   * Key of the real-resolution page image used by the full-screen review page.
+   *
+   * Optional because a session persisted by an older build has no such key, and
+   * a restored session must still open; the review surface falls back to
+   * `previewKey` when it is absent or its bytes have gone.
+   */
+  pageImageKey?: string;
   findings: Finding[];
 }
 

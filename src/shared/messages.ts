@@ -7,7 +7,7 @@ import {
 import type { DocKind, ExtensionMessage, Finding, ScanMode, DocPageMeta, RedactionOptions, RedactionStyle, DocRedactionStage } from "./types.js";
 import type { RedactionVerifyMethod } from "../document-pipeline/verify.js";
 import { isAllowedGatewayOrigin, isCategory } from "./settings.js";
-import { isPreviewKey } from "./docStore.js";
+import { isPageImageKey, isPreviewKey } from "./docStore.js";
 import { parseCustomPattern } from "./customPatterns.js";
 import type { CustomPattern } from "./customPatterns.js";
 import type { FindingCategory, PopupState } from "./types.js";
@@ -130,6 +130,10 @@ function isMaskedPreview(category: FindingCategory, preview: string): boolean {
 
 function isDocPageMeta(value: unknown): value is DocPageMeta {
   if (!isRecord(value)) return false;
+  // `pageImageKey` is optional (a session persisted by an older build has none,
+  // and the review page falls back to the thumbnail), but when present it must
+  // still be a well-formed store key rather than an arbitrary string.
+  if (value.pageImageKey !== undefined && !isPageImageKey(value.pageImageKey)) return false;
   return (
     typeof value.index === "number" &&
     typeof value.widthPx === "number" &&

@@ -5,9 +5,19 @@
  * discoverPageInventory, resolveScanCoverageStatus, computeElementVisibility,
  * buildTraceableSelector, getAccessibleShadowRoot.
  *
- * These run in jsdom (vitest default) so they have no real CSS layout engine.
- * Functions that rely on getBoundingClientRect or getComputedStyle fall back
- * gracefully — the tests verify that graceful fallback rather than real layout.
+ * These need a DOM, and Vitest's default environment is Node, so the directive
+ * above is what makes `document` exist at all. Without it every assertion below
+ * failed with "document is not defined".
+ *
+ * jsdom specifically, not the happy-dom the other DOM suites here use: happy-dom
+ * honours `<iframe src>` by actually fetching it, so the cross-origin iframe case
+ * below turned into a live network request from the test suite. This project
+ * asserts zero egress from the extension, and a unit test reaching the network is
+ * the same failure in a different place.
+ *
+ * Neither environment has a real CSS layout engine, so functions relying on
+ * getBoundingClientRect or getComputedStyle fall back gracefully — the tests
+ * verify that graceful fallback rather than real layout.
  */
 import { describe, it, expect, vi } from "vitest";
 import {
@@ -202,7 +212,7 @@ describe("getAccessibleShadowRoot", () => {
   });
 
   it("falls back gracefully when chrome.dom is not available (test env)", () => {
-    // In jsdom, chrome.dom.openOrClosedShadowRoot is not present.
+    // Neither test DOM provides chrome.dom.openOrClosedShadowRoot.
     // The function should not throw and should use the fallback.
     const host = document.createElement("div");
     host.attachShadow({ mode: "open" });
@@ -211,7 +221,7 @@ describe("getAccessibleShadowRoot", () => {
 });
 
 // ---------------------------------------------------------------------------
-// computeElementVisibility (jsdom-safe tests only)
+// computeElementVisibility (DOM-environment tests only)
 // ---------------------------------------------------------------------------
 
 describe("computeElementVisibility", () => {
@@ -219,7 +229,7 @@ describe("computeElementVisibility", () => {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     // SVGElement but not HTMLElement — should not throw
     const result = computeElementVisibility(svg as unknown as Element);
-    // SVGElement IS SVGElement but in jsdom may not be HTMLElement exactly
+    // A real SVGElement is not an HTMLElement; the point is that it must not throw
     expect(typeof result).toBe("string");
   });
 
@@ -228,7 +238,7 @@ describe("computeElementVisibility", () => {
     div.setAttribute("hidden", "");
     document.body.appendChild(div);
     const result = computeElementVisibility(div);
-    // With jsdom, getBoundingClientRect returns {0,0,0,0} — so will be HIDDEN_COLLAPSED_UI
+    // Neither test DOM does layout, so getBoundingClientRect is all zeros.
     expect(result).toBe("HIDDEN_COLLAPSED_UI");
     document.body.removeChild(div);
   });
@@ -272,7 +282,7 @@ describe("discoverPageInventory", () => {
   it("counts cross-origin iframes as inaccessible", () => {
     document.body.innerHTML = `<iframe src="https://other.example.com/page"></iframe>`;
     const inv = discoverPageInventory(document);
-    // In jsdom, iframe.contentDocument is null for external srcs
+    // An external iframe is not readable from this context.
     expect(inv.crossOriginIframes).toBeGreaterThanOrEqual(0);
   });
 
@@ -291,7 +301,7 @@ describe("discoverPageInventory", () => {
   it("records PDF viewer embed as an unscannable region", () => {
     document.body.innerHTML = `<embed type="application/x-google-chrome-pdf" />`;
     const inv = discoverPageInventory(document);
-    // top-level PDF viewer check is on contentType, which jsdom sets normally
+    // The embedded-viewer count is contentType-driven.
     // The embed itself: pdfs.embedded should count it
     expect(inv.pdfs.embedded).toBeGreaterThanOrEqual(0);
   });

@@ -44,18 +44,35 @@ body {
 .review__pages {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  /* stretch, not center: at Fit the sheet is the full stage width, and a
+     centred sheet of unknown width would shrink a document that is already
+     readable. */
+  align-items: stretch;
   gap: 24px;
+  min-width: 0;
 }
 
 .review__sheet {
   position: relative;
-  /* Scale the page to a readable size. The preview bitmap is downscaled,
-     so without a minimum width the document renders too small to read. */
-  width: 800px;
+  /* Fit by default: the page image is the real render, so the sheet takes the
+     stage width and the words are readable at any window size. An explicit zoom
+     sets an inline pixel width instead, up to 3x native. */
+  width: 100%;
   max-width: none;
   background: #ffffff;
   box-shadow: 0 10px 40px -8px rgba(0, 0, 0, 0.7);
+}
+
+.review__row--zoom {
+  align-items: center;
+}
+
+.review__zoombadge {
+  font-family: var(--mono);
+  font-size: 11px;
+  min-width: 52px;
+  text-align: center;
+  color: var(--muted);
 }
 
 .review__pageimg {

@@ -59,6 +59,12 @@ export interface DocumentPage {
    * inside a runtime message, which is bounded by MAX_MESSAGE_BYTES.
    */
   previewKey: string;
+  /**
+   * Key of the same page at real resolution, for the full-screen review page.
+   * Optional: a smaller thumbnail is a usable fallback, so a failure to stage
+   * this one degrades the review surface instead of failing the preview.
+   */
+  pageImageKey?: string;
 }
 
 export interface RedactedDocumentResult {

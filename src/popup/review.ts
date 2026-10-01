@@ -36,6 +36,20 @@ interface ReviewSession {
   source: "original" | "capture";
 }
 
+/**
+ * Zoom levels, as a fraction of the page's real pixel size.
+ *
+ * "Fit" is not a fixed pixel width: the sheet is sized to the available stage,
+ * so the same document is legible on a laptop and on a 4K monitor. The explicit
+ * multiples are there because deciding whether a box covers the whole value is
+ * the one judgement in this product that cannot be delegated to a thumbnail, and
+ * at 200% nobody has to squint to make it.
+ */
+const ZOOM_FIT = 0;
+const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3];
+const MIN_ZOOM = ZOOM_STEPS[0];
+const MAX_ZOOM = ZOOM_STEPS[ZOOM_STEPS.length - 1];
+
 const el = <T extends HTMLElement>(id: string): T | null => (document.getElementById(id) as T | null);
 
 const dom = {
@@ -53,6 +67,10 @@ const dom = {
   style: el<HTMLSelectElement>("style"),
   stampRow: el<HTMLDivElement>("stamp-row"),
   stampText: el<HTMLInputElement>("stamp-text"),
+  zoomOut: el<HTMLButtonElement>("zoom-out"),
+  zoomIn: el<HTMLButtonElement>("zoom-in"),
+  zoomFit: el<HTMLButtonElement>("zoom-fit"),
+  zoomLabel: el<HTMLElement>("zoom-label"),
   actionStatus: el<HTMLParagraphElement>("action-status"),
   close: el<HTMLButtonElement>("close"),
   redact: el<HTMLButtonElement>("redact"),
@@ -66,6 +84,8 @@ let findings: ReviewFinding[] = [];
 const selected = new Set<string>();
 /** Per-page redraw, so a style change repaints every sheet. */
 const redrawers: (() => void)[] = [];
+/** Current zoom: ZOOM_FIT, or one of ZOOM_STEPS. */
+let zoom = ZOOM_FIT;
 
 function setActionStatus(text: string, isError = false): void {
   if (!dom.actionStatus) return;
@@ -150,6 +170,39 @@ function renderFindingsList(): void {
   if (dom.redact) dom.redact.disabled = selected.size === 0;
 }
 
+/**
+ * Apply the current zoom to every sheet.
+ *
+ * The canvas backing store is left at the page's real pixel size and only its
+ * CSS width changes, which is what keeps a drawn box correct: pointer
+ * coordinates are converted through `getBoundingClientRect`, so the mapping
+ * follows the displayed size rather than assuming one.
+ */
+function applyZoom(): void {
+  if (!dom.pages || !session) return;
+  for (const sheet of dom.pages.querySelectorAll<HTMLElement>(".review__sheet")) {
+    const page = session.pages.find((p) => p.index === Number(sheet.dataset.pageIndex));
+    if (!page) continue;
+    if (zoom === ZOOM_FIT) {
+      sheet.style.width = "";
+      sheet.dataset.zoomMode = "fit";
+    } else {
+      sheet.style.width = `${Math.round(page.widthPx * zoom)}px`;
+      sheet.dataset.zoomMode = "fixed";
+    }
+  }
+  if (dom.zoomLabel) {
+    dom.zoomLabel.textContent = zoom === ZOOM_FIT ? "Fit" : `${Math.round(zoom * 100)}%`;
+  }
+  if (dom.zoomOut) dom.zoomOut.disabled = zoom <= MIN_ZOOM;
+  if (dom.zoomIn) dom.zoomIn.disabled = zoom >= MAX_ZOOM;
+}
+
+function setZoom(next: number): void {
+  zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
+  applyZoom();
+}
+
 async function renderPages(): Promise<void> {
   if (!dom.pages || !session) return;
   dom.pages.replaceChildren();
@@ -158,12 +211,20 @@ async function renderPages(): Promise<void> {
   for (const page of session.pages) {
     const sheet = document.createElement("div");
     sheet.className = "review__sheet";
+    // Carried on the element so a zoom change can find its page without
+    // re-deriving the layout or rebuilding the sheets.
+    sheet.dataset.pageIndex = String(page.index);
 
     const img = document.createElement("img");
     img.className = "review__pageimg";
     img.alt = `Page ${page.index + 1}`;
+    // Prefer the real-resolution copy: this page exists so the words can be read
+    // before deciding whether to redact them, and a 320px thumbnail scaled up is
+    // not readable. A session staged by an older build has no such copy, so the
+    // thumbnail remains a working fallback rather than a broken page.
     try {
-      const url = await previewObjectUrl(page.previewKey);
+      const url = (page.pageImageKey ? await previewObjectUrl(page.pageImageKey) : null) ??
+        (await previewObjectUrl(page.previewKey));
       if (url) img.src = url;
       else img.alt = `Page ${page.index + 1} (preview unavailable)`;
     } catch {
@@ -171,8 +232,8 @@ async function renderPages(): Promise<void> {
     }
 
     // The canvas is the full-resolution render and the drawing surface. The
-    // image underneath is the preview bitmap, which is deliberately small, so
-    // the canvas is what the user draws on and what carries the boxes.
+    // image underneath is what the user reads, so it is the real-resolution
+    // page copy when one was staged and the thumbnail only as a fallback.
     const canvas = document.createElement("canvas");
     canvas.className = "review__overlay";
     canvas.width = page.widthPx;
@@ -282,6 +343,7 @@ async function renderPages(): Promise<void> {
     dom.pages.append(sheet);
   }
   for (const redraw of redrawers) redraw();
+  applyZoom();
 }
 
 function loadSessionFromStorage(value: unknown): ReviewSession | null {
@@ -426,7 +488,38 @@ async function requestRedaction(): Promise<void> {
   if (dom.redact) dom.redact.disabled = selected.size === 0;
 }
 
+/** Next zoom step outward, or inward when already at the smallest one. */
+function stepZoomOut(): void {
+  if (zoom === ZOOM_FIT) {
+    const stage = dom.pages?.parentElement?.clientWidth ?? 0;
+    const widest = session?.pages.reduce((n, p) => Math.max(n, p.widthPx), 0) ?? 0;
+    // Start from the widest page actually on screen, so "zoom out" from Fit
+    // lands on a real readable scale instead of an arbitrary one.
+    setZoom(widest > 0 && stage > 0 ? Math.min(MAX_ZOOM, stage / widest) : 1);
+    return;
+  }
+  const below = [...ZOOM_STEPS].reverse().find((z) => z < zoom);
+  setZoom(below ?? MIN_ZOOM);
+}
+
+function stepZoomIn(): void {
+  if (zoom === ZOOM_FIT) {
+    // One step past Fit would be a different number every window, so Fit zooms
+    // to 100% (real pixels) and the explicit steps take it from there.
+    setZoom(1);
+    return;
+  }
+  const above = ZOOM_STEPS.find((z) => z > zoom);
+  setZoom(above ?? MAX_ZOOM);
+}
+
 function wire(): void {
+  dom.zoomOut?.addEventListener("click", stepZoomOut);
+  dom.zoomIn?.addEventListener("click", stepZoomIn);
+  dom.zoomFit?.addEventListener("click", () => {
+    zoom = ZOOM_FIT;
+    applyZoom();
+  });
   dom.selectAll?.addEventListener("click", () => {
     for (const f of findings) selected.add(f.id);
     renderFindingsList();
@@ -471,6 +564,27 @@ function wire(): void {
     void requestRedaction();
   });
   dom.close?.addEventListener("click", () => window.close());
+
+  // Ctrl/Cmd +/- and 0 are what a reader reaches for on a document, and the
+  // same gesture must not scroll or zoom the browser instead.
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        stepZoomIn();
+      } else if (e.key === "-") {
+        e.preventDefault();
+        stepZoomOut();
+      } else if (e.key === "0") {
+        e.preventDefault();
+        zoom = ZOOM_FIT;
+        applyZoom();
+      }
+    },
+    { capture: true }
+  );
 
   // The worker broadcasts progress and completion; reflect it here so the page
   // is not a silent black box while a redaction runs.

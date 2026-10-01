@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import mammoth from "mammoth";
+import type { OcrToken } from "./ocr.js";
 
 /**
  * DOCX-page loading. Extracts raw text with mammoth, then lays it out on a
@@ -16,6 +17,16 @@ export interface DocxPage {
   widthPt: number;
   heightPt: number;
   hasTextLayer: boolean;
+  /**
+   * Tokens for the text this module drew, in canvas pixels.
+   *
+   * The page is rendered here from known text at known coordinates, so the
+   * token boxes are exact by construction. Running OCR over our own output
+   * meant re-reading text we already had perfectly, and it re-read it worse:
+   * recognition errors could turn a valid card number into an invalid one and
+   * drop a real finding.
+   */
+  tokens: OcrToken[];
 }
 
 const DPI = 150;
@@ -121,6 +132,7 @@ export async function loadDocxPages(bytes: ArrayBuffer): Promise<DocxPage[]> {
   ctx.textBaseline = "top";
 
   const pages = layoutPages(text, ctx);
+  const fontPx = Number.parseFloat(FONT);
   return pages.map((pageLines, index) => {
     const pageCanvas = document.createElement("canvas");
     pageCanvas.width = PAGE_WIDTH_PX;
@@ -133,8 +145,24 @@ export async function loadDocxPages(bytes: ArrayBuffer): Promise<DocxPage[]> {
     pctx.fillStyle = "#111111";
     pctx.textBaseline = "top";
     let y = MARGIN_PX;
+    const tokens: OcrToken[] = [];
     for (const line of pageLines) {
-      if (line !== "") pctx.fillText(line, MARGIN_PX, y);
+      if (line !== "") {
+        pctx.fillText(line, MARGIN_PX, y);
+        // Measured from the context that just drew the line, so the box is the
+        // text's real extent. Clamped to the page because a line that overflowed
+        // the layout would otherwise produce a rect the painter cannot cover.
+        const measured = pctx.measureText(line).width;
+        const width = Math.min(measured, PAGE_WIDTH_PX - MARGIN_PX);
+        if (width > 0) {
+          tokens.push({
+            text: line,
+            confidence: 100,
+            lineIndex: tokens.length,
+            bbox: { x: MARGIN_PX, y, width, height: fontPx },
+          });
+        }
+      }
       y += LINE_HEIGHT;
     }
     return {
@@ -144,7 +172,8 @@ export async function loadDocxPages(bytes: ArrayBuffer): Promise<DocxPage[]> {
       heightPx: pageCanvas.height,
       widthPt: 612,
       heightPt: 792,
-      hasTextLayer: false,
+      hasTextLayer: tokens.length > 0,
+      tokens,
     };
   });
 }
