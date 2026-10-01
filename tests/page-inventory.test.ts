@@ -1,4 +1,5 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
+// @vitest-environment jsdom
 /**
  * Unit tests for the multi-format acquisition pipeline Layer 0 utilities:
  * discoverPageInventory, resolveScanCoverageStatus, computeElementVisibility,
