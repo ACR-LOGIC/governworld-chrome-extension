@@ -4,7 +4,7 @@ import { loadSettings, saveSettings, isCloudAllowed, isAllowedGatewayOrigin, mee
 import { recordAudit, exportSignedAuditLog } from "../shared/audit.js";
 import type { Settings } from "../shared/settings.js";
 import type { DocKind, PopupState, ScanMode, WorkerMessage, ExtensionMessage, Finding, PopupFromWorker, Rect, RedactionOptions, ScanSettingsMessage } from "../shared/types.js";
-import { previewDocument, redactDocument, restoreLastSession, clearSession as clearDocSession, clearAllFiles, storeFile, deleteFile } from "./documents.js";
+import { previewDocument, redactDocument, restoreLastSession, clearSession as clearDocSession, clearAllFiles, storeFile, deleteFile, hasStagedDocument } from "./documents.js";
 import { analyzeExamples, testPattern } from "../shared/wizardAnalyzer.js";
 import { captureImage, stageCapturedImage, ImageCaptureError } from "./captureImage.js";
 import {
@@ -1251,9 +1251,30 @@ const PURGE_WAIT_MS = 5_000;
  * change a setting, and it showed the user nothing at all. The purge is
  * best-effort housekeeping, so a later success clears the condition.
  */
+/**
+ * Best-effort housekeeping: drop staged documents at a lifecycle boundary.
+ *
+ * It skips outright when a document is staged. The purge empties the entire
+ * store, so running it while the popup has a file in flight destroyed that file
+ * and the preview reported "The selected file is no longer available." for a
+ * document the user could see selected. Waiting for the purge before reading the
+ * document (which is what `handlePopupDocPreview` does) could not prevent that —
+ * it only guaranteed the purge finished first.
+ *
+ * Skipping is safe: staged bytes are per-session state in IndexedDB, and the next
+ * explicit document action overwrites them. Housekeeping exists to avoid unbounded
+ * growth across restarts, not to guarantee an empty store.
+ */
 function purgeStagedFilesOnLifecycle(reason: string): void {
+  // `startupPurge` must be assigned synchronously: document requests await it,
+  // and awaiting a promise that is still undefined would let them run before the
+  // skip decision below has been made.
   startupPurge = (async () => {
     try {
+      if (await hasStagedDocument()) {
+        console.warn(`[governworld] staged-file purge skipped on ${reason}: a document is staged.`);
+        return;
+      }
       await clearAllFiles();
       startupCleanupError = undefined;
     } catch (error) {

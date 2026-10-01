@@ -4,7 +4,7 @@
 // popup must say so honestly AND offer to send the image to the Document
 // Studio, where the ordinary review/redact/download flow applies unchanged.
 import { chromium } from "playwright";
-import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir, waitForPopupReady } from "./browser-launch.mjs";
 import { mkdtempSync, readFileSync, cpSync, rmSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { join, dirname, resolve } from "node:path";
@@ -101,7 +101,9 @@ async function scan(url) {
   await page.waitForTimeout(600);
   await page.bringToFront();
   await popup.goto(`chrome-extension://${extId}/popup.html`);
-  await popup.waitForTimeout(2200);
+  // Wait for initPopup to attach its listeners; a fixed wait raced it on a cold
+  // profile, so the buttons this test then clicks had no handlers.
+  await waitForPopupReady(popup);
   await page.bringToFront();
   await popup.evaluate(() => document.getElementById("scan-btn")?.click());
   for (let i = 0; i < 40; i++) {

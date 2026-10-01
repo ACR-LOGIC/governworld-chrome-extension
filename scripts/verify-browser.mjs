@@ -7,7 +7,7 @@
 //
 // Requires a Chromium binary from `npx playwright install chromium`.
 import { chromium } from "@playwright/test";
-import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir, waitForPopupReady } from "./browser-launch.mjs";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -97,7 +97,9 @@ try {
   const popupErrors = [];
   popup.on("pageerror", (error) => popupErrors.push(String(error)));
   await popup.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "load" });
-  await popup.waitForTimeout(400);
+  // initPopup attaches listeners after awaiting storage, so a 400ms sleep was
+  // measuring a popup that had no behaviour yet.
+  await waitForPopupReady(popup);
 
   const triggerPresent = await popup.evaluate(() => Boolean(document.getElementById("open-side-panel-btn")));
   if (!triggerPresent) fail("popup.html", "side-panel trigger button is missing");

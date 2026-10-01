@@ -19,7 +19,7 @@
 //  2. POPUP_SCAN targets the browser's active tab, so the fixture page has to be
 //     in front at the moment the message is sent.
 import { chromium } from "@playwright/test";
-import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir, waitForPopupReady } from "./browser-launch.mjs";
 import { createServer } from "node:http";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
@@ -221,9 +221,10 @@ try {
   // --- Popup page (kept in the background as the message endpoint) --------
   const popup = watch(await context.newPage(), "popup");
   await popup.goto(`chrome-extension://${extensionId}/popup.html`, { waitUntil: "load" });
-  // The worker purges staged files on chrome.runtime.onInstalled, which races the
-  // first write in a fresh profile. Let it finish before anything is staged.
-  await popup.waitForTimeout(3000);
+  // Wait for initPopup to attach its listeners rather than sleeping a guessed
+  // duration: it awaits storage first, and a fixed wait raced it, so the capture
+  // drove a UI that had no handlers yet.
+  await waitForPopupReady(popup);
   await shot(popup, "popup-01-protection", "default landing surface");
 
   // --- Live page scan ------------------------------------------------------

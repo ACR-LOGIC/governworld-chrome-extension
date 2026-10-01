@@ -11,7 +11,7 @@ import {
   isDocumentPipelineSupported,
 } from "../shared/platform.js";
 import { loadCustomPatterns } from "../shared/customPatterns.js";
-import { docStoreFile, docReadFile, docDeleteFile, docClearFiles } from "../shared/docDb.js";
+import { docStoreFile, docReadFile, docDeleteFile, docClearFiles, markDocumentStaged, isDocumentStaged, clearStagedMarker } from "../shared/docDb.js";
 
 /**
  * Document session management for the service worker. File bytes are held in
@@ -51,8 +51,21 @@ export interface DocSession {
 const sessions = new Map<string, DocSession>();
 let lastDocId: string | null = null;
 
+/**
+ * Mark a document as staged, so the lifecycle purge leaves it alone.
+ *
+ * The purge clears the entire store, so it would otherwise delete a document the
+ * popup staged moments earlier. The marker lives in `chrome.storage.session`
+ * because the write happens in the popup and the decision in this worker; see
+ * `markDocumentStaged` in shared/docDb.ts.
+ */
 export async function storeFile(fileKey: string, bytes: ArrayBuffer): Promise<void> {
+  await markDocumentStaged();
   await docStoreFile(fileKey, bytes);
+}
+
+export async function hasStagedDocument(): Promise<boolean> {
+  return isDocumentStaged();
 }
 
 export async function readFile(fileKey: string): Promise<ArrayBuffer | null> {
@@ -63,9 +76,19 @@ export async function deleteFile(fileKey: string): Promise<void> {
   await docDeleteFile(fileKey);
 }
 
+/**
+ * Empty the staged-document store.
+ *
+ * This is destructive by definition: it drops every staged file, preview and
+ * print page. `purgeStagedFilesOnLifecycle` checks `hasStagedDocument()` first
+ * and skips in that case, so housekeeping cannot take a document the user is
+ * working on. Callers that mean "discard this now" (an explicit cancel, a new
+ * file replacing the old one) call it directly.
+ */
 export async function clearAllFiles(): Promise<void> {
   await docClearFiles();
   await chrome.storage.session.remove(LAST_DOC_KEY);
+  await clearStagedMarker();
   forgetPersistedSession();
   sessions.clear();
   lastDocId = null;

@@ -5,7 +5,7 @@
 // The popup studio is 360px wide, so this is the only place drawing can be
 // verified at all: at popup scale a box lands on pixels nobody can read.
 import { chromium } from "playwright";
-import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir, stageFileInPopup } from "./browser-launch.mjs";
 import { mkdtempSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -36,17 +36,12 @@ const extId = new URL(sw.url()).host;
 
 const popup = await context.newPage();
 await popup.goto(`chrome-extension://${extId}/popup.html`);
-await popup.waitForTimeout(2500);
 
 // Stage a real image through the ordinary upload path, exactly as a user does.
-await popup.evaluate(async (data) => {
-  const input = document.getElementById("doc-file-input");
-  const bin = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-  const dt = new DataTransfer();
-  dt.items.add(new File([bin], "letter.png", { type: "image/png" }));
-  input.files = dt.files;
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-}, png.toString("base64"));
+// This waits for the popup to be interactive first: initPopup attaches its
+// listeners ~3.6s after load, and dispatching before then stages nothing while
+// still reporting a product failure.
+await stageFileInPopup(popup, png, "letter.png", "image/png");
 
 console.log("\n1. Preview the image in the studio");
 let ready = false;
@@ -162,6 +157,27 @@ const dlg = await review.evaluate(() => document.getElementById("confirm")?.open
 check("the confirm dialog opened", dlg);
 if (dlg) {
   await review.click("#confirm-go");
+  // The worker calls chrome.downloads.download with saveAs:true, so a NATIVE save
+  // dialog opens and blocks until it is answered. Nothing answers it here, and an
+  // unanswered dialog can leave the redaction unfinished — which surfaced as an
+  // intermittent "The redaction could not be completed." with no worker error to
+  // explain it. So wait on the download itself instead of the page's own status
+  // text, which only reflects what the worker managed to report.
+  let saved = false;
+  for (let i = 0; i < 120; i++) {
+    const list = await sw.evaluate(async () => (await chrome.downloads.search({ limit: 10 })).length);
+    if (list > dlBefore) {
+      saved = true;
+      break;
+    }
+    await review.waitForTimeout(1000);
+  }
+  check("a new download was produced", saved, saved ? `${dlBefore} -> ${dlBefore + 1}+` : `${dlBefore} -> unchanged`);
+  const dlAfter = await sw.evaluate(async () =>
+    (await chrome.downloads.search({ limit: 10 })).map((d) => ({ state: d.state, exists: d.exists, error: d.error }))
+  );
+  check("the download has no error", dlAfter.every((d) => !d.error), JSON.stringify(dlAfter));
+
   for (let i = 0; i < 90; i++) {
     await review.waitForTimeout(1000);
     const t = (await ui()).actionStatus;
@@ -171,11 +187,6 @@ if (dlg) {
 const finalStatus = (await ui()).actionStatus;
 console.log(`   status: "${finalStatus}"`);
 check("the page reports the redaction succeeded", /saved/i.test(finalStatus), `"${finalStatus}"`);
-const dlAfter = await sw.evaluate(async () =>
-  (await chrome.downloads.search({ limit: 10 })).map((d) => ({ state: d.state, exists: d.exists, error: d.error }))
-);
-check("a new download was produced", dlAfter.length > dlBefore, `${dlBefore} -> ${dlAfter.length}`);
-check("the download has no error", dlAfter.every((d) => !d.error), JSON.stringify(dlAfter));
 
 await context.close();
 console.log(failures.length === 0 ? "\nFull-screen review: all checks passed." : `\nFull-screen review: ${failures.length} failed: ${failures.join(", ")}`);

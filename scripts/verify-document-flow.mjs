@@ -12,7 +12,7 @@
 //
 // Requires a prior `npm run build`. Runs headed, so it needs a display.
 import { chromium } from "playwright";
-import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir, waitForPopupReady } from "./browser-launch.mjs";
 import { mkdtempSync, readFileSync, existsSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -57,10 +57,11 @@ try {
   page.on("pageerror", (e) => pageErrors.push(e.message));
   await page.goto(`chrome-extension://${extId}/popup.html`);
 
-  // initPopup awaits storage before it wires a single listener, so wait for it
-  // to settle rather than racing it the way a fast automated click would.
-  await page.waitForFunction(() => document.getElementById("doc-file-input") !== null, null, { timeout: 15_000 });
-  await page.waitForTimeout(2_500);
+  // initPopup awaits storage before it wires a single listener, so wait for the
+  // popup's own readiness marker rather than racing it the way an automated click
+  // would. A fixed sleep was ~1s short of the real attach time on a cold profile,
+  // which staged nothing and then reported it as a product failure.
+  await waitForPopupReady(page);
 
   const ui = () =>
     page.evaluate(() => {
@@ -93,17 +94,44 @@ try {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }, b64);
 
-  await page.waitForTimeout(1_200);
-  const during = await ui();
+  // Observe the in-flight state rather than sampling once at a fixed delay.
+  //
+  // A text-layer PDF finishes previewing in well under a second — OCR is no
+  // longer on this path — so a 1.2s sample reads the FINISHED state and reports
+  // "progress is not visible while processing" for a run that genuinely showed a
+  // spinner throughout. Poll from the moment of the pick and record whether the
+  // progress row and status were ever visible before the workspace opened, which
+  // is the claim actually being made.
+  const sawProgress = { progress: false, status: false, statusText: "" };
+  const observed = await page.evaluate(async () => {
+    const out = { progress: false, status: false, statusText: "" };
+    const deadline = performance.now() + 60_000;
+    while (performance.now() < deadline) {
+      const progress = document.getElementById("doc-progress");
+      const status = document.getElementById("doc-status");
+      const text = document.getElementById("doc-status-text")?.textContent ?? "";
+      if (progress && !progress.hasAttribute("hidden")) out.progress = true;
+      if (status && !status.hasAttribute("hidden") && text.length > 0) {
+        out.status = true;
+        out.statusText = text;
+      }
+      const workspace = document.getElementById("doc-workspace");
+      if (workspace && !workspace.hasAttribute("hidden")) return { ...out, completed: true };
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    return { ...out, completed: false };
+  });
+  Object.assign(sawProgress, observed);
+
   check(
     "progress is visible while processing",
-    during.progressVisible,
-    `progressVisible=${during.progressVisible}`
+    sawProgress.progress,
+    `progressVisible=${sawProgress.progress}`
   );
   check(
     "status is visible while processing",
-    during.statusVisible && during.statusText.length > 0,
-    `"${during.statusText}"`
+    sawProgress.status && sawProgress.statusText.length > 0,
+    `"${sawProgress.statusText}"`
   );
 
   console.log("\n2. Findings render");

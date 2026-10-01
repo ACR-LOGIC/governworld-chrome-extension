@@ -8,7 +8,7 @@
  * picked back up by the worker.
  *
  * This lives in one place on purpose. The popup and the worker previously each
- * carried their own copy of `openDb`, and the copies drifted into a failure
+ * carried its own copy of `openDb`, and the copies drifted into a failure
  * mode where the cached connection went stale and every later transaction
  * threw forever, silently disabling the whole extension.
  */
@@ -16,6 +16,52 @@
 const DB_NAME = "governworld-redaction";
 const DB_VERSION = 1;
 const STORE = "docfiles";
+
+/**
+ * Session-scoped marker: a document has been staged and must not be purged.
+ *
+ * The lifecycle purge clears the entire object store. A document is in that
+ * store, so a purge that started after the popup staged one destroyed it and the
+ * preview failed with "The selected file is no longer available." — for a file
+ * the user could see selected on screen. Awaiting the purge before reading the
+ * document did not help; it made the outcome certain, because the purge then
+ * always finished before the read.
+ *
+ * `chrome.storage.session` rather than a module-level boolean, because the write
+ * happens in the popup and the decision is made in the service worker: in-memory
+ * state is per-context and cannot carry a fact between them. It is session-scoped
+ * on purpose — a stale marker must not survive a restart into a session that has
+ * staged nothing.
+ */
+const STAGED_MARKER_KEY = "docStagedMarker";
+
+export async function markDocumentStaged(): Promise<void> {
+  try {
+    await chrome.storage.session.set({ [STAGED_MARKER_KEY]: Date.now() });
+  } catch {
+    // Best-effort. If this fails the purge may delete a staged document, which
+    // the user can recover from by picking the file again; failing the pick
+    // outright would be worse than losing the housekeeping optimisation.
+  }
+}
+
+export async function isDocumentStaged(): Promise<boolean> {
+  try {
+    const raw = await chrome.storage.session.get(STAGED_MARKER_KEY);
+    return typeof raw[STAGED_MARKER_KEY] === "number";
+  } catch {
+    return false;
+  }
+}
+
+/** Clear the marker, e.g. once every staged document has been discarded. */
+export async function clearStagedMarker(): Promise<void> {
+  try {
+    await chrome.storage.session.remove(STAGED_MARKER_KEY);
+  } catch {
+    // Nothing to do: the marker is session-scoped and expires with the session.
+  }
+}
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 

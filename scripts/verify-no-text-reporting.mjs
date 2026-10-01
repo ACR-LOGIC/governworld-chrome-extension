@@ -6,7 +6,7 @@
 // health for a document full of PII - which is the single most misleading thing
 // this extension can say to a user.
 import { chromium } from "playwright";
-import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir, waitForPopupReady } from "./browser-launch.mjs";
 import { mkdtempSync, readFileSync, writeFileSync, cpSync, rmSync, mkdirSync } from "node:fs";
 import { createServer } from "node:http";
 import { join, dirname, resolve } from "node:path";
@@ -86,7 +86,10 @@ async function scan(url) {
   // The worker scans the ACTIVE tab, so the fixture must be in front.
   await page.bringToFront();
   await popup.goto(`chrome-extension://${extId}/popup.html`);
-  await popup.waitForTimeout(2200);
+  // initPopup attaches its listeners after awaiting storage, which takes longer
+  // than a fixed wait allows on a cold profile. Without this the click below hits
+  // a button with no handler and the scan never runs.
+  await waitForPopupReady(popup);
   await page.bringToFront();
   // Click through the popup's own DOM: page.click() would focus the popup tab.
   await popup.evaluate(() => document.getElementById("scan-btn")?.click());

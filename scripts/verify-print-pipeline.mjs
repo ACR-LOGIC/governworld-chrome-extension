@@ -12,7 +12,7 @@
 //   node scripts/verify-print-pipeline.mjs
 
 import { chromium } from "@playwright/test";
-import { browserChannelArgs, browserProfileDir } from "./browser-launch.mjs";
+import { browserChannelArgs, browserProfileDir, waitForPopupReady } from "./browser-launch.mjs";
 import { createServer } from "node:http";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
@@ -82,7 +82,7 @@ try {
   const popup = await context.newPage();
   popup.on("pageerror", (e) => pageErrors.push(`popup: ${e.message}`));
   await popup.goto(`chrome-extension://${id}/popup.html`, { waitUntil: "load" });
-  await popup.waitForTimeout(3000);
+  await waitForPopupReady(popup);
 
   // --- stage the real fixture through the pipeline -------------------------
   await popup.click("#tab-btn-protection");

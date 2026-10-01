@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Andres Chavez Ramirez. All rights reserved.
 import { validateMessage } from "../shared/messages.js";
 import { previewObjectUrl } from "../shared/docStore.js";
-import { docStoreFile, docDeleteFile } from "../shared/docDb.js";
+import { docStoreFile, docDeleteFile, markDocumentStaged } from "../shared/docDb.js";
 import {
   ALL_CATEGORIES,
   loadSettings,
@@ -199,7 +199,16 @@ function requestId(): string {
 
 const MAX_DOC_BYTES = 20 * 1024 * 1024;
 
+/**
+ * Stage the chosen file for the worker to read.
+ *
+ * `markDocumentStaged` runs BEFORE the write, not after: the worker's
+ * install-time purge empties the whole store, and if it started first it would
+ * delete a document the popup had already written. Marking first means the purge
+ * sees a staged document and skips, whichever of the two runs first.
+ */
 async function storeFile(fileKey: string, bytes: ArrayBuffer): Promise<void> {
+  await markDocumentStaged();
   await docStoreFile(fileKey, bytes);
 }
 
@@ -2980,4 +2989,17 @@ export async function initPopup(): Promise<void> {
   });
 
   void sendMessage({ type: "POPUP_GET_STATE", requestId: requestId() });
+
+  // Readiness marker for the automated harnesses, set only once every listener
+  // above is bound.
+  //
+  // `initPopup` awaits settings and storage before it attaches anything, which
+  // takes seconds on a cold profile. The harnesses used a fixed 2-2.5s sleep and
+  // then drove the UI, so they dispatched events on inputs with nothing bound to
+  // them and reported the resulting silence as a product failure. They now poll
+  // for this instead of guessing.
+  //
+  // Placed at the very end deliberately: any earlier and it would claim the popup
+  // is interactive while it is not.
+  document.documentElement.dataset.gwReady = "1";
 }
