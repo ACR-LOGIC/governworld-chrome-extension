@@ -91,6 +91,15 @@ describe.skipIf(!existsSync(manifestPath))("built extension package", () => {
     ).toBe(true);
   });
 
+  it("keeps the managed-policy schema loadable by Chrome", () => {
+    // Chrome strictly validates the managed schema and refuses to load the
+    // extension when the top-level object carries additionalProperties
+    // ("Invalid type for attribute 'additionalProperties'").
+    const schema = JSON.parse(readFileSync(join(dist, "schema", "policy.json"), "utf8")) as Record<string, unknown>;
+    expect(schema.type).toBe("object");
+    expect(schema.additionalProperties).toBeUndefined();
+  });
+
   it("keeps a CSP that forbids inline and remote script", () => {
     const manifest = getManifest();
     const csp = manifest.content_security_policy.extension_pages;
