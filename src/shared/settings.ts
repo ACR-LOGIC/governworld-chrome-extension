@@ -298,7 +298,7 @@ export function normalizeSettings(raw: unknown): Settings {
   if (!isRecord(raw)) return base;
 
   const mode = raw.mode === "cloud" ? "cloud" : "local";
-  const enabledCategories = Array.isArray(raw.enabledCategories)
+  const enabledCategories = Array.isArray(raw.enabledCategories) && raw.enabledCategories.length > 0
     ? raw.enabledCategories.filter(isCategory)
     : base.enabledCategories;
 

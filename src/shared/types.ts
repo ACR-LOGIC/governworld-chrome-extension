@@ -81,6 +81,52 @@ export interface RedactionOptions {
 
 export type ScanMode = "local" | "cloud";
 
+/**
+ * Media provenance for a single visual-capture queue item sent from the content
+ * script to the service worker. The service worker dispatches each item to the
+ * offscreen OCR / PDF pipeline asynchronously after a DOM scan. No pixel data
+ * is included — only URLs, pre-extracted data: URLs (small only), and rects.
+ */
+export interface VisualCaptureRequestItem {
+  sourceId: string;
+  sourceType: "image-ocr" | "canvas-ocr" | "video-frame-ocr" | "pdf-text" | "pdf-ocr" | "screenshot-ocr";
+  cssSelector: string;
+  elementTag: string;
+  resourceUrl?: string;
+  /**
+   * Pre-extracted data: URL for untainted canvases and small inline data: images.
+   * Must start with "data:image/" when set. Omitted for large images and cross-
+   * origin assets so the message stays under MAX_MESSAGE_BYTES.
+   */
+  dataUrl?: string;
+  cropRect?: { x: number; y: number; width: number; height: number };
+  visibility: "VISIBLE_IN_VIEWPORT" | "VISIBLE_OUT_OF_VIEWPORT" | "HIDDEN_COLLAPSED_UI" | "HIDDEN_METADATA" | "UNVERIFIED_VISIBILITY";
+}
+
+/** A PDF resource that needs local parsing by the offscreen document-pipeline. */
+export interface PdfExtractRequestItem {
+  url: string;
+  cssSelector: string;
+  isTopLevel: boolean;
+}
+
+/**
+ * Honest coverage classification for the scan session. Reported in scan stats
+ * so the popup can display the correct status badge.
+ *
+ * INVARIANT: "NO_SENSITIVE_DATA_DETECTED" is only emitted when every discovered
+ * content region was successfully inspected (deferredMediaCount===0 and no
+ * unscannable regions). Any other outcome that conflates "couldn't inspect" with
+ * "nothing found" violates the fail-closed architecture.
+ */
+export type ScanCoverageStatus =
+  | "FULLY_SCANNED"
+  | "PARTIALLY_SCANNED"
+  | "UNSUPPORTED_CONTENT_PRESENT"
+  | "BLOCKED_BY_BROWSER_SECURITY"
+  | "NO_SENSITIVE_DATA_DETECTED"
+  | "SCAN_FAILED";
+
 export interface ScanStats {
   visibleChars: number;
   /** Characters of accessibility-attribute text also analyzed. */
@@ -88,7 +134,23 @@ export interface ScanStats {
   truncated: boolean;
   startedAt?: number;
   finishedAt?: number;
+  /**
+   * Visual media regions queued for async OCR / PDF extraction.
+   * The service worker processes these after the DOM scan completes and merges
+   * the resulting findings into a follow-up POPUP_STATE update.
+   */
+  visualQueue?: VisualCaptureRequestItem[];
+  /** PDF URLs (embedded or top-level viewer) queued for local extraction. */
+  pdfQueue?: PdfExtractRequestItem[];
+  /**
+   * Number of visual regions beyond the per-pass budget cap that were deferred.
+   * When > 0 the popup shows a "Scan N more images" offer.
+   */
+  deferredMediaCount?: number;
+  /** Honest coverage classification based on what was and was not inspected. */
+  coverageStatus?: ScanCoverageStatus;
 }
+
 
 /**
  * Typed message contract between extension contexts. Discriminated unions only;
@@ -185,7 +247,12 @@ export type WorkerMessage =
   | { type: "COPY_REDACTED_TEXT"; requestId: string; sessionId: string; findingIds: string[] }
   | { type: "COPY_REDACTED_TEXT_RESULT"; requestId: string; sessionId: string; text: string }
   | { type: "CONTEXT_REDACT_SELECTION"; requestId: string; selectionText?: string; settings?: ScanSettingsMessage }
-  | { type: "CONTEXT_MASK_SELECTION"; requestId: string; selectionText?: string; settings?: ScanSettingsMessage };
+  | { type: "CONTEXT_MASK_SELECTION"; requestId: string; selectionText?: string; settings?: ScanSettingsMessage }
+  /** Async OCR/PDF findings from a visual-capture queue item (content → SW). */
+  | { type: "SCAN_PAGE_VISUAL_RESULT"; requestId: string; sessionId: string; sourceId: string; findings: Finding[] }
+  /** Coverage status broadcast from the SW to the popup after all async media results are merged. */
+  | { type: "POPUP_SCAN_COVERAGE"; requestId: string; coverageStatus: string; deferredMediaCount: number };
+
 
 export type ExtensionMessage = PopupMessage | WorkerMessage | PopupFromWorker;
 
@@ -438,6 +505,9 @@ export const MESSAGE_TYPES = new Set<string>([
   "POPUP_API_STATUS_STATE",
   "POPUP_API_POLICY_STATE",
   "POPUP_API_SUBMIT_RESULT",
+  // Multi-format acquisition pipeline messages (Layer 2–5 async OCR/PDF results)
+  "SCAN_PAGE_VISUAL_RESULT",
+  "POPUP_SCAN_COVERAGE",
 ]);
 
 export const MAX_MESSAGE_BYTES = 64 * 1024;

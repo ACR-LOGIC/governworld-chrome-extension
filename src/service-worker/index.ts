@@ -234,19 +234,35 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 export async function ensureContentScriptReady(tabId: number): Promise<boolean> {
+  // Step 1: PING first — the content script may already be loaded.
   try {
     const response = (await chrome.tabs.sendMessage(tabId, { type: "PING" })) as { ok?: boolean } | undefined;
     if (response?.ok) return true;
   } catch {
+    // No content script responding — fall through to injection.
+  }
+  // Step 2: Inject content.js.
+  try {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
+  } catch (error) {
+    console.warn(`[governworld] Unable to dynamically inject content script on tab ${tabId}:`, error);
+    return false;
+  }
+  // Step 3: PING again with retry — injection completion does not guarantee
+  // the content script has finished loading and registered its listener.
+  // The old code waited a fixed 80ms and returned true unconditionally, which
+  // raced the content script startup and intermittently failed with
+  // "Could not establish connection. Receiving end does not exist."
+  for (let attempt = 0; attempt < 20; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
     try {
-      await chrome.scripting.executeScript({ target: { tabId }, files: ["content.js"] });
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      return true;
-    } catch (error) {
-      console.warn(`[governworld] Unable to dynamically inject content script on tab ${tabId}:`, error);
-      return false;
+      const response = (await chrome.tabs.sendMessage(tabId, { type: "PING" })) as { ok?: boolean } | undefined;
+      if (response?.ok) return true;
+    } catch {
+      // Not ready yet — retry.
     }
   }
+  console.warn(`[governworld] Content script on tab ${tabId} did not become ready after injection`);
   return false;
 }
 
@@ -772,7 +788,141 @@ async function handleContentScanResult(message: Extract<WorkerMessage, { type: "
   const session = await readSession(tabId);
   notifyPopup({ type: "POPUP_STATE", requestId: pending.requestId, state: buildPopupState(settings, session) });
   void maybeNotifyFindings(findings);
+
+  // ── Async media dispatch (Layers 2–5) ─────────────────────────────────
+  // Fire-and-forget: process the visual and PDF queues and merge findings back.
+  // A failure here never affects the already-delivered DOM scan result.
+  const visualQueue = message.stats.visualQueue ?? [];
+  const pdfQueue = message.stats.pdfQueue ?? [];
+
+  if (visualQueue.length === 0 && pdfQueue.length === 0) return;
+
+  void (async () => {
+    try {
+      const newFindings: Finding[] = [];
+
+      // ── Image / canvas / video-frame OCR ────────────────────────────
+      for (const item of visualQueue) {
+        try {
+          let bytes: ArrayBuffer | null = null;
+          let mimeType = "image/png";
+
+          if (item.dataUrl) {
+            // Pre-extracted canvas/small-data-URL: decode directly.
+            const comma = item.dataUrl.indexOf(",");
+            if (comma > 0) {
+              const header = item.dataUrl.slice(0, comma);
+              const m = /data:(image\/[a-z+]+);base64/i.exec(header);
+              if (m) mimeType = m[1].toLowerCase();
+              const binary = atob(item.dataUrl.slice(comma + 1));
+              const buf = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) buf[i] = binary.charCodeAt(i);
+              bytes = buf.buffer;
+            }
+          } else if (item.resourceUrl) {
+            // Attempt original-fetch then fall back to captureVisibleTab crop.
+            const { tryFetchOriginal } = await import("./captureImage.js");
+            const original = await tryFetchOriginal(item.resourceUrl).catch(() => null);
+            if (original) {
+              bytes = original.bytes;
+              mimeType = original.mimeType;
+            } else if (tab?.windowId) {
+              const { captureActiveTab } = await import("./captureImage.js");
+              const capture = await captureActiveTab(tab.windowId).catch(() => null);
+              if (capture) {
+                bytes = capture.bytes;
+                mimeType = capture.mimeType;
+              }
+            }
+          }
+
+          if (!bytes) continue;
+
+          // Stage as a temporary file and send to the offscreen OCR pipeline.
+          const tmpKey = `vis_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+          await storeFile(tmpKey, bytes);
+          try {
+            const { previewDocument } = await import("./documents.js");
+            const { docId, pages } = await previewDocument(tmpKey, item.cssSelector || "page-image.png", mimeType, "image");
+            for (const page of pages) {
+              for (const f of page.findings) {
+                if (meetsThreshold(settings, f.category, f.confidence)) {
+                  newFindings.push({
+                    ...f,
+                    id: `media_${item.sourceId}_${f.id}`,
+                    source: "local-rules",
+                    selected: false, // visual OCR findings are report-only
+                  });
+                }
+              }
+            }
+            // Clean up the temporary staged file.
+            await deleteFile(tmpKey).catch(() => undefined);
+          } catch {
+            await deleteFile(tmpKey).catch(() => undefined);
+          }
+        } catch {
+          // Individual item failure is not fatal to the queue.
+        }
+      }
+
+      // ── PDF extraction ────────────────────────────────────────────────
+      for (const item of pdfQueue) {
+        try {
+          const { tryFetchOriginal } = await import("./captureImage.js");
+          // For PDFs we fetch the bytes — pdf.ts handles them.
+          let response: Response | null = null;
+          try {
+            response = await fetch(item.url, { credentials: "omit", redirect: "follow" });
+          } catch { /* network error */ }
+          if (!response?.ok) continue;
+          const buffer = await response.arrayBuffer();
+          if (buffer.byteLength === 0) continue;
+
+          const tmpKey = `pdf_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
+          await storeFile(tmpKey, buffer);
+          try {
+            const { previewDocument } = await import("./documents.js");
+            const name = item.url.split("/").pop()?.slice(0, 80) || "document.pdf";
+            const { docId, pages } = await previewDocument(tmpKey, name, "application/pdf", "pdf");
+            for (const page of pages) {
+              for (const f of page.findings) {
+                if (meetsThreshold(settings, f.category, f.confidence)) {
+                  newFindings.push({
+                    ...f,
+                    id: `pdf_${item.cssSelector}_${f.id}`,
+                    source: "local-rules",
+                    selected: false,
+                  });
+                }
+              }
+            }
+            await deleteFile(tmpKey).catch(() => undefined);
+          } catch {
+            await deleteFile(tmpKey).catch(() => undefined);
+          }
+        } catch { /* PDF item failure is not fatal */ }
+      }
+
+      if (newFindings.length === 0) return;
+
+      // Merge new findings into the persisted session and push a POPUP_STATE update.
+      const currentSession = await readSession(tabId);
+      if (!currentSession || currentSession.sessionId !== message.sessionId) return;
+      const merged = [...currentSession.findings, ...newFindings];
+      await writeSession(tabId, { ...currentSession, findings: merged });
+      const updatedSession = await readSession(tabId);
+      notifyPopup({
+        type: "POPUP_STATE",
+        requestId: pending.requestId,
+        state: buildPopupState(settings, updatedSession),
+      });
+    } catch {
+      // Async media dispatch failure never affects the already-delivered scan result.
+    }
+  })();
 }
+
 
 async function handleContentCopyResult(message: Extract<WorkerMessage, { type: "COPY_REDACTED_TEXT_RESULT" }>, _tabId: number): Promise<void> {
   notifyPopup({ type: "POPUP_COPY_RESULT", requestId: message.requestId, text: message.text });

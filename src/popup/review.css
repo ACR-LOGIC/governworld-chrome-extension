@@ -50,9 +50,9 @@ body {
 
 .review__sheet {
   position: relative;
-  /* Never shrink the page below its natural size: this whole view exists
-     because the popup made the words unreadable. */
-  width: max-content;
+  /* Scale the page to a readable size. The preview bitmap is downscaled,
+     so without a minimum width the document renders too small to read. */
+  width: 800px;
   max-width: none;
   background: #ffffff;
   box-shadow: 0 10px 40px -8px rgba(0, 0, 0, 0.7);
@@ -60,9 +60,8 @@ body {
 
 .review__pageimg {
   display: block;
-  /* The preview bitmap is a downscaled render; the canvas overlay above it
-     carries the drawing surface at full resolution. */
-  max-width: none;
+  width: 100%;
+  height: auto;
 }
 
 .review__overlay {

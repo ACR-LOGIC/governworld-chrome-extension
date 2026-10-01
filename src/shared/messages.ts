@@ -190,6 +190,84 @@ function normalizeFindingArray(value: unknown): Finding[] | null {
   }));
 }
 
+const SCAN_COVERAGE_STATUSES = new Set([
+  "FULLY_SCANNED",
+  "PARTIALLY_SCANNED",
+  "UNSUPPORTED_CONTENT_PRESENT",
+  "BLOCKED_BY_BROWSER_SECURITY",
+  "NO_SENSITIVE_DATA_DETECTED",
+  "SCAN_FAILED",
+]);
+
+const VISUAL_SOURCE_TYPES = new Set([
+  "image-ocr", "canvas-ocr", "video-frame-ocr", "pdf-text", "pdf-ocr", "screenshot-ocr",
+]);
+
+const VISIBILITY_STATES = new Set([
+  "VISIBLE_IN_VIEWPORT", "VISIBLE_OUT_OF_VIEWPORT",
+  "HIDDEN_COLLAPSED_UI", "HIDDEN_METADATA", "UNVERIFIED_VISIBILITY",
+]);
+
+/**
+ * Validate one VisualCaptureRequestItem from untrusted content-script input.
+ * All fields are validated; malformed items are dropped (not returning null for
+ * the whole stats object). dataUrl is only accepted as a data:image/ prefix
+ * and only when ≤ 64 KB so it cannot exceed MAX_MESSAGE_BYTES on its own.
+ */
+function normalizeVisualCaptureItem(entry: unknown): import("../shared/types.js").VisualCaptureRequestItem | null {
+  if (!isRecord(entry)) return null;
+  if (typeof entry.sourceId !== "string" || entry.sourceId.length === 0 || entry.sourceId.length > 64) return null;
+  if (!VISUAL_SOURCE_TYPES.has(entry.sourceType as string)) return null;
+  if (typeof entry.cssSelector !== "string" || entry.cssSelector.length > 1024) return null;
+  if (typeof entry.elementTag !== "string" || entry.elementTag.length > 64) return null;
+  if (!VISIBILITY_STATES.has(entry.visibility as string)) return null;
+  if (entry.resourceUrl !== undefined && (typeof entry.resourceUrl !== "string" || !isSafeImageSrc(entry.resourceUrl) && !/\.pdf($|\?|#)/i.test(entry.resourceUrl as string))) {
+    return null;
+  }
+  if (entry.dataUrl !== undefined) {
+    if (typeof entry.dataUrl !== "string") return null;
+    if (!entry.dataUrl.startsWith("data:image/")) return null;
+    if (entry.dataUrl.length > 65_536) return null; // hard cap — never allow inline blobs near the 64 KB message limit
+  }
+  if (entry.cropRect !== undefined && !isRect(entry.cropRect)) return null;
+  return {
+    sourceId: entry.sourceId as string,
+    sourceType: entry.sourceType as import("../shared/types.js").VisualCaptureRequestItem["sourceType"],
+    cssSelector: entry.cssSelector as string,
+    elementTag: entry.elementTag as string,
+    resourceUrl: typeof entry.resourceUrl === "string" ? entry.resourceUrl : undefined,
+    dataUrl: typeof entry.dataUrl === "string" ? entry.dataUrl : undefined,
+    cropRect: entry.cropRect !== undefined ? (entry.cropRect as { x: number; y: number; width: number; height: number }) : undefined,
+    visibility: entry.visibility as import("../shared/types.js").VisualCaptureRequestItem["visibility"],
+  };
+}
+
+function normalizeVisualQueue(value: unknown): import("../shared/types.js").VisualCaptureRequestItem[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: import("../shared/types.js").VisualCaptureRequestItem[] = [];
+  for (const entry of value) {
+    if (out.length >= 8) break; // enforce server-side OCR budget cap
+    const item = normalizeVisualCaptureItem(entry);
+    if (item) out.push(item);
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+function normalizePdfQueue(value: unknown): import("../shared/types.js").PdfExtractRequestItem[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out: import("../shared/types.js").PdfExtractRequestItem[] = [];
+  for (const entry of value) {
+    if (out.length >= 8) break;
+    if (!isRecord(entry)) continue;
+    if (typeof entry.url !== "string" || entry.url.length === 0 || entry.url.length > 4096) continue;
+    if (typeof entry.cssSelector !== "string" || entry.cssSelector.length > 1024) continue;
+    if (typeof entry.isTopLevel !== "boolean") continue;
+    try { new URL(entry.url); } catch { continue; }
+    out.push({ url: entry.url, cssSelector: entry.cssSelector, isTopLevel: entry.isTopLevel });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
 function normalizeScanStats(value: unknown): { visibleChars: number; attrChars?: number; truncated: boolean; startedAt?: number; finishedAt?: number; imageCandidates?: ImageCandidate[] } | null {
   if (!isRecord(value) || typeof value.visibleChars !== "number" || !Number.isSafeInteger(value.visibleChars) || value.visibleChars < 0) return null;
   if (value.attrChars !== undefined && (typeof value.attrChars !== "number" || !Number.isSafeInteger(value.attrChars) || value.attrChars < 0)) return null;
@@ -197,9 +275,20 @@ function normalizeScanStats(value: unknown): { visibleChars: number; attrChars?:
   if (value.startedAt !== undefined && (typeof value.startedAt !== "number" || !Number.isFinite(value.startedAt))) return null;
   if (value.finishedAt !== undefined && (typeof value.finishedAt !== "number" || !Number.isFinite(value.finishedAt))) return null;
   const imageCandidates = value.imageCandidates === undefined ? undefined : normalizeImageCandidates(value.imageCandidates);
-  // A malformed candidate list is dropped rather than failing the whole scan:
-  // the findings are still valid, and losing them over an advisory field would
-  // be a worse outcome than losing the option to OCR the page.
+  // Advisory fields (visualQueue, pdfQueue, deferredMediaCount, coverageStatus) are dropped
+  // rather than failing the whole scan when malformed. Findings remain valid.
+  const visualQueue = value.visualQueue === undefined ? undefined : normalizeVisualQueue(value.visualQueue);
+  const pdfQueue = value.pdfQueue === undefined ? undefined : normalizePdfQueue(value.pdfQueue);
+  const deferredMediaCount =
+    typeof value.deferredMediaCount === "number" &&
+    Number.isSafeInteger(value.deferredMediaCount) &&
+    value.deferredMediaCount >= 0
+      ? value.deferredMediaCount
+      : undefined;
+  const coverageStatus =
+    typeof value.coverageStatus === "string" && SCAN_COVERAGE_STATUSES.has(value.coverageStatus)
+      ? (value.coverageStatus as import("../shared/types.js").ScanCoverageStatus)
+      : undefined;
   return {
     visibleChars: value.visibleChars,
     ...(value.attrChars !== undefined ? { attrChars: value.attrChars } : {}),
@@ -207,6 +296,10 @@ function normalizeScanStats(value: unknown): { visibleChars: number; attrChars?:
     ...(value.startedAt !== undefined ? { startedAt: value.startedAt } : {}),
     ...(value.finishedAt !== undefined ? { finishedAt: value.finishedAt } : {}),
     ...(imageCandidates ? { imageCandidates } : {}),
+    ...(visualQueue ? { visualQueue } : {}),
+    ...(pdfQueue ? { pdfQueue } : {}),
+    ...(deferredMediaCount !== undefined ? { deferredMediaCount } : {}),
+    ...(coverageStatus !== undefined ? { coverageStatus } : {}),
   };
 }
 
@@ -820,7 +913,20 @@ export function validateMessage(raw: unknown): ValidationResult {
         },
       };
     }
+    case "SCAN_PAGE_VISUAL_RESULT": {
+      if (typeof raw.sessionId !== "string" || !raw.sessionId) return { ok: false, error: "Invalid sessionId" };
+      if (typeof raw.sourceId !== "string" || !raw.sourceId) return { ok: false, error: "Invalid sourceId" };
+      const visualFindings = normalizeFindingArray(raw.findings);
+      if (!visualFindings) return { ok: false, error: "Invalid findings" };
+      return { ok: true, message: { type, requestId, sessionId: raw.sessionId as string, sourceId: raw.sourceId as string, findings: visualFindings } };
+    }
+    case "POPUP_SCAN_COVERAGE": {
+      const COVERAGE_STATUSES = new Set(["FULLY_SCANNED","PARTIALLY_SCANNED","UNSUPPORTED_CONTENT_PRESENT","BLOCKED_BY_BROWSER_SECURITY","NO_SENSITIVE_DATA_DETECTED","SCAN_FAILED"]);
+      if (typeof raw.coverageStatus !== "string" || !COVERAGE_STATUSES.has(raw.coverageStatus)) return { ok: false, error: "Invalid coverageStatus" };
+      if (typeof raw.deferredMediaCount !== "number" || !Number.isSafeInteger(raw.deferredMediaCount) || raw.deferredMediaCount < 0) return { ok: false, error: "Invalid deferredMediaCount" };
+      return { ok: true, message: { type, requestId, coverageStatus: raw.coverageStatus as string, deferredMediaCount: raw.deferredMediaCount as number } };
+    }
     default:
       return { ok: false, error: "Unhandled message type" };
   }
-}
+}

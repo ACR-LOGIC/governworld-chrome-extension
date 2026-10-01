@@ -15,6 +15,9 @@ import { observeMutations, getAffectedNodeIds, type MutationObserverHandle, type
 import { formatCoverageSummary, setDynamicContentMonitored } from "./normalization/coverage.js";
 import { traverseIframes } from "./normalization/iframe.js";
 import { extractTableStructures, annotateSegmentsWithTableStructure } from "./normalization/table.js";
+import { discoverPageInventory, resolveScanCoverageStatus } from "./normalization/pageInventory.js";
+import { buildMediaQueue, extractVideoCaptions } from "./mediaQueue.js";
+import { extractSvgText } from "./svgExtract.js";
 
 /**
  * Content script (isolated world). Runs only after a deliberate user action
@@ -170,6 +173,15 @@ if (g.__gwRedactionContentLoaded !== true) {
     activeSessionTimeoutMs = sessionTimeoutMs;
     currentSettings = settings;
 
+    // ── Layer 0: Page inventory (enumerates all content representations) ──
+    let inventory;
+    try {
+      inventory = discoverPageInventory(document);
+    } catch {
+      inventory = null;
+    }
+
+    // ── Layer 1: DOM canonical text (existing path, unchanged) ─────────────
     const canonical = buildCanonicalDocument({
       root: document,
       sourceKind: "web-dom",
@@ -228,6 +240,65 @@ if (g.__gwRedactionContentLoaded !== true) {
     const rawMatches = detect(combined, settings.enabledCategories, customPatterns);
     findings = buildFindings(rawMatches, settings.enabledCategories, customPatterns);
 
+    // ── Layer 2 (SVG branch): Inline SVG text → run through detect ────────
+    try {
+      const svgSegments = extractSvgText(document);
+      if (svgSegments.length > 0) {
+        const svgText = svgSegments.map((s) => s.text).join("\n");
+        const svgMatches = detect(svgText, settings.enabledCategories, customPatterns);
+        // SVG findings have no DOM-range rects since they are in an SVG coordinate
+        // space. We report them as attr-style report-only findings (selected:false)
+        // but with source "local-rules" so they appear in the findings list.
+        const svgOffset = combined.length + 1; // beyond the DOM scan text
+        svgMatches.forEach((match, i) => {
+          const value = svgText.slice(match.start, match.end);
+          findings.push({
+            id: `svg_${match.category}_${match.start}_${match.end}_${i}`,
+            category: match.category,
+            confidence: match.confidence,
+            source: "local-rules",
+            preview: maskValue(match.category, value),
+            nodeId: "svg",
+            startOffset: svgOffset + match.start,
+            endOffset: svgOffset + match.end,
+            rects: [],
+            contextPreview: maskContext(svgText.slice(Math.max(0, match.start - 80), Math.min(svgText.length, match.end + 80))),
+            selected: false, // SVG findings are report-only (no DOM highlight)
+          } satisfies Finding);
+        });
+      }
+    } catch {
+      // SVG extraction is best-effort — never fail the scan.
+    }
+
+    // ── Layer 4 (video captions, deterministic): run through detect ───────
+    try {
+      const captions = extractVideoCaptions(document);
+      if (captions.length > 0) {
+        const captionText = captions.map((c) => c.text).join("\n");
+        const captionMatches = detect(captionText, settings.enabledCategories, customPatterns);
+        const captionOffset = combined.length + 2000; // well beyond DOM text
+        captionMatches.forEach((match, i) => {
+          const value = captionText.slice(match.start, match.end);
+          findings.push({
+            id: `caption_${match.category}_${match.start}_${match.end}_${i}`,
+            category: match.category,
+            confidence: match.confidence,
+            source: "local-rules",
+            preview: maskValue(match.category, value),
+            nodeId: "video-caption",
+            startOffset: captionOffset + match.start,
+            endOffset: captionOffset + match.end,
+            rects: [],
+            contextPreview: maskContext(captionText.slice(Math.max(0, match.start - 80), Math.min(captionText.length, match.end + 80))),
+            selected: false,
+          } satisfies Finding);
+        });
+      }
+    } catch {
+      // Caption extraction is best-effort.
+    }
+
     // Accessibility-surface pass (report-only): scan aria-label/alt/placeholder/
     // title values. Read-only; these findings are never maskable.
     let attrChars = 0;
@@ -265,10 +336,45 @@ if (g.__gwRedactionContentLoaded !== true) {
     }
     touchSession();
 
+    // ── Layers 2–5: Build visual-capture and PDF queues ───────────────────
+    let visualQueue: import("../shared/types.js").VisualCaptureRequestItem[] | undefined;
+    let pdfQueue: import("../shared/types.js").PdfExtractRequestItem[] | undefined;
+    let deferredMediaCount = 0;
+    let coverageStatus: import("../shared/types.js").ScanCoverageStatus | undefined;
+
+    try {
+      if (inventory) {
+        const mediaResult = buildMediaQueue(document, inventory, 8, location.href);
+        if (mediaResult.visualQueue.length > 0) visualQueue = mediaResult.visualQueue;
+        if (mediaResult.pdfQueue.length > 0) pdfQueue = mediaResult.pdfQueue;
+        deferredMediaCount = mediaResult.deferredCount;
+        const allUnresolved = [
+          ...inventory.unscannableRegions,
+          ...mediaResult.newUnscannableRegions,
+        ];
+        // Exclude items that were successfully queued for processing.
+        const queuedIds = new Set((visualQueue ?? []).map((q) => q.cssSelector));
+        const remainingUnresolved = allUnresolved.filter((r) => !queuedIds.has(r.cssSelector));
+        coverageStatus = resolveScanCoverageStatus({
+          findingsCount: findings.filter((f) => f.source !== "attr" && f.selected).length,
+          unresolvedRegions: remainingUnresolved,
+          deferredMediaCount,
+        });
+      }
+    } catch {
+      // Media queue is best-effort — never fail the scan.
+    }
+
     const result: Finding[] = findings.map((f) => ({
       ...f,
       rects: f.rects.map((r) => ({ ...r })),
     }));
+
+    // Collect image candidates for the popup's "Scan images" offer.
+    // Previously only fired on zero-text pages; now fires always so the popup
+    // always knows what images are present regardless of DOM text content.
+    const imageCandidates = combined.length === 0 ? collectImageCandidates() : undefined;
+
     respond(
       {
         type: "SCAN_RESULT",
@@ -279,15 +385,17 @@ if (g.__gwRedactionContentLoaded !== true) {
           visibleChars: combined.length,
           attrChars,
           truncated: canonical.truncated,
-          // When there is no text to scan, the page's images are what the user
-          // almost certainly meant to protect. Reporting them lets the popup
-          // offer OCR over the real file instead of silently finding nothing.
-          ...(combined.length === 0 ? { imageCandidates: collectImageCandidates() } : {}),
+          ...(imageCandidates ? { imageCandidates } : {}),
+          ...(visualQueue ? { visualQueue } : {}),
+          ...(pdfQueue ? { pdfQueue } : {}),
+          ...(deferredMediaCount > 0 ? { deferredMediaCount } : {}),
+          ...(coverageStatus !== undefined ? { coverageStatus } : {}),
         },
       },
       requestId
     );
   }
+
 
   /**
    * List the page's images so a textless page can still be protected.
